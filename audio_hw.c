@@ -275,7 +275,28 @@ static void select_input_device(struct aml_audio_device *adev)
     {
         set_route_by_array(adev->mixer, line_input, 1);
     }
-	
+    
+    if (adev->in_device == (AUDIO_DEVICE_IN_REMOTE_SUBMIX & (~AUDIO_DEVICE_BIT_IN)))
+    {
+        //do not mix real input
+        set_route_by_array(adev->mixer, mic_input, 0);
+        set_route_by_array(adev->mixer, line_input, 0);
+        
+        struct route_setting out_wrap_input[] = {
+            {
+                .ctl_name = "RECMIXR Mixer OUTMIXR Capture Switch",
+                .intval = 1
+            },
+            {
+                .ctl_name = "RECMIXL Mixer OUTMIXL Capture Switch",
+	              .intval = 1
+            },
+            {
+                .ctl_name = NULL,
+            },
+        };
+        set_route_by_array(adev->mixer, out_wrap_input, 1);
+    }
 	return;
 }
 
@@ -2277,10 +2298,28 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
                                    struct audio_stream_in *stream)
 {
     struct aml_stream_in *in = (struct aml_stream_in *)stream;
-
+    struct aml_audio_device *adev = in->dev;
     LOGFUNC("%s(%p, %p)", __FUNCTION__, dev, stream);
     in_standby(&stream->common);
 
+    if (adev->in_device == (AUDIO_DEVICE_IN_REMOTE_SUBMIX & (~AUDIO_DEVICE_BIT_IN)))
+    {
+        struct route_setting out_wrap_input[] = {
+            {
+                .ctl_name = "RECMIXR Mixer OUTMIXR Capture Switch",
+                .intval = 1
+            },
+            {
+                .ctl_name = "RECMIXL Mixer OUTMIXL Capture Switch",
+	              .intval = 1
+            },
+            {
+                .ctl_name = NULL,
+            },
+        };
+        set_route_by_array(adev->mixer, out_wrap_input, 0);
+    }
+    
     if (in->resampler) {
         free(in->buffer);
         release_resampler(in->resampler);
