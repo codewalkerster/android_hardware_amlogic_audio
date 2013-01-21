@@ -47,7 +47,9 @@
 #if defined(AML_AUDIO_RT5631)
 #include "rt5631_mixer_ctrl.h"
 #elif defined(AML_AUDIO_M3CODEC)
-#inclued "m3codec_mixer_ctl.h"
+#include "m3codec_mixer_ctl.h"
+#elif defined(AML_AUDIO_WM8960)
+#include "wm8960_mixer_ctrl.h"
 #else
 struct route_setting
 {
