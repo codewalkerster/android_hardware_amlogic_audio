@@ -77,42 +77,6 @@ struct route_setting mic_input[] = {
     },
     {
         .ctl_name = MIXER_ADC_PCM_CAPTURE_VOLUME,
-        .intval = 2,
-    },
-    {
-        .ctl_name = MIXER_LEFT_OUTPUT_MIXER_PCM_PLAYBACK_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_RIGHT_OUTPUT_MIXER_PCM_PLAYBACK_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_HEADPHONE_PLAYBACK_VOLUME,
-        .intval = 0,
-    },
-    {
-        .ctl_name = MIXER_SPEAKER_PLAYBACK_VOLUME,
-        .intval = 125,
-    },
-    {
-        .ctl_name = MIXER_SPEAK_DC_VOLUME,
-        .intval = 3,
-    },
-    {
-        .ctl_name = MIXER_SPEAKER_AC_VOLUME,
-        .intval = 3,
-    },
-    {
-        .ctl_name = MIXER_DAC_MONO_MIX,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_MONO_OUTPUT_MIXER_LEFT_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_MONO_OUTPUT_MIXER_RIGHT_SWITCH,
         .intval = 1,
     },
     {
@@ -127,48 +91,6 @@ struct route_setting line_input[] = {
 };
 
 struct route_setting output_speaker[] = {
-	/*
-    {
-        .ctl_name = MIXER_LEFT_BOOST_MIXER_LINPUT1_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_LEFT_INPUT_MIXER_BOOST_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_LEFT_BOOST_MIXER_LINPUT3_SWITCH,
-        .intval = 0,
-    },
-    {
-        .ctl_name = MIXER_LEFT_BOOST_MIXER_LINPUT2_SWITCH,
-        .intval = 1,
-    },    
-    {
-        .ctl_name = MIXER_CAPTURE_SWITCH,
-        .intval = 0,
-    },
-    {
-        .ctl_name = MIXER_CAPTURE_VOLUME,
-        .intval = 40,
-    },
-    {
-        .ctl_name = MIXER_ADC_HIGH_PASS_FILTER_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_CAPTURE_VOLUME_ZC_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_ADC_OUTPUT_SELECT,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_ADC_PCM_CAPTURE_VOLUME,
-        .intval = 2,
-    },
-    */
     {
         .ctl_name = MIXER_LEFT_OUTPUT_MIXER_PCM_PLAYBACK_SWITCH,
         .intval = 1,
@@ -176,10 +98,6 @@ struct route_setting output_speaker[] = {
     {
         .ctl_name = MIXER_RIGHT_OUTPUT_MIXER_PCM_PLAYBACK_SWITCH,
         .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_HEADPHONE_PLAYBACK_VOLUME,
-        .intval = 0,
     },
     {
         .ctl_name = MIXER_SPEAKER_PLAYBACK_VOLUME,
@@ -187,23 +105,19 @@ struct route_setting output_speaker[] = {
     },
     {
         .ctl_name = MIXER_SPEAK_DC_VOLUME,
-        .intval = 3,
+        .intval = 2,
     },
     {
         .ctl_name = MIXER_SPEAKER_AC_VOLUME,
-        .intval = 3,
+        .intval = 4,
     },
     {
         .ctl_name = MIXER_DAC_MONO_MIX,
         .intval = 1,
     },
     {
-        .ctl_name = MIXER_MONO_OUTPUT_MIXER_LEFT_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_MONO_OUTPUT_MIXER_RIGHT_SWITCH,
-        .intval = 1,
+        .ctl_name = MIXER_HEADPHONE_PLAYBACK_VOLUME,
+        .intval = 115,
     },
     {
         .ctl_name = NULL,
@@ -211,48 +125,6 @@ struct route_setting output_speaker[] = {
 };
 
 struct route_setting output_headphone[] = { 
-	/*   
-    {
-        .ctl_name = MIXER_LEFT_BOOST_MIXER_LINPUT1_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_LEFT_INPUT_MIXER_BOOST_SWITCH,
-        .intval = 0,
-    },
-    {
-        .ctl_name = MIXER_LEFT_BOOST_MIXER_LINPUT3_SWITCH,
-        .intval = 0,
-    },
-    {
-        .ctl_name = MIXER_LEFT_BOOST_MIXER_LINPUT2_SWITCH,
-        .intval = 1,
-    },    
-    {
-        .ctl_name = MIXER_CAPTURE_SWITCH,
-        .intval = 0,
-    },
-    {
-        .ctl_name = MIXER_CAPTURE_VOLUME,
-        .intval = 40,
-    },
-    {
-        .ctl_name = MIXER_ADC_HIGH_PASS_FILTER_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_CAPTURE_VOLUME_ZC_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_ADC_OUTPUT_SELECT,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_ADC_PCM_CAPTURE_VOLUME,
-        .intval = 2,
-    },
-    */
     {
         .ctl_name = MIXER_LEFT_OUTPUT_MIXER_PCM_PLAYBACK_SWITCH,
         .intval = 1,
@@ -266,69 +138,28 @@ struct route_setting output_headphone[] = {
         .intval = 0,
     },
     {
+        .ctl_name = MIXER_SPEAK_DC_VOLUME,
+        .intval = 0,
+    },
+    {
+        .ctl_name = MIXER_SPEAKER_AC_VOLUME,
+        .intval = 0,
+    },
+    {
         .ctl_name = MIXER_DAC_MONO_MIX,
         .intval = 0,
     },
     {
-        .ctl_name = MIXER_MONO_OUTPUT_MIXER_LEFT_SWITCH,
-        .intval = 0,
-    },
-    {
-        .ctl_name = MIXER_MONO_OUTPUT_MIXER_RIGHT_SWITCH,
-        .intval = 0,
-    },
-    {
         .ctl_name = MIXER_HEADPHONE_PLAYBACK_VOLUME,
-        .intval = 112,
+        .intval = 115,
     },
     {
         .ctl_name = NULL,
     },
+
 };
 
 struct route_setting output_headset[] = {
-	/*
-    {
-        .ctl_name = MIXER_LEFT_BOOST_MIXER_LINPUT1_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_LEFT_INPUT_MIXER_BOOST_SWITCH,
-        .intval = 0,
-    },
-    {
-        .ctl_name = MIXER_LEFT_BOOST_MIXER_LINPUT3_SWITCH,
-        .intval = 0,
-    },
-    {
-        .ctl_name = MIXER_LEFT_BOOST_MIXER_LINPUT2_SWITCH,
-        .intval = 1,
-    },    
-    {
-        .ctl_name = MIXER_CAPTURE_SWITCH,
-        .intval = 0,
-    },
-    {
-        .ctl_name = MIXER_CAPTURE_VOLUME,
-        .intval = 40,
-    },
-    {
-        .ctl_name = MIXER_ADC_HIGH_PASS_FILTER_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_CAPTURE_VOLUME_ZC_SWITCH,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_ADC_OUTPUT_SELECT,
-        .intval = 1,
-    },
-    {
-        .ctl_name = MIXER_ADC_PCM_CAPTURE_VOLUME,
-        .intval = 2,
-    },
-    */
     {
         .ctl_name = MIXER_LEFT_OUTPUT_MIXER_PCM_PLAYBACK_SWITCH,
         .intval = 1,
@@ -356,7 +187,7 @@ struct route_setting output_headset[] = {
     },
     {
         .ctl_name = MIXER_HEADPHONE_PLAYBACK_VOLUME,
-        .intval = 112,
+        .intval = 115,
     },
     {
         .ctl_name = NULL,

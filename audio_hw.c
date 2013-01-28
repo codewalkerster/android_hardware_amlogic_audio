@@ -259,8 +259,16 @@ static void select_output_device(struct aml_audio_device *adev)
     headphone_on = adev->out_device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE;
     speaker_on = adev->out_device & AUDIO_DEVICE_OUT_SPEAKER;
     LOGFUNC("~~~~ %s : hs=%d , hp=%d, sp=%d", __func__, headset_on, headphone_on, speaker_on);
-    set_route_by_array(adev->mixer, output_headphone, headset_on | headphone_on);
-    set_route_by_array(adev->mixer, output_speaker, speaker_on);
+    //WM8960 codec hp and spk use the same audio route
+#ifdef AML_AUDIO_WM8960
+	if(speaker_on)
+		set_route_by_array(adev->mixer, output_speaker, speaker_on);
+	else if(headset_on|headphone_on)
+		set_route_by_array(adev->mixer, output_headphone, headset_on | headphone_on);
+#else
+	set_route_by_array(adev->mixer, output_speaker, speaker_on);
+	set_route_by_array(adev->mixer, output_headphone, headset_on | headphone_on);
+#endif
 }
 
 static void select_input_device(struct aml_audio_device *adev)
