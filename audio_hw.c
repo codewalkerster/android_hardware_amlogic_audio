@@ -50,6 +50,8 @@
 #include "m3codec_mixer_ctl.h"
 #elif defined(AML_AUDIO_WM8960)
 #include "wm8960_mixer_ctrl.h"
+#elif defined(AML_AUDIO_RT3261)
+#include "rt3261_mixer_ctrl.h"
 #else
 struct route_setting
 {

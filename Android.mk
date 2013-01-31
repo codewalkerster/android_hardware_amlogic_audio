@@ -42,6 +42,11 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 	ifeq ($(BOARD_AUDIO_CODEC),wm8960)
 		LOCAL_CFLAGS += -DAML_AUDIO_WM8960
 	endif
+	
+	ifeq ($(BOARD_AUDIO_CODEC),rt3261)
+		LOCAL_CFLAGS += -DAML_AUDIO_RT3261
+	endif
+
 	include $(BUILD_SHARED_LIBRARY)
 
 # The stub audio policy HAL module that can be used as a skeleton for
