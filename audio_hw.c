@@ -44,6 +44,8 @@
 #include <hardware/audio_effect.h>
 #include <audio_effects/effect_aec.h>
 
+#include <cutils/properties.h>
+
 #if defined(AML_AUDIO_RT5631)
 #include "rt5631_mixer_ctrl.h"
 #elif defined(AML_AUDIO_M3CODEC)
@@ -91,7 +93,8 @@ static struct route_setting output_headphone[] =
 /* ALSA ports for AML */
 #define PORT_MM 0
 /* number of frames per period */
-#define PERIOD_SIZE 1024
+#define DEFAULT_PERIOD_SIZE  1024
+static unsigned  PERIOD_SIZE  = DEFAULT_PERIOD_SIZE;
 /* number of periods for low power playback */
 #define PLAYBACK_PERIOD_COUNT 4
 /* number of periods for capture */
@@ -115,7 +118,7 @@ static struct route_setting output_headphone[] =
 struct pcm_config pcm_config_out = {
     .channels = 2,
     .rate = MM_FULL_POWER_SAMPLING_RATE,
-    .period_size = PERIOD_SIZE,
+    .period_size = DEFAULT_PERIOD_SIZE,
     .period_count = PLAYBACK_PERIOD_COUNT,
     .format = PCM_FORMAT_S16_LE,
 };
@@ -123,7 +126,7 @@ struct pcm_config pcm_config_out = {
 struct pcm_config pcm_config_in = {
     .channels = 2,
     .rate = MM_FULL_POWER_SAMPLING_RATE,
-    .period_size = PERIOD_SIZE,
+    .period_size = DEFAULT_PERIOD_SIZE,
     .period_count = PLAYBACK_PERIOD_COUNT,
     .format = PCM_FORMAT_S16_LE,
 };
@@ -211,6 +214,19 @@ static void select_input_device(struct aml_audio_device *adev);
 static int adev_set_voice_volume(struct audio_hw_device *dev, float volume);
 static int do_input_standby(struct aml_stream_in *in);
 static int do_output_standby(struct aml_stream_out *out);
+
+static int getprop_bool(const char * path)
+{
+    char buf[20];
+    int ret = -1;
+
+    ret = property_get(path, buf, NULL);
+    if (ret > 0) {
+        if(strcasecmp(buf,"true")==0 || strcmp(buf,"1")==0)
+            return 1;
+    }
+    return 0;
+}
 
 /* The enable flag when 0 makes the assumption that enums are disabled by
  * "Off" and integers/booleans by 0 */
@@ -438,6 +454,14 @@ static int start_output_stream(struct aml_stream_out *out)
 	card = CARD_AMLOGIC_BOARD;
     port = PORT_MM;
 	LOGFUNC("------------open on board audio-------");
+    if(getprop_bool("media.libplayer.wfd")){
+        PERIOD_SIZE = DEFAULT_PERIOD_SIZE/2;
+        out->config.period_size = PERIOD_SIZE;
+    }
+    else{
+        PERIOD_SIZE = DEFAULT_PERIOD_SIZE;
+        out->config.period_size = PERIOD_SIZE;        
+    }
 	    out->config.rate = MM_FULL_POWER_SAMPLING_RATE;
     /* default to low power: will be corrected in out_write if necessary before first write to
      * tinyalsa.
@@ -1097,6 +1121,16 @@ static int start_input_stream(struct aml_stream_in *in)
 	
 	ALOGV("%s(in->requested_rate=%d, in->config.rate=%d)", 
 		     __FUNCTION__, in->requested_rate, in->config.rate);
+
+    if(getprop_bool("media.libplayer.wfd")){
+        PERIOD_SIZE = DEFAULT_PERIOD_SIZE/2;
+        in->config.period_size = PERIOD_SIZE;
+    }
+    else
+    {
+        PERIOD_SIZE = DEFAULT_PERIOD_SIZE;
+        in->config.period_size = PERIOD_SIZE;
+    }
 
 	if (in->need_echo_reference && in->echo_reference == NULL) {
 		in->echo_reference = get_echo_reference(adev,
