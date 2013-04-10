@@ -65,7 +65,7 @@ struct route_setting mic_input[] = {
     },    
     {
     	.ctl_name = MIXER_MIC1_BOOST,
-		.intval = 3
+		.intval = 4
     },
     {
         .ctl_name = NULL,
