@@ -72,7 +72,7 @@ struct route_setting mic_input[] = {
     },
 };
 
-struct route_setting line_input[] = {
+struct route_setting headset_input[] = {
     {
         .ctl_name = NULL,
     },

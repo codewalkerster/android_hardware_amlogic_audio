@@ -77,7 +77,45 @@ struct route_setting mic_input[] = {
     },
     {
         .ctl_name = MIXER_ADC_PCM_CAPTURE_VOLUME,
-        .intval = 1,
+        .intval = 2,
+    },
+    {
+        .ctl_name = NULL,
+    },
+};
+
+struct route_setting headset_input[] = {
+    {
+        .ctl_name = "Right Boost Mixer RINPUT1 Switch",
+        .intval = 1
+    },    
+    {
+    	.ctl_name = "Right Input Mixer Boost Switch",
+	.intval = 1
+    },
+    {
+    	.ctl_name = "Right Boost Mixer RINPUT3 Switch",
+	.intval = 0
+    },
+    {
+    	.ctl_name = "Right Boost Mixer RINPUT2 Switch",
+	.intval = 1
+    },
+    {
+    	.ctl_name = "Capture Switch",
+	.intval = 0
+    },    
+    {
+    	.ctl_name = "Capture Volume",
+	.intval = 30
+    },    
+    {
+    	.ctl_name = "ADC Output Select",
+	.intval = 2
+    },    
+    {
+    	.ctl_name = "ADC PCM Capture Volume",
+	.intval = 2
     },
     {
         .ctl_name = NULL,
@@ -101,7 +139,7 @@ struct route_setting output_speaker[] = {
     },
     {
         .ctl_name = MIXER_SPEAKER_PLAYBACK_VOLUME,
-        .intval = 125,
+        .intval = 123,
     },
     {
         .ctl_name = MIXER_SPEAK_DC_VOLUME,
@@ -109,7 +147,7 @@ struct route_setting output_speaker[] = {
     },
     {
         .ctl_name = MIXER_SPEAKER_AC_VOLUME,
-        .intval = 4,
+        .intval = 3,
     },
     {
         .ctl_name = MIXER_DAC_MONO_MIX,
@@ -117,7 +155,7 @@ struct route_setting output_speaker[] = {
     },
     {
         .ctl_name = MIXER_HEADPHONE_PLAYBACK_VOLUME,
-        .intval = 115,
+        .intval = 0,
     },
     {
         .ctl_name = NULL,
@@ -151,7 +189,7 @@ struct route_setting output_headphone[] = {
     },
     {
         .ctl_name = MIXER_HEADPHONE_PLAYBACK_VOLUME,
-        .intval = 115,
+        .intval = 118,
     },
     {
         .ctl_name = NULL,

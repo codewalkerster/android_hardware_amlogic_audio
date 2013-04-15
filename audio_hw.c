@@ -277,32 +277,27 @@ static void select_output_device(struct aml_audio_device *adev)
     headphone_on = adev->out_device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE;
     speaker_on = adev->out_device & AUDIO_DEVICE_OUT_SPEAKER;
     LOGFUNC("~~~~ %s : hs=%d , hp=%d, sp=%d", __func__, headset_on, headphone_on, speaker_on);
-    //WM8960 codec hp and spk use the same audio route
-#ifdef AML_AUDIO_WM8960
-	if(speaker_on)
-		set_route_by_array(adev->mixer, output_speaker, speaker_on);
-	else if(headset_on|headphone_on)
-		set_route_by_array(adev->mixer, output_headphone, headset_on | headphone_on);
-#else
-	set_route_by_array(adev->mixer, output_speaker, speaker_on);
-	set_route_by_array(adev->mixer, output_headphone, headset_on | headphone_on);
-#endif
+    if(headset_on|headphone_on)
+        set_route_by_array(adev->mixer, output_headphone, headset_on | headphone_on);
+    else
+    {
+        set_route_by_array(adev->mixer, output_speaker, speaker_on);
+        LOGFUNC("speaker_on\n");
+    }
 }
 
 static void select_input_device(struct aml_audio_device *adev)
 {
-    int mic_in = adev->in_device & AUDIO_DEVICE_IN_BUILTIN_MIC;
-
+    int mic_in = adev->in_device & (AUDIO_DEVICE_IN_BUILTIN_MIC | AUDIO_DEVICE_IN_BACK_MIC);
+	int headset_mic = adev->in_device & AUDIO_DEVICE_IN_WIRED_HEADSET;
     LOGFUNC("~~~~ %s : in_device(%#x), mic_in(%#x)", __func__, adev->in_device, mic_in);
 
     if (mic_in) 
-    {
-        set_route_by_array(adev->mixer, mic_input, 1);
-    }
-    else
-    {
-        set_route_by_array(adev->mixer, line_input, 1);
-    }
+		set_route_by_array(adev->mixer, mic_input, mic_in);
+	else if(headset_mic)
+		set_route_by_array(adev->mixer, headset_input, headset_mic);
+	else
+		LOGFUNC("ERROR, no active input device available!\n");
 	
 	return;
 }
