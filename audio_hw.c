@@ -43,48 +43,7 @@
 #include <audio_utils/echo_reference.h>
 #include <hardware/audio_effect.h>
 #include <audio_effects/effect_aec.h>
-
-#include <cutils/properties.h>
-
-#if defined(AML_AUDIO_RT5631)
-#include "rt5631_mixer_ctrl.h"
-#elif defined(AML_AUDIO_M3CODEC)
-#include "m3codec_mixer_ctl.h"
-#elif defined(AML_AUDIO_WM8960)
-#include "wm8960_mixer_ctrl.h"
-#elif defined(AML_AUDIO_RT3261)
-#include "rt3261_mixer_ctrl.h"
-#else
-struct route_setting
-{
-	char *ctl_name;
-	int intval;
-	char *strval;
-};
-struct route_setting mic_input[] = 
-{
-	{
-		.ctl_name = NULL,
-	},
-};
-struct route_setting line_input[] = 
-{
-	{
-		.ctl_name = NULL,
-	},
-};
-static struct route_setting output_headphone[] = 
-{
-	{
-		.ctl_name = NULL,
-	},
-};static struct route_setting output_speaker[] = 
-{
-	{
-		.ctl_name = NULL,
-	},
-};
-#endif
+#include "audio_route.h"
 
 /* ALSA cards for AML */
 #define CARD_AMLOGIC_BOARD 0 
@@ -93,8 +52,7 @@ static struct route_setting output_headphone[] =
 /* ALSA ports for AML */
 #define PORT_MM 0
 /* number of frames per period */
-#define DEFAULT_PERIOD_SIZE  1024
-static unsigned  PERIOD_SIZE  = DEFAULT_PERIOD_SIZE;
+#define PERIOD_SIZE 1024
 /* number of periods for low power playback */
 #define PLAYBACK_PERIOD_COUNT 4
 /* number of periods for capture */
@@ -118,7 +76,7 @@ static unsigned  PERIOD_SIZE  = DEFAULT_PERIOD_SIZE;
 struct pcm_config pcm_config_out = {
     .channels = 2,
     .rate = MM_FULL_POWER_SAMPLING_RATE,
-    .period_size = DEFAULT_PERIOD_SIZE,
+    .period_size = PERIOD_SIZE,
     .period_count = PLAYBACK_PERIOD_COUNT,
     .format = PCM_FORMAT_S16_LE,
 };
@@ -126,21 +84,15 @@ struct pcm_config pcm_config_out = {
 struct pcm_config pcm_config_in = {
     .channels = 2,
     .rate = MM_FULL_POWER_SAMPLING_RATE,
-    .period_size = DEFAULT_PERIOD_SIZE,
+    .period_size = PERIOD_SIZE,
     .period_count = PLAYBACK_PERIOD_COUNT,
     .format = PCM_FORMAT_S16_LE,
-};
-struct mixer_ctls{   
-	struct mixer_ctl *master_playback_volume;    
-	struct mixer_ctl *capture_volume;
 };
 
 struct aml_audio_device {
     struct audio_hw_device hw_device;
 
 	pthread_mutex_t lock;       /* see note below on mutex acquisition order */
-	struct mixer *mixer;
-	struct mixer_ctls mixer_ctls;
     int mode;
     audio_devices_t in_device;
 	audio_devices_t out_device;
@@ -152,6 +104,7 @@ struct aml_audio_device {
 	struct aml_stream_out *active_output;
 
 	bool mic_mute;
+	struct audio_route *ar;
     struct echo_reference_itfe *echo_reference;
     bool bluetooth_nrec;
     bool low_power;
@@ -215,56 +168,6 @@ static int adev_set_voice_volume(struct audio_hw_device *dev, float volume);
 static int do_input_standby(struct aml_stream_in *in);
 static int do_output_standby(struct aml_stream_out *out);
 
-static int getprop_bool(const char * path)
-{
-    char buf[20];
-    int ret = -1;
-
-    ret = property_get(path, buf, NULL);
-    if (ret > 0) {
-        if(strcasecmp(buf,"true")==0 || strcmp(buf,"1")==0)
-            return 1;
-    }
-    return 0;
-}
-
-/* The enable flag when 0 makes the assumption that enums are disabled by
- * "Off" and integers/booleans by 0 */
-static int set_route_by_array(struct mixer *mixer, struct route_setting *route,
-                              int enable)
-{
-    struct mixer_ctl *ctl;
-    unsigned int i, j;
-
-    /* Go through the route array and set each value */
-    i = 0;
-    while (route[i].ctl_name) {
-        ctl = mixer_get_ctl_by_name(mixer, route[i].ctl_name);
-        if (!ctl)
-            return -EINVAL;
-
-        //LOGFUNC("set_route_by_array().... index[%d] enable[%d]  : ctl_name=%s, strval=%s, intval=%d", 
-        //    i, enable, route[i].ctl_name, route[i].strval,route[i].intval);
-        if (route[i].strval) {
-            if (enable)
-                mixer_ctl_set_enum_by_string(ctl, route[i].strval);
-            else
-                mixer_ctl_set_enum_by_string(ctl, "Off");
-        } else {
-            /* This ensures multiple (i.e. stereo) values are set jointly */
-            for (j = 0; j < mixer_ctl_get_num_values(ctl); j++) {
-                if (enable)
-                    mixer_ctl_set_value(ctl, j, route[i].intval);
-                else
-                    mixer_ctl_set_value(ctl, j, 0);
-            }
-        }
-        i++;
-    }
-
-    return 0;
-}
-
 static void select_output_device(struct aml_audio_device *adev)
 {
     LOGFUNC("%s(mode=%d, out_device=%#x)", __FUNCTION__, adev->mode, adev->out_device);
@@ -277,28 +180,30 @@ static void select_output_device(struct aml_audio_device *adev)
     headphone_on = adev->out_device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE;
     speaker_on = adev->out_device & AUDIO_DEVICE_OUT_SPEAKER;
     LOGFUNC("~~~~ %s : hs=%d , hp=%d, sp=%d", __func__, headset_on, headphone_on, speaker_on);
-    if(headset_on|headphone_on)
-        set_route_by_array(adev->mixer, output_headphone, headset_on | headphone_on);
-    else
-    {
-        set_route_by_array(adev->mixer, output_speaker, speaker_on);
-        LOGFUNC("speaker_on\n");
-    }
+	reset_mixer_state(adev->ar);
+    if (speaker_on)
+		audio_route_apply_path(adev->ar, "speaker");
+	if (headphone_on || headset_on)
+		audio_route_apply_path(adev->ar, "headphone");
+	update_mixer_state(adev->ar);
 }
 
 static void select_input_device(struct aml_audio_device *adev)
 {
-    int mic_in = adev->in_device & (AUDIO_DEVICE_IN_BUILTIN_MIC | AUDIO_DEVICE_IN_BACK_MIC);
+    int mic_in = adev->in_device & AUDIO_DEVICE_IN_BUILTIN_MIC;
 	int headset_mic = adev->in_device & AUDIO_DEVICE_IN_WIRED_HEADSET;
-    LOGFUNC("~~~~ %s : in_device(%#x), mic_in(%#x)", __func__, adev->in_device, mic_in);
+    LOGFUNC("~~~~ %s : in_device(%#x), mic_in(%#x), headset_mic(%#x)", __func__, adev->in_device, mic_in, headset_mic);
 
-    if (mic_in) 
-		set_route_by_array(adev->mixer, mic_input, mic_in);
-	else if(headset_mic)
-		set_route_by_array(adev->mixer, headset_input, headset_mic);
-	else
-		LOGFUNC("ERROR, no active input device available!\n");
-	
+	reset_mixer_state(adev->ar);
+    if (mic_in)
+    {
+			audio_route_apply_path(adev->ar, "main_mic");
+    }
+    if (headset_mic)
+    {
+    	audio_route_apply_path(adev->ar, "headset-mic");
+    }
+	update_mixer_state(adev->ar);
 	return;
 }
 
@@ -449,14 +354,6 @@ static int start_output_stream(struct aml_stream_out *out)
 	card = CARD_AMLOGIC_BOARD;
     port = PORT_MM;
 	LOGFUNC("------------open on board audio-------");
-    if(getprop_bool("media.libplayer.wfd")){
-        PERIOD_SIZE = DEFAULT_PERIOD_SIZE/2;
-        out->config.period_size = PERIOD_SIZE;
-    }
-    else{
-        PERIOD_SIZE = DEFAULT_PERIOD_SIZE;
-        out->config.period_size = PERIOD_SIZE;        
-    }
 	    out->config.rate = MM_FULL_POWER_SAMPLING_RATE;
     /* default to low power: will be corrected in out_write if necessary before first write to
      * tinyalsa.
@@ -682,21 +579,7 @@ static audio_channel_mask_t out_get_channels(const struct audio_stream *stream)
    // return AUDIO_CHANNEL_OUT_STEREO;
     //return AUDIO_CHANNEL_OUT_STEREO;
 }
-/*
-static uint32_t out_get_channels(const struct audio_stream *stream)
-{
-    //LOGFUNC("%s(%p)", __FUNCTION__, stream);
-    struct aml_stream_out *out = (struct aml_stream_out *)stream;
 
-    if (out->config.channels == 1) {
-        return AUDIO_CHANNEL_OUT_MONO;
-    } else {
-        return AUDIO_CHANNEL_OUT_STEREO;
-    }
-    
-    return AUDIO_CHANNEL_OUT_STEREO;
-}
-*/
 static audio_format_t out_get_format(const struct audio_stream *stream)
 {
    // LOGFUNC("%s(%p)", __FUNCTION__, stream);
@@ -729,8 +612,8 @@ static int do_output_standby(struct aml_stream_out *out)
         be done when the call is ended */
         if (adev->mode != AUDIO_MODE_IN_CALL) {
             /* FIXME: only works if only one output can be active at a time */
-            set_route_by_array(adev->mixer, output_headphone, 0);
-            set_route_by_array(adev->mixer, output_speaker, 0);
+
+            reset_mixer_state(adev->ar);
         }
 
         /* stop writing to echo reference */
@@ -1117,16 +1000,6 @@ static int start_input_stream(struct aml_stream_in *in)
 	ALOGV("%s(in->requested_rate=%d, in->config.rate=%d)", 
 		     __FUNCTION__, in->requested_rate, in->config.rate);
 
-    if(getprop_bool("media.libplayer.wfd")){
-        PERIOD_SIZE = DEFAULT_PERIOD_SIZE/2;
-        in->config.period_size = PERIOD_SIZE;
-    }
-    else
-    {
-        PERIOD_SIZE = DEFAULT_PERIOD_SIZE;
-        in->config.period_size = PERIOD_SIZE;
-    }
-
 	if (in->need_echo_reference && in->echo_reference == NULL) {
 		in->echo_reference = get_echo_reference(adev,
                                         AUDIO_FORMAT_PCM_16_BIT,
@@ -1249,19 +1122,7 @@ static audio_channel_mask_t in_get_channels(const struct audio_stream *stream)
     }
     //return AUDIO_CHANNEL_IN_MONO;
 }
-/*
-static uint32_t in_get_channels(const struct audio_stream *stream)
-{
-    struct aml_stream_in *in = (struct aml_stream_in *)stream;
-    //LOGFUNC("%s(%p)", __FUNCTION__, stream);
 
-    if (in->config.channels == 1) {
-        return AUDIO_CHANNEL_IN_MONO;
-    } else {
-        return AUDIO_CHANNEL_IN_STEREO;
-    }
-}
-*/
 static audio_format_t in_get_format(const struct audio_stream *stream)
 {
     //LOGFUNC("%s(%p)", __FUNCTION__, stream);
@@ -1529,7 +1390,6 @@ static int get_next_buffer(struct resampler_buffer_provider *buffer_provider,
 {
     struct aml_stream_in *in;
 
-    //LOGFUNC("%s(%p, %p)", __FUNCTION__, buffer_provider, buffer);
     if (buffer_provider == NULL || buffer == NULL)
         return -EINVAL;
 
@@ -2353,9 +2213,7 @@ static int adev_close(hw_device_t *device)
     LOGFUNC("%s(%p)", __FUNCTION__, device);
     /* RIL */
     //ril_close(&adev->ril);
-
-    mixer_close(adev->mixer);
-
+    audio_route_free(adev->ar);
     free(device);
     return 0;
 }
@@ -2423,49 +2281,13 @@ static int adev_open(const hw_module_t* module, const char* name,
     adev->hw_device.close_input_stream = adev_close_input_stream;
     adev->hw_device.dump = adev_dump;
 
-    adev->mixer = mixer_open(0);
-    if (!adev->mixer) {
-        free(adev);
-        ALOGE("Unable to open the mixer, aborting.");
-        return -EINVAL;
-    }
-
-#if 0
-{
-    struct mixer *mixer = adev->mixer;
-    struct mixer_ctl *ctl;
-    unsigned int i, j;
-    char name[128];
-
-    ALOGE("ctl_name...   adev_open");
-
-    for(i = 0 ; i < mixer_get_num_ctls(mixer) ; i++) {
-        ctl = mixer_get_ctl(mixer, i);
-        if (ctl != NULL) {
-            j = mixer_ctl_get_name(ctl, name, 128);
-            ALOGE("ctl_name[%02d]: %s, type : %s", i, name, mixer_ctl_get_type_string(ctl));
-            if(mixer_ctl_get_type(ctl) == MIXER_CTL_TYPE_ENUM)
-            {
-                for(j=0; j<mixer_ctl_get_num_enums(ctl); j++)
-                {
-                    mixer_ctl_get_enum_string(ctl, j, name, 128);
-                    ALOGE("\t ENUM(%d) : %s", j, name);
-                }
-            }
-            
-        }
-        else 
-            ALOGE("ctl_name[%02d]: can not get control pointer", i);
-    }
-}
-#endif
+    adev->ar = audio_route_init();
 
     /* Set the default route before the PCM stream is opened */
     adev->mode = AUDIO_MODE_NORMAL;
 	adev->out_device = AUDIO_DEVICE_OUT_SPEAKER;
 	adev->in_device = AUDIO_DEVICE_IN_BUILTIN_MIC & ~AUDIO_DEVICE_BIT_IN;
 
-    //adev->devices = AUDIO_DEVICE_OUT_SPEAKER | AUDIO_DEVICE_IN_BUILTIN_MIC;
     select_output_device(adev);
 
     *device = &adev->hw_device.common;

@@ -1,0 +1,45 @@
+<mixer>  
+  <path name="speaker">
+  	<ctl name="Left Output Mixer PCM Playback Switch" value="1" />
+  	<ctl name="Right Output Mixer PCM Playback Switch" value="1" />
+  	<ctl name="Speaker Playback Volume" value="123" />
+  	<ctl name="Speaker DC Volume" value="3" />
+  	<ctl name="Speaker AC Volume" value="3" />
+  	<ctl name="DAC Mono Mix" value="1" />
+  	<ctl name="Headphone Playback Volume" value="0" />
+  </path>
+
+  <path name="headphone">
+    <ctl name="Left Output Mixer PCM Playback Switch" value="1" />
+  	<ctl name="Right Output Mixer PCM Playback Switch" value="1" />
+  	<ctl name="Speaker Playback Volume" value="0" />
+  	<ctl name="Speaker DC Volume" value="0" />
+  	<ctl name="Speaker AC Volume" value="0" />
+  	<ctl name="DAC Mono Mix" value="0" />
+  	<ctl name="Headphone Playback Volume" value="115" />
+  </path>
+
+  <path name="main_mic">
+    <ctl name="Left Boost Mixer LINPUT1 Switch" value="1" />
+    <ctl name="Left Input Mixer Boost Switch" value="1" />
+    <ctl name="Left Boost Mixer LINPUT3 Switch" value="0" />
+    <ctl name="Left Boost Mixer LINPUT2 Switch" value="1" />
+    <ctl name="Capture Switch" value="0" />
+    <ctl name="Capture Volume" value="40" />
+    <ctl name="ADC High Pass Filter Switch" value="1" />
+    <ctl name="Capture Volume ZC Switch" value="1" />
+    <ctl name="ADC Output Select" value="1" />
+    <ctl name="ADC PCM Capture Volume" value="1" />
+  </path>
+  
+  <path name="headset-mic">
+    <ctl name="Right Boost Mixer RINPUT1 Switch" value="1" />
+    <ctl name="Right Input Mixer Boost Switch" value="1" />
+    <ctl name="Right Boost Mixer RINPUT3 Switch" value="0" />
+    <ctl name="Right Boost Mixer RINPUT2 Switch" value="1" />
+    <ctl name="Capture Switch" value="0" />
+    <ctl name="Capture Volume" value="30" />
+    <ctl name="ADC Output Select" value="2" />
+    <ctl name="ADC PCM Capture Volume" value="2" />
+  </path>
+</mixer>

@@ -26,12 +26,17 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 
 	LOCAL_MODULE := audio.primary.amlogic
 	LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
-	LOCAL_SRC_FILES := audio_hw.c
+	LOCAL_SRC_FILES := \
+		audio_hw.c \
+		audio_route.c
 	LOCAL_C_INCLUDES += \
 		external/tinyalsa/include \
 		system/media/audio_utils/include \
-		system/media/audio_effects/include
-	LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils libdl
+		system/media/audio_effects/include \
+		external/expat/lib 
+	LOCAL_SHARED_LIBRARIES := \
+		liblog libcutils libtinyalsa \
+		libaudioutils libdl libexpat
 	LOCAL_MODULE_TAGS := optional
 
 #CONFIG_AML_CODEC
@@ -39,16 +44,24 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 		LOCAL_CFLAGS += -DAML_AUDIO_RT5631
 	endif
 	
-	ifeq ($(BOARD_AUDIO_CODEC),wm8960)
-		LOCAL_CFLAGS += -DAML_AUDIO_WM8960
+	include $(BUILD_SHARED_LIBRARY)
+#build for USB audio
+	ifeq ($(strip $(BOARD_USE_USB_AUDIO)),true)
+		include $(CLEAR_VARS)
+		
+		LOCAL_MODULE := audio.usb.amlogic
+		LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+		LOCAL_SRC_FILES := \
+			usb_audio_hw.c
+		LOCAL_C_INCLUDES += \
+			external/tinyalsa/include \
+			system/media/audio_utils/include 
+		LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils
+		LOCAL_MODULE_TAGS := optional
+		
+		include $(BUILD_SHARED_LIBRARY)
 	endif
 	
-	ifeq ($(BOARD_AUDIO_CODEC),rt3261)
-		LOCAL_CFLAGS += -DAML_AUDIO_RT3261
-	endif
-
-	include $(BUILD_SHARED_LIBRARY)
-
 # The stub audio policy HAL module that can be used as a skeleton for
 # new implementations.
 #include $(CLEAR_VARS)
