@@ -31,4 +31,10 @@
     <ctl name="RECMIXR Mixer MIC2_BST1 Capture Switch" value="1" />
     <ctl name="MIC2 Boost" value="3" />
   </path>
+
+  <path name="hdmi">
+    <ctl name="Speaker Playback Volume" value="0" />
+    <ctl name="HP Playback Volume" value="0" />
+  </path>
+  
 </mixer>

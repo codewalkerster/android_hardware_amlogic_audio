@@ -52,7 +52,8 @@
 /* ALSA ports for AML */
 #define PORT_MM 0
 /* number of frames per period */
-#define PERIOD_SIZE 1024
+#define DEFAULT_PERIOD_SIZE  1024
+static unsigned  PERIOD_SIZE  = DEFAULT_PERIOD_SIZE;
 /* number of periods for low power playback */
 #define PLAYBACK_PERIOD_COUNT 4
 /* number of periods for capture */
@@ -76,7 +77,7 @@
 struct pcm_config pcm_config_out = {
     .channels = 2,
     .rate = MM_FULL_POWER_SAMPLING_RATE,
-    .period_size = PERIOD_SIZE,
+    .period_size = DEFAULT_PERIOD_SIZE,
     .period_count = PLAYBACK_PERIOD_COUNT,
     .format = PCM_FORMAT_S16_LE,
 };
@@ -84,7 +85,7 @@ struct pcm_config pcm_config_out = {
 struct pcm_config pcm_config_in = {
     .channels = 2,
     .rate = MM_FULL_POWER_SAMPLING_RATE,
-    .period_size = PERIOD_SIZE,
+    .period_size = DEFAULT_PERIOD_SIZE,
     .period_count = PLAYBACK_PERIOD_COUNT,
     .format = PCM_FORMAT_S16_LE,
 };
@@ -168,19 +169,36 @@ static int adev_set_voice_volume(struct audio_hw_device *dev, float volume);
 static int do_input_standby(struct aml_stream_in *in);
 static int do_output_standby(struct aml_stream_out *out);
 
+static int getprop_bool(const char * path)
+{
+    char buf[20];
+    int ret = -1;
+
+    ret = property_get(path, buf, NULL);
+    if (ret > 0) {
+        if(strcasecmp(buf,"true")==0 || strcmp(buf,"1")==0)
+            return 1;
+    }
+    return 0;
+}
 static void select_output_device(struct aml_audio_device *adev)
 {
     LOGFUNC("%s(mode=%d, out_device=%#x)", __FUNCTION__, adev->mode, adev->out_device);
     int headset_on;
     int headphone_on;
     int speaker_on;
+    int hdmi_on;
     //adev->cur_devices = adev->devices;
 
     headset_on = adev->out_device & AUDIO_DEVICE_OUT_WIRED_HEADSET;
     headphone_on = adev->out_device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE;
     speaker_on = adev->out_device & AUDIO_DEVICE_OUT_SPEAKER;
-    LOGFUNC("~~~~ %s : hs=%d , hp=%d, sp=%d", __func__, headset_on, headphone_on, speaker_on);
+    hdmi_on = adev->out_device & AUDIO_DEVICE_OUT_AUX_DIGITAL;
+    LOGFUNC("~~~~ %s : hs=%d , hp=%d, sp=%d, hdmi=0x%x", __func__, headset_on, headphone_on, speaker_on,hdmi_on);
 	reset_mixer_state(adev->ar);
+    
+    if (hdmi_on)
+        audio_route_apply_path(adev->ar, "hdmi");
     if (speaker_on)
 		audio_route_apply_path(adev->ar, "speaker");
 	if (headphone_on || headset_on)
@@ -354,6 +372,14 @@ static int start_output_stream(struct aml_stream_out *out)
 	card = CARD_AMLOGIC_BOARD;
     port = PORT_MM;
 	LOGFUNC("------------open on board audio-------");
+    if(getprop_bool("media.libplayer.wfd")){
+        PERIOD_SIZE = DEFAULT_PERIOD_SIZE/2;
+        out->config.period_size = PERIOD_SIZE;
+    }
+    else{
+        PERIOD_SIZE = DEFAULT_PERIOD_SIZE;
+        out->config.period_size = PERIOD_SIZE;        
+    }
 	    out->config.rate = MM_FULL_POWER_SAMPLING_RATE;
     /* default to low power: will be corrected in out_write if necessary before first write to
      * tinyalsa.
@@ -1000,6 +1026,15 @@ static int start_input_stream(struct aml_stream_in *in)
 	ALOGV("%s(in->requested_rate=%d, in->config.rate=%d)", 
 		     __FUNCTION__, in->requested_rate, in->config.rate);
 
+    if(getprop_bool("media.libplayer.wfd")){
+        PERIOD_SIZE = DEFAULT_PERIOD_SIZE/2;
+        in->config.period_size = PERIOD_SIZE;
+    }
+    else
+    {
+        PERIOD_SIZE = DEFAULT_PERIOD_SIZE;
+        in->config.period_size = PERIOD_SIZE;
+    }
 	if (in->need_echo_reference && in->echo_reference == NULL) {
 		in->echo_reference = get_echo_reference(adev,
                                         AUDIO_FORMAT_PCM_16_BIT,
