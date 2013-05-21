@@ -208,11 +208,11 @@ static void select_output_device(struct aml_audio_device *adev)
 
 static void select_input_device(struct aml_audio_device *adev)
 {
-    int mic_in = adev->in_device & AUDIO_DEVICE_IN_BUILTIN_MIC;
+    int mic_in = adev->in_device & ( AUDIO_DEVICE_IN_BUILTIN_MIC | AUDIO_DEVICE_IN_BACK_MIC);
 	int headset_mic = adev->in_device & AUDIO_DEVICE_IN_WIRED_HEADSET;
     LOGFUNC("~~~~ %s : in_device(%#x), mic_in(%#x), headset_mic(%#x)", __func__, adev->in_device, mic_in, headset_mic);
 
-	reset_mixer_state(adev->ar);
+	//reset_mixer_state(adev->ar);
     if (mic_in)
     {
 			audio_route_apply_path(adev->ar, "main_mic");
