@@ -25,7 +25,7 @@
     <ctl name="Left Boost Mixer LINPUT3 Switch" value="0" />
     <ctl name="Left Boost Mixer LINPUT2 Switch" value="1" />
     <ctl name="Capture Switch" value="0" />
-    <ctl name="Capture Volume" value="40" />
+    <ctl name="Capture Volume" value="53" />
     <ctl name="ADC High Pass Filter Switch" value="1" />
     <ctl name="Capture Volume ZC Switch" value="1" />
     <ctl name="ADC Output Select" value="1" />
@@ -41,5 +41,10 @@
     <ctl name="Capture Volume" value="30" />
     <ctl name="ADC Output Select" value="2" />
     <ctl name="ADC PCM Capture Volume" value="2" />
+  </path>
+
+  <path name="hdmi">
+    <ctl name="Speaker Playback Volume" value="0" />
+    <ctl name="Headphone Playback Volume" value="0" />
   </path>
 </mixer>
