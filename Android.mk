@@ -74,4 +74,40 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 
 #include $(BUILD_SHARED_LIBRARY)
 
+#endif
+
+#########################################################
+
+ifdef DOLBY_UDC
+
+include $(CLEAR_VARS)
+
+	LOCAL_MODULE := audio.hdmi6.amlogic
+	LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+	LOCAL_SRC_FILES := hdmi_hw.c
+	LOCAL_C_INCLUDES += \
+		external/tinyalsa/include \
+		system/media/audio_utils/include \
+		system/media/audio_effects/include
+	LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils libdl
+	LOCAL_MODULE_TAGS := optional
+
+#CONFIG_AML_CODEC
+	ifeq ($(BOARD_AUDIO_CODEC),rt5631)
+		LOCAL_CFLAGS += -DAML_AUDIO_RT5631
+	endif
+	
+	ifeq ($(BOARD_AUDIO_CODEC),wm8960)
+		LOCAL_CFLAGS += -DAML_AUDIO_WM8960
+	endif
+	
+	ifeq ($(BOARD_AUDIO_CODEC),rt3261)
+		LOCAL_CFLAGS += -DAML_AUDIO_RT3261
+	endif
+
+	include $(BUILD_SHARED_LIBRARY)
+
+
+endif
+
 endif
