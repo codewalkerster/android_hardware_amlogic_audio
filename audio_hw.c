@@ -65,7 +65,7 @@ static unsigned  PERIOD_SIZE  = DEFAULT_PERIOD_SIZE;
 #define RESAMPLER_BUFFER_FRAMES (PERIOD_SIZE * 6)
 #define RESAMPLER_BUFFER_SIZE (4 * RESAMPLER_BUFFER_FRAMES)
 
-#define DEFAULT_OUT_SAMPLING_RATE 48000
+static unsigned int  DEFAULT_OUT_SAMPLING_RATE  = 48000;
 
 /* sampling rate when using MM low power port */
 #define MM_LOW_POWER_SAMPLING_RATE 44100
@@ -372,7 +372,7 @@ static int start_output_stream(struct aml_stream_out *out)
         PERIOD_SIZE = DEFAULT_PERIOD_SIZE;
         out->config.period_size = PERIOD_SIZE;        
     }
-	    out->config.rate = MM_FULL_POWER_SAMPLING_RATE;
+//	    out->config.rate = MM_FULL_POWER_SAMPLING_RATE;
     /* default to low power: will be corrected in out_write if necessary before first write to
      * tinyalsa.
      */
@@ -713,7 +713,25 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
         }
         pthread_mutex_unlock(&adev->lock);
     }
-
+    int sr = 0;	
+    ret = str_parms_get_int(parms, AUDIO_PARAMETER_STREAM_SAMPLING_RATE, &sr);
+    if (ret >= 0) {
+		if(sr > 0){
+			ALOGI("audio hw sampling_rate change from %d to %d \n",DEFAULT_OUT_SAMPLING_RATE,sr);
+			DEFAULT_OUT_SAMPLING_RATE = sr;
+			out->config.rate = DEFAULT_OUT_SAMPLING_RATE;
+	              pthread_mutex_lock(&adev->lock);
+	              pthread_mutex_lock(&out->lock);			
+			if(!out->standby && (out == adev->active_output)){
+				do_output_standby(out);
+				start_output_stream(out);
+				out->standby = 0;
+			}
+			pthread_mutex_unlock(&adev->lock);
+			pthread_mutex_unlock(&out->lock);				
+			
+		}
+    }
     str_parms_destroy(parms);
     return ret;
 }
