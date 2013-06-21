@@ -23,6 +23,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include <fcntl.h>
+#include <stdint.h>
+#include <sys/time.h>
+#include <stdlib.h>
+
+
 #include <cutils/log.h>
 
 #include <tinyalsa/asoundlib.h>
@@ -68,6 +74,61 @@ struct config_parse_state {
     int level;
 };
 
+#define AUDIO_CARD_PATH "/proc/asound/cards"
+
+int get_default_card()
+{
+    int err=0;
+    int fd;
+    unsigned i=0;
+    int string_length=10000;
+    char *read_buf,*buf1;
+    int card_num[10];
+    int card_default=0;
+    char *str_start;
+    
+    fd = open(AUDIO_CARD_PATH, O_RDONLY);
+
+    if (fd <0) {
+        ALOGE("ERROR: failed to open config file %s error: %d\n", AUDIO_CARD_PATH, errno);
+        close(fd);
+        return -EINVAL;
+    }
+    
+    read_buf = (char *)malloc(string_length);
+    if(read_buf==NULL){
+        ALOGD("ERROR: falied to malloc merry for read_buf !");
+        close(fd);
+        return -EINVAL;
+    }
+    buf1 = read_buf;
+    memset(read_buf, 0x0, string_length);
+    err = read(fd, read_buf, string_length);
+    while(read_buf){
+        i++;
+        str_start = strstr(read_buf, "SOC-Audio");
+        if (str_start == NULL) {
+           if(i>=2){
+                break;
+           }else{ 
+               ALOGE("ERROR:%s section not found Default card in times %d", "SOC-Audio",i);
+               break;
+           }
+        }
+        
+        card_num[i] = atoi(str_start - 21);
+        read_buf=str_start + strlen("SOC-Audio");
+
+    }
+    card_default = card_num[i-1];
+   // ALOGD("******get_default_card***card=%d***",card_default);
+    
+    read_buf = buf1;
+    free(read_buf);
+    read_buf = NULL;
+    close(fd);
+    return card_default;
+}
 /* path functions */
 
 static void path_free(struct audio_route *ar)
@@ -404,7 +465,7 @@ struct audio_route *audio_route_init(void)
     FILE *file;
     int bytes_read;
     void *buf;
-    int i;
+    int i,mixer_card;
     struct mixer_path *path;
     struct audio_route *ar;
 
@@ -412,7 +473,8 @@ struct audio_route *audio_route_init(void)
     if (!ar)
         goto err_calloc;
 
-    ar->mixer = mixer_open(MIXER_CARD);
+    mixer_card = get_default_card();
+    ar->mixer = mixer_open(mixer_card);
     if (!ar->mixer) {
         ALOGE("Unable to open the mixer, aborting.");
         goto err_mixer_open;

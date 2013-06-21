@@ -30,4 +30,6 @@ void reset_mixer_state(struct audio_route *ar);
 /* Updates the mixer with any changed values */
 void update_mixer_state(struct audio_route *ar);
 
+/* get soc-aduio card number in platform */
+int get_default_card();
 #endif

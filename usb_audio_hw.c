@@ -97,6 +97,7 @@ struct aml_stream_in {
 
     struct aml_audio_device *dev;
 };
+static int get_usb_card(struct aml_audio_device *dev);
 
 int getnumOfRates(char *ratesStr){
     int i, size = 0;
@@ -410,6 +411,11 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = out->dev;
+    int ret = get_usb_card(adev);
+	if (ret < 0){
+		ALOGE("out_set_parameters*****ERROR: Could not get usb card number");
+	}
+#if 0
     struct str_parms *parms;
     char value[32];
     
@@ -429,7 +435,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
         adev->card_device = atoi(value);
     pthread_mutex_unlock(&adev->lock);
     str_parms_destroy(parms);
-
+#endif
     return 0;
 }
 
@@ -670,6 +676,48 @@ static int in_set_gain(struct audio_stream_in *stream, float gain)
 
 #define USB_AUDIO_PCM "/proc/asound/usb_audio_info"
 
+static int get_usb_card(struct aml_audio_device *dev)
+{
+    int card = -1,err=0;
+    int fd;
+    struct aml_audio_device *adev = dev;
+    uint i=0,usbid;
+    int string_length=32,str_len=8;
+    char *read_buf, *str;
+    int card_num;
+    char *str_start;
+    fd = open(USB_AUDIO_PCM, O_RDONLY);
+    
+    if (fd <0) {
+        ALOGE("ERROR: failed to open config file %s error: %d\n", USB_AUDIO_PCM, errno);
+        close(fd);
+        return -EINVAL;
+    }
+  
+    read_buf = (char *)malloc(string_length);
+    str = (char*)malloc(str_len);
+    memset(read_buf, 0x0, string_length);
+    memset(read_buf, 0x0, str_len);
+    err = read(fd, read_buf, string_length);
+    memcpy(str,read_buf,8);
+   // ALOGD("****str=%s****",str);
+        
+    usbid = strtoul(str, NULL, 16);
+    card = atoi(read_buf + 9);
+    adev->card = card;
+    ALOGD("******get_usb_card***card=%d***",adev->card);
+	adev->card_device= 0;
+    
+    free(read_buf);
+    free(str);
+    read_buf = NULL;
+    str = NULL;
+    close(fd);
+    return err;
+
+
+}
+#if 0
 static int get_usb_card(struct aml_stream_in *in){
     ALOGD("============get_usb_card=============");
 	int card = -1, err = 0;
@@ -701,7 +749,7 @@ static int get_usb_card(struct aml_stream_in *in){
 	close(fd);
 	return err;
 }
-
+#endif
 static int get_next_buffer(struct resampler_buffer_provider *buffer_provider,
                                    struct resampler_buffer* buffer)
 {
@@ -1108,8 +1156,8 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     //memcpy(&in->in_config, &pcm_config_in, sizeof(pcm_config_in));
     in->dev = adev;
 	in->in_config.rate = in->requested_rate;
-   
-	ret = get_usb_card(in);
+	  ret = get_usb_card(adev);
+  
 	if (ret < 0){
 		ALOGE("ERROR: Could not get usb card number");
 		goto err_open;

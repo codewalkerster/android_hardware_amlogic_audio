@@ -271,7 +271,7 @@ static void select_mode(struct aml_audio_device *adev)
     select_input_device(adev);
 	return;
 }
-
+#if 0
 /*
   type : 0 -> playback, 1 -> capture  
 */
@@ -316,24 +316,16 @@ int get_external_card(int type)
 
     return ret;
 }
-
+#endif
 static int check_output_stream(struct aml_stream_out *out)
 {
     int ret = 0;
     unsigned int card = CARD_AMLOGIC_DEFAULT;
     unsigned int port = PORT_MM;
-    int ext_card;
+
+    card = get_default_card();
 	LOGFUNC("*******%s*********", __FUNCTION__);
 
-    ext_card = get_external_card(0);
-    if(ext_card < 0)
-    {
-        card = CARD_AMLOGIC_DEFAULT;
-    }
-    else
-    {
-        card = ext_card;
-    }
 
     out->config.start_threshold = PERIOD_SIZE * 2;
     out->config.avail_min = 0;//SHORT_PERIOD_SIZE;
@@ -369,7 +361,7 @@ static int start_output_stream(struct aml_stream_out *out)
     }
     LOGFUNC("%s(adev->out_device=%#x, adev->mode=%d)", __FUNCTION__, adev->out_device, adev->mode);
 
-	card = CARD_AMLOGIC_BOARD;
+	card = get_default_card();
     port = PORT_MM;
 	LOGFUNC("------------open on board audio-------");
     if(getprop_bool("media.libplayer.wfd")){
@@ -1022,6 +1014,8 @@ static int start_input_stream(struct aml_stream_in *in)
         adev->in_device |= in->device;
         select_input_device(adev);
     }
+    card = get_default_card();
+    port = PORT_MM;
 	
 	ALOGV("%s(in->requested_rate=%d, in->config.rate=%d)", 
 		     __FUNCTION__, in->requested_rate, in->config.rate);
@@ -1097,17 +1091,8 @@ static int check_input_stream(struct aml_stream_in *in)
     int ret = 0;
     unsigned int card = CARD_AMLOGIC_BOARD;
     unsigned int port = 0;
-    int ext_card;
 
-    ext_card = get_external_card(1);
-    if(ext_card < 0)
-    {
-        card = CARD_AMLOGIC_BOARD;
-    }
-    else
-    {
-        card = ext_card;
-    }
+    card = get_default_card();
 
     /* this assumes routing is done previously */
     in->pcm = pcm_open(card, port, PCM_IN, &in->config);
