@@ -1,0 +1,35 @@
+<mixer>
+  <path name="speaker">
+    <ctl name="OUT MIXR DAC R1 Switch" value="1" />
+    <ctl name="OUT MIXL DAC L1 Switch" value="1" />
+    <ctl name="OUT Channel Switch" value="1" />
+    <ctl name="LOUT MIX OUTVOL L Switch" value="1" />
+    <ctl name="LOUT MIX OUTVOL R Switch" value="1" />
+    <ctl name="OUT Playback Volume" value="33" />
+  </path>
+
+  <path name="headphone">
+    <ctl name="OUT MIXR DAC R1 Switch" value="1" />
+    <ctl name="OUT MIXL DAC L1 Switch" value="1" />
+    <ctl name="HPO MIX HPVOL Switch" value="1" />
+    <ctl name="HP Playback Volume" value="31" />
+  </path>
+
+  <path name="main_mic">
+    <ctl name="IN2 Mode Control" value="1" />
+    <ctl name="RECMIXL BST2 Switch" value="1" />
+    <ctl name="RECMIXR BST2 Switch" value="1" />
+    <ctl name="ADC Capture Switch" value="1" />
+    <ctl name="IN2 Boost" value="1" />
+    <ctl name="ADC Capture Volume" value="100" />
+  </path>
+
+  <path name="headset-mic">
+  </path>
+
+  <path name="hdmi">
+    <ctl name="OUT Playback Volume" value="0" />
+    <ctl name="HP Playback Volume" value="0" />
+  </path>
+  
+</mixer>
