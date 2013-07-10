@@ -756,6 +756,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
 		if(sr > 0){
 			ALOGI("audio hw sampling_rate change from %d to %d \n",DEFAULT_OUT_SAMPLING_RATE,sr);
 			DEFAULT_OUT_SAMPLING_RATE = sr;
+			pcm_config_out.rate = DEFAULT_OUT_SAMPLING_RATE;
 			out->config.rate = DEFAULT_OUT_SAMPLING_RATE;
 	              pthread_mutex_lock(&adev->lock);
 	              pthread_mutex_lock(&out->lock);			
@@ -906,9 +907,9 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
 	}else{
 		ret = pcm_write(out->pcm, in_buffer, out_frames * frame_size);
 	}
-#endif
+#else
 	ret = pcm_write(out->pcm, in_buffer, out_frames * frame_size);
-
+#endif
 	exit:
 		pthread_mutex_unlock(&out->lock);
 	
