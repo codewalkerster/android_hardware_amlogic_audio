@@ -13,7 +13,6 @@
     <ctl name="SPORMIX Mixer SPKVOLR Playback Switch" value="1" />
     <ctl name="SPOR Mux" value="SPORMIX" />
     <ctl name="SPOL Mux" value="SPOLMIX" />
-    <ctl name="HP Playback Volume" value="0" />
   </path>
 
   <path name="headphone">

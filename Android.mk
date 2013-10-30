@@ -61,6 +61,23 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 		
 		include $(BUILD_SHARED_LIBRARY)
 	endif
+#build for hdmi audio HAL
+		include $(CLEAR_VARS)
+		
+		LOCAL_MODULE := audio.hdmi.amlogic
+		LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+		LOCAL_SRC_FILES := \
+			hdmi_audio_hw.c
+		LOCAL_C_INCLUDES += \
+			external/tinyalsa/include \
+			system/media/audio_effects/include \
+			system/media/audio_utils/include 
+			
+		LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils
+		LOCAL_MODULE_TAGS := optional
+		
+		include $(BUILD_SHARED_LIBRARY)
+
 	
 # The stub audio policy HAL module that can be used as a skeleton for
 # new implementations.

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "audio_hw_hdmi"
+#define LOG_TAG "audio_hw_hdmi6"
 #define LOG_NDEBUG 0
 #define LOG_NDEBUG_FUNCTION
 #ifdef LOG_NDEBUG_FUNCTION
