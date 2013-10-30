@@ -991,6 +991,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
 {
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     struct aml_stream_out *out;
+    struct mixer *usb_mixer;
     int ret;
 
     out = (struct aml_stream_out *)calloc(1, sizeof(struct aml_stream_out));
@@ -1018,6 +1019,17 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->out_config = pcm_out_config;
 
     out->dev = adev;
+    ret = get_usb_card(adev);
+    if (ret < 0){
+        ALOGE("ERROR: Could not get usb card number");
+        goto err_open;
+    }
+
+    usb_mixer = mixer_open(adev->card);
+    if (!usb_mixer) {
+        ALOGE("Unable to open the mixer, aborting.");
+        goto err_open;
+    }
     config->format = out_get_format(&out->stream.common);
     config->channel_mask = out_get_channels(&out->stream.common);
     config->sample_rate = out_get_sample_rate(&out->stream.common);
@@ -1031,6 +1043,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     return 0;
 
 err_open:
+    mixer_close(usb_mixer);
     free(out);
     *stream_out = NULL;
     return ret;
@@ -1127,6 +1140,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
 {
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     struct aml_stream_in *in;
+    struct mixer *usb_mixer;
     int ret;
    
     in = (struct aml_stream_in *)calloc(1, sizeof(struct aml_stream_in));
@@ -1155,19 +1169,25 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
 
     //memcpy(&in->in_config, &pcm_config_in, sizeof(pcm_config_in));
     in->dev = adev;
-	in->in_config.rate = in->requested_rate;
-	  ret = get_usb_card(adev);
-  
-	if (ret < 0){
-		ALOGE("ERROR: Could not get usb card number");
-		goto err_open;
-	}
-	ret = get_usb_cap("Capture:", &in->in_config.channels, &in->in_config.rate, adev->card);
+    in->in_config.rate = in->requested_rate;
+    ret = get_usb_card(adev);
+    if (ret < 0){
+        ALOGE("ERROR: Could not get usb card number");
+        goto err_open;
+    }
+
+    usb_mixer = mixer_open(adev->card);
+    if (!usb_mixer) {
+        ALOGE("Unable to open the mixer, aborting.");
+        goto err_open;
+    }
     
-	if (ret) {
-		ALOGE("ERROR: Could not get capture capabilities from usb device");
-		goto err_open;
-	}
+    ret = get_usb_cap("Capture:", &in->in_config.channels, &in->in_config.rate, adev->card);
+    
+    if (ret) {
+        ALOGE("ERROR: Could not get capture capabilities from usb device");
+        goto err_open;
+    }
 	if (in->requested_rate != in->in_config.rate) {
 		in->buffer = malloc(in->in_config.period_size *
 							audio_stream_frame_size(&in->stream.common));
@@ -1201,7 +1221,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
 err_open:
     if (in->resampler)
         release_resampler(in->resampler);
-
+    mixer_close(usb_mixer);
     free(in);
     *stream_in = NULL;
     return ret;
