@@ -672,6 +672,7 @@ static int do_output_standby(struct aml_stream_out *out)
             /* FIXME: only works if only one output can be active at a time */
 
             reset_mixer_state(adev->ar);
+            update_mixer_state(adev->ar);
         }
 
         /* stop writing to echo reference */
