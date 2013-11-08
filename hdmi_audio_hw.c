@@ -331,13 +331,80 @@ static int check_output_stream(struct aml_stream_out *out)
     return 0;
 }
 
+static int  get_aml_card(){
+	int card = -1, err = 0;
+	int fd = -1;
+	unsigned fileSize = 512;
+	char *read_buf = NULL, *pd = NULL;
+	static const char *const SOUND_CARDS_PATH = "/proc/asound/cards";
+	fd = open(SOUND_CARDS_PATH, O_RDONLY);
+    if (fd < 0) {
+        ALOGE("ERROR: failed to open config file %s error: %d\n", SOUND_CARDS_PATH, errno);
+        close(fd);
+        return -EINVAL;
+    }
 
+	read_buf = (char *)malloc(fileSize);
+	if (!read_buf) {
+        ALOGE("Failed to malloc read_buf");
+        close(fd);
+        return -ENOMEM;
+    }
+	memset(read_buf, 0x0, fileSize);
+	err = read(fd, read_buf, fileSize);
+	if (fd < 0) {
+        ALOGE("ERROR: failed to read config file %s error: %d\n", SOUND_CARDS_PATH, errno);
+        close(fd);
+        return -EINVAL;
+    }
+	pd = strstr(read_buf, "AML");
+	card = *(pd - 3) - '0';
+
+OUT:
+	free(read_buf);
+	close(fd);
+	return card;
+}
+static int get_spdif_port(){
+	int port = -1, err = 0;
+	int fd = -1;
+	unsigned fileSize = 512;
+	char *read_buf = NULL, *pd = NULL;
+	static const char *const SOUND_PCM_PATH = "/proc/asound/pcm";
+	fd = open(SOUND_PCM_PATH, O_RDONLY);
+    if (fd < 0) {
+        ALOGE("ERROR: failed to open config file %s error: %d\n", SOUND_PCM_PATH, errno);
+        close(fd);
+        return -EINVAL;
+    }
+
+	read_buf = (char *)malloc(fileSize);
+	if (!read_buf) {
+        ALOGE("Failed to malloc read_buf");
+        close(fd);
+        return -ENOMEM;
+    }
+	memset(read_buf, 0x0, fileSize);
+	err = read(fd, read_buf, fileSize);
+	if (fd < 0) {
+        ALOGE("ERROR: failed to read config file %s error: %d\n", SOUND_PCM_PATH, errno);
+        close(fd);
+        return -EINVAL;
+    }
+	pd = strstr(read_buf, "SPDIF");
+	port = *(pd -3) - '0';
+
+OUT:
+	free(read_buf);
+	close(fd);
+	return port;
+}
 /* must be called with hw device and output stream mutexes locked */
 static int start_output_stream(struct aml_stream_out *out)
 {
     struct aml_audio_device *adev = out->dev;
-    unsigned int card = CARD_AMLOGIC_DEFAULT;
-    unsigned int port = PORT_MM;
+    int card = CARD_AMLOGIC_DEFAULT;
+    int port = PORT_MM;
 	int ret=0;
 
     adev->active_output = out;
@@ -348,19 +415,21 @@ static int start_output_stream(struct aml_stream_out *out)
     }
     LOGFUNC("%s(adev->out_device=%#x, adev->mode=%d)", __FUNCTION__, adev->out_device, adev->mode);
 
-	card = CARD_AMLOGIC_BOARD;
-    port = PORT_MM;
-	LOGFUNC("------------open on board audio-------");
-    if(getprop_bool("media.libplayer.wfd")){
- //       PERIOD_SIZE = DEFAULT_PERIOD_SIZE/2;
-        out->config.period_size = PERIOD_SIZE;
-	//
- //   }
- //   else{
-  //      PERIOD_SIZE = DEFAULT_PERIOD_SIZE;
-  //      out->config.period_size = PERIOD_SIZE;        
+    card = get_aml_card();
+    if(card < 0 ){
+    	 ALOGE("hdmi get aml card id failed \n");
+	 card = 	 CARD_AMLOGIC_DEFAULT;
     }
-	    out->config.rate = MM_FULL_POWER_SAMPLING_RATE;
+    port = get_spdif_port();
+    if(port < 0 ){
+    	 ALOGE("hdmi get aml card port  failed \n");
+	 card = 	 PORT_MM;
+    }	
+    ALOGI("hdmi sound card id %d,device id %d \n",card,port);	
+    LOGFUNC("------------open on board audio-------");
+    if(getprop_bool("media.libplayer.wfd")){
+        out->config.period_size = PERIOD_SIZE;     
+    }
     /* default to low power: will be corrected in out_write if necessary before first write to
      * tinyalsa.
      */
