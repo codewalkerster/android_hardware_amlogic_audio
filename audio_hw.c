@@ -173,7 +173,7 @@ static uint32_t out_get_sample_rate(const struct audio_stream *stream);
 
 static int getprop_bool(const char * path)
 {
-    char buf[20];
+    char buf[PROPERTY_VALUE_MAX];
     int ret = -1;
 
     ret = property_get(path, buf, NULL);
