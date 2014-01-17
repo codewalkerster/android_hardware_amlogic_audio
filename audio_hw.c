@@ -45,7 +45,6 @@
 #include <hardware/audio_effect.h>
 #include <audio_effects/effect_aec.h>
 #include "audio_route.h"
-
 /* ALSA cards for AML */
 #define CARD_AMLOGIC_BOARD 0 
 #define CARD_AMLOGIC_USB 1
@@ -928,6 +927,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         out_frames = in_frames;
     }
     if (out->echo_reference != NULL) {
+
         struct echo_reference_buffer b;
         b.raw = (void *)buffer;
         b.frame_count = in_frames;
@@ -935,15 +935,17 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         out->echo_reference->write(out->echo_reference, &b);
     }
 
-#if 0   
+#if 1  
+        if(getprop_bool("media.audiohw.dump")){
         FILE *fp1=fopen("/data/audio_out","a+"); 
-        if(fp){ 
+        if(fp1){ 
             int flen=fwrite((char *)in_buffer,1,out_frames * frame_size,fp1); 
             LOGFUNC("flen = %d---outlen=%d ", flen, out_frames * frame_size);
-            fclose(fp); 
+            fclose(fp1); 
         }else{
             LOGFUNC("could not open file:audio_out");
         }
+        	}
 #endif
 #if 0
     if(out->config.rate != DEFAULT_OUT_SAMPLING_RATE) {
@@ -1002,6 +1004,9 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
             }
             pthread_mutex_unlock(&adev->lock);
         }
+ 	//if(getprop_bool("media.hw.set"))		
+	memset(buffer,0,bytes);
+
     return bytes;
 }
 
