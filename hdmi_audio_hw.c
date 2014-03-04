@@ -75,6 +75,9 @@ static unsigned int  DEFAULT_OUT_SAMPLING_RATE  = 48000;
 /* sampling rate when using VX port for narrow band */
 #define VX_NB_SAMPLING_RATE 8000
 
+static unsigned int first_write_status;
+
+
 struct pcm_config pcm_config_out = {
     .channels = 2,
     .rate = MM_FULL_POWER_SAMPLING_RATE,
@@ -754,6 +757,7 @@ static int do_output_standby(struct aml_stream_out *out)
         }
 
         out->standby = 1;
+        first_write_status = 0;
     }
     pthread_mutex_unlock(&HdmiStreamState.hdmi_state_mutex);
     return 0;
@@ -910,6 +914,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
 		volatile char *data_src;
 		short *dataprint;
 		uint i, total_len;
+        char prop[PROPERTY_VALUE_MAX];
 	
 		/* acquiring hw device mutex systematically is useful if a low priority thread is waiting
 		 * on the output stream mutex - e.g. executing select_mode() while holding the hw device
@@ -942,6 +947,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
 				goto exit;
 			}
 			out->standby = 0;
+            first_write_status = 0;
 			/* a change in output device may change the microphone selection */
 			if (adev->active_input &&
 					adev->active_input->source == AUDIO_SOURCE_VOICE_COMMUNICATION)
@@ -985,6 +991,17 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         out->echo_reference->write(out->echo_reference, &b);
     }
 
+#if 0   
+        FILE *fp=fopen("/data/audio_out.pcm","a+"); 
+        if(fp){ 
+            int flen=fwrite((char *)buffer,1,out_frames * frame_size,fp); 
+            LOGFUNC("flen = %d---outlen=%d ", flen, out_frames * frame_size);
+            fclose(fp); 
+        }else{
+            LOGFUNC("could not open file:audio_out");
+        }
+#endif
+
 	if(out->config.rate != DEFAULT_OUT_SAMPLING_RATE) {
 		total_len = out_frames*frame_size + cached_len;
 
@@ -1017,9 +1034,20 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         if(!out->standby)
 		ret = pcm_write(out->pcm, (void *)output_buffer_bytes, ouput_len);
 	}else{
-        if(!out->standby)
-		ret = pcm_write(out->pcm, (void *)buf, out_frames * frame_size);
-		//ret = pcm_mmap_write(out->pcm, (void *)buf, out_frames * frame_size);
+        if(!out->standby){
+            property_get("sys.hdmiIn.Capture",prop,"false");
+            // ALOGD("****first_write_status=%d***",first_write_status);
+            if(!strcmp(prop,"true")){
+                if(first_write_status < 20){
+                   first_write_status = first_write_status + 1;
+                   memset((char*)buf,0,bytes);
+                }
+            }else{
+                first_write_status = 0;
+            }
+    		ret = pcm_write(out->pcm, (void *)buf, out_frames * frame_size);
+    		//ret = pcm_mmap_write(out->pcm, (void *)buf, out_frames * frame_size);
+        }
 	}
 
 
