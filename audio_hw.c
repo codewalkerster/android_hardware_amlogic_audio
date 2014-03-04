@@ -433,6 +433,40 @@ OUT:
     return port;
 }
 
+static int get_spdif_port(){
+    int port = -1, err = 0;
+    int fd = -1;
+    unsigned fileSize = 512;
+    char *read_buf = NULL, *pd = NULL;
+    static const char *const SOUND_PCM_PATH = "/proc/asound/pcm";
+    fd = open(SOUND_PCM_PATH, O_RDONLY);
+    if (fd < 0) {
+        ALOGE("ERROR: failed to open config file %s error: %d\n", SOUND_PCM_PATH, errno);
+        close(fd);
+        return -EINVAL;
+    }
+
+    read_buf = (char *)malloc(fileSize);
+    if (!read_buf) {
+        ALOGE("Failed to malloc read_buf");
+        close(fd);
+        return -ENOMEM;
+    }
+    memset(read_buf, 0x0, fileSize);
+    err = read(fd, read_buf, fileSize);
+    if (fd < 0) {
+        ALOGE("ERROR: failed to read config file %s error: %d\n", SOUND_PCM_PATH, errno);
+        close(fd);
+        return -EINVAL;
+    }
+    pd = strstr(read_buf, "SPDIF");
+    port = *(pd -3) - '0';
+
+OUT:
+    free(read_buf);
+    close(fd);
+    return port;
+}
 /* must be called with hw device and output stream mutexes locked */
 static int start_output_stream(struct aml_stream_out *out)
 {
@@ -935,8 +969,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         out->echo_reference->write(out->echo_reference, &b);
     }
 
-#if 1  
-        if(getprop_bool("media.audiohw.dump")){
+#if 0   
         FILE *fp1=fopen("/data/audio_out","a+"); 
         if(fp1){ 
             int flen=fwrite((char *)in_buffer,1,out_frames * frame_size,fp1); 
@@ -945,7 +978,6 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         }else{
             LOGFUNC("could not open file:audio_out");
         }
-        	}
 #endif
 #if 0
     if(out->config.rate != DEFAULT_OUT_SAMPLING_RATE) {
@@ -1004,9 +1036,6 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
             }
             pthread_mutex_unlock(&adev->lock);
         }
- 	//if(getprop_bool("media.hw.set"))		
-	memset(buffer,0,bytes);
-
     return bytes;
 }
 
@@ -1057,11 +1086,14 @@ static int start_input_stream(struct aml_stream_in *in)
         select_devices(adev);
     }
     card = get_aml_card();
+    ALOGD("*****get_spdif_port()=%d****",get_spdif_port());
 
     ALOGV("%s(in->requested_rate=%d, in->config.rate=%d)", 
              __FUNCTION__, in->requested_rate, in->config.rate);
     if (adev->in_device & AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET){
         port = get_pcm_bt_port();
+    } else if(getprop_bool("sys.hdmiIn.Capture")){
+        port = get_spdif_port();
     } else {
         port = PORT_MM;
     }
@@ -1625,7 +1657,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer,
 #if 0
     FILE *dump_fp = NULL;
 
-    dump_fp = fopen("/data/dump_in.pcm", "a+");
+    dump_fp = fopen("/data/audio_in.pcm", "a+");
     if (dump_fp != NULL) {
         fwrite(buffer, bytes, 1, dump_fp);
         fclose(dump_fp);
