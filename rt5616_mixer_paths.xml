@@ -23,7 +23,7 @@
     <ctl name="IN2 Mode Control" value="0" />
     <ctl name="RECMIXL BST2 Switch" value="1" />
     <ctl name="RECMIXR BST2 Switch" value="1" />
-    <ctl name="ADC Capture Switch" value="1" />
+    <ctl name="ADC Capture Switch" value="0" />
     <ctl name="IN2 Boost" value="1" />
     <ctl name="ADC Capture Volume" value="90" />
   </path>
