@@ -1086,7 +1086,6 @@ static int start_input_stream(struct aml_stream_in *in)
         select_devices(adev);
     }
     card = get_aml_card();
-    ALOGD("*****get_spdif_port()=%d****",get_spdif_port());
 
     ALOGV("%s(in->requested_rate=%d, in->config.rate=%d)", 
              __FUNCTION__, in->requested_rate, in->config.rate);
