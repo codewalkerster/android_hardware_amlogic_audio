@@ -830,6 +830,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
             pthread_mutex_unlock(&in->lock);
         }
         pthread_mutex_unlock(&adev->lock);
+	 goto exit;	
     }
     int sr = 0;	
     ret = str_parms_get_int(parms, AUDIO_PARAMETER_STREAM_SAMPLING_RATE, &sr);
@@ -850,6 +851,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
 			pthread_mutex_unlock(&out->lock);				
 			
 		}
+	 	goto exit;	
     }
     int frame_size = 0;	
     ret = str_parms_get_int(parms, AUDIO_PARAMETER_STREAM_FRAME_COUNT, &frame_size);
@@ -871,6 +873,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
 			
 		}
     }	
+exit:	
     str_parms_destroy(parms);
     return ret;
 }
