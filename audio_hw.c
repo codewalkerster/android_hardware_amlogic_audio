@@ -1023,7 +1023,8 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
 #endif
     exit:
         pthread_mutex_unlock(&out->lock);
-    
+        //fixed me: It is not a good way to clear android audioflinger buffer,but when pcm write error, audioflinger can't break out.
+        memset(in_buffer,0,bytes);
         if (ret != 0) {
             usleep(bytes * 1000000 / audio_stream_frame_size(&stream->common) /
                    out_get_sample_rate(&stream->common));
