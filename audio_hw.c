@@ -130,6 +130,7 @@ struct aml_stream_out {
     struct aml_audio_device *dev;
     int write_threshold;
     bool low_power;
+    uint32_t frame_count;
 };
 
 #define MAX_PREPROCESSORS 3 /* maximum one AGC + one NS + one AEC per input stream */
@@ -738,7 +739,7 @@ static int do_output_standby(struct aml_stream_out *out)
     if (!out->standby) {
         pcm_close(out->pcm);
         out->pcm = NULL;
-
+        out->frame_count = 0;
         adev->active_output = 0;
 
         /* if in call, don't turn off the output stage. This will
@@ -891,7 +892,11 @@ static char * out_get_parameters(const struct audio_stream *stream, const char *
 static uint32_t out_get_latency(const struct audio_stream_out *stream)
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;    
-    return (out->config.period_size * out->config.period_count * 1000) / out->config.rate;
+
+    if (!out->pcm || !pcm_is_ready(out->pcm))
+        return 0;
+
+    return pcm_get_latency(out->pcm);
 }
 
 static int out_set_volume(struct audio_stream_out *stream, float left,
@@ -1020,6 +1025,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
     }
 #else
     ret = pcm_write(out->pcm, in_buffer, out_frames * frame_size);
+    out->frame_count += out_frames;
 #endif
     exit:
         pthread_mutex_unlock(&out->lock);
@@ -1046,7 +1052,11 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
 static int out_get_render_position(const struct audio_stream_out *stream,
                                    uint32_t *dsp_frames)
 {
-    return -EINVAL;
+    struct aml_stream_out *out = (struct aml_stream_out *)stream;
+
+    *dsp_frames = out->frame_count;
+	
+    return 0;
 }
 
 static int out_add_audio_effect(const struct audio_stream *stream, effect_handle_t effect)
@@ -1806,6 +1816,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->dev = ladev;
     out->standby = true;
     output_standby = true;
+    out->frame_count = 0;
 
    /* FIXME: when we support multiple output devices, we will want to
       * do the following:
