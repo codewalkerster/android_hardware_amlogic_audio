@@ -1,22 +1,22 @@
 <mixer>  
+    <ctl name="Speaker Playback Volume" value="0" />
+    <ctl name="Speaker DC Volume" value="0" />
+    <ctl name="Speaker AC Volume" value="0" />
+    <ctl name="Headphone Playback Volume" value="0" />
+    
   <path name="speaker">
-  	<ctl name="Left Output Mixer PCM Playback Switch" value="1" />
-  	<ctl name="Right Output Mixer PCM Playback Switch" value="1" />
-  	<ctl name="Speaker Playback Volume" value="123" />
-  	<ctl name="Speaker DC Volume" value="3" />
-  	<ctl name="Speaker AC Volume" value="3" />
-  	<ctl name="DAC Mono Mix" value="1" />
-  	<ctl name="Headphone Playback Volume" value="0" />
+    <ctl name="Left Output Mixer PCM Playback Switch" value="1" />
+    <ctl name="Right Output Mixer PCM Playback Switch" value="1" />
+    <ctl name="Speaker DC Volume" value="3" />
+    <ctl name="Speaker AC Volume" value="3" />
+    <ctl name="DAC Mono Mix" value="1" />
+    <ctl name="Speaker Playback Volume" value="123" />
   </path>
 
   <path name="headphone">
     <ctl name="Left Output Mixer PCM Playback Switch" value="1" />
-  	<ctl name="Right Output Mixer PCM Playback Switch" value="1" />
-  	<ctl name="Speaker Playback Volume" value="0" />
-  	<ctl name="Speaker DC Volume" value="0" />
-  	<ctl name="Speaker AC Volume" value="0" />
-  	<ctl name="DAC Mono Mix" value="0" />
-  	<ctl name="Headphone Playback Volume" value="115" />
+    <ctl name="Right Output Mixer PCM Playback Switch" value="1" />
+    <ctl name="Headphone Playback Volume" value="115" />
   </path>
 
   <path name="main_mic">
