@@ -742,6 +742,14 @@ static int do_output_standby(struct aml_stream_out *out)
         out->frame_count = 0;
         adev->active_output = 0;
 
+        if (out->buffer){
+            free(out->buffer);
+            out->buffer = NULL;
+        }
+        if (out->resampler){
+            release_resampler(out->resampler);
+            out->resampler = NULL;
+        }
         /* if in call, don't turn off the output stage. This will
         be done when the call is ended */
         if (adev->mode != AUDIO_MODE_IN_CALL) {
@@ -1849,11 +1857,6 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
 
     LOGFUNC("%s(%p, %p)", __FUNCTION__, dev, stream);
     out_standby(&stream->common);
-    if (out->buffer)
-        free(out->buffer);
-    if (out->resampler)
-        release_resampler(out->resampler);
-
     free(stream);
 }
 

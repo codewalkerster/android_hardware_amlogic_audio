@@ -36,22 +36,27 @@
 #include <tinyalsa/asoundlib.h>
 #include <audio_utils/resampler.h>
 
+#include "audio_resampler.h"
+
 #define DEFAULT_OUT_SAMPLING_RATE 44100
 #define RESAMPLER_BUFFER_SIZE 4096
+#define DEFAULT_PERIOD_SIZE  1024
+#define PERIOD_COUNT 4
 #define BUFFSIZE 100000
+
 struct pcm_config pcm_out_config = {
     .channels = 2,
     .rate = DEFAULT_OUT_SAMPLING_RATE,
-    .period_size = 1024,
-    .period_count = 4,
+    .period_size = DEFAULT_PERIOD_SIZE,
+    .period_count = PERIOD_COUNT,
     .format = PCM_FORMAT_S16_LE,
 };
 
 struct pcm_config pcm_in_config = {
 	.channels = 1,
 	.rate = DEFAULT_OUT_SAMPLING_RATE,
-	.period_size = 1024,
-	.period_count = 4,
+	.period_size = DEFAULT_PERIOD_SIZE,
+	.period_count = PERIOD_COUNT,
 	.format = PCM_FORMAT_S16_LE,
 };
 
@@ -75,8 +80,8 @@ struct aml_stream_out {
 	pthread_mutex_t lock;       /* see note below on mutex acquisition order */
 	struct pcm_config out_config;
     struct pcm *out_pcm;
-	struct resampler_itfe *resampler;
-    char *buffer;
+    struct resample_para resampler;
+    void *buffer;
     bool standby;
 
     struct aml_audio_device *dev;
@@ -284,16 +289,15 @@ static int start_output_stream(struct aml_stream_out *out)
 			return -EINVAL;
 		}
 	}
+	out->buffer = NULL;
 	if (out->out_config.rate != pcm_out_config.rate){
-		err = create_resampler(DEFAULT_OUT_SAMPLING_RATE,
-							   out->out_config.rate,
-							   2,
-							   RESAMPLER_QUALITY_DEFAULT,
-							   NULL,
-							   &out->resampler);
-		if (err != 0)
-			return -ENOMEM;
-		out->buffer = malloc(RESAMPLER_BUFFER_SIZE); /* todo: allow for reallocing */
+		out->resampler.input_sr = pcm_out_config.rate;
+		out->resampler.output_sr = out->out_config.rate;
+		out->resampler.channels = out->out_config.channels;
+		resampler_init(&out->resampler);
+		int buffersize = DEFAULT_PERIOD_SIZE * out->out_config.rate / pcm_out_config.rate + 1;
+		out->buffer = malloc(buffersize*4);
+		ALOGE("out->buffer: %p, buffer_size = %d",out->buffer,buffersize);
 		if (!out->buffer)
 			return -ENOMEM;
 	}
@@ -362,7 +366,7 @@ static audio_format_t out_get_format(const struct audio_stream *stream)
     return AUDIO_FORMAT_PCM_16_BIT;
 }
 
-static int out_set_format(struct audio_stream *stream, int format)
+static int out_set_format(struct audio_stream *stream, audio_format_t format)
 {
     ALOGD("%s(%p)", __FUNCTION__, stream);
 
@@ -375,12 +379,17 @@ static int do_output_standby(struct aml_stream_out *out)
     struct aml_audio_device *adev = out->dev;
 
     ALOGD("%s(%p)", __FUNCTION__, out);
-
+	
     if (!out->standby) {
         pcm_close(out->out_pcm);
         out->out_pcm = NULL;
 
         adev->active_output = 0;
+		
+        if (out->buffer != NULL){
+            free(out->buffer);
+            out->buffer = NULL;
+        }
         out->standby = true;
     }
     return 0;
@@ -447,7 +456,7 @@ static char * out_get_parameters(const struct audio_stream *stream, const char *
 
 static uint32_t out_get_latency(const struct audio_stream_out *stream)
 {
-	struct aml_stream_out *out = (struct stream_out *)stream;
+	struct aml_stream_out *out = (struct aml_stream_out *)stream;
     return (pcm_out_config.period_size * pcm_out_config.period_count * 1000) /
             out->out_config.rate;
 }
@@ -495,18 +504,15 @@ FILE * fp=fopen("/data/audio_in","a+");
 #endif
 		/* only use resampler if required */
 		if (out->out_config.rate != DEFAULT_OUT_SAMPLING_RATE) {
-			out->resampler->resample_from_input(out->resampler,
-												(int16_t *)buffer,
-												&in_frames,
-												(int16_t *)out->buffer,
-												&out_frames);
+			out_frames = resample_process(&out->resampler, in_frames,
+							(short *)buffer, (short *)out->buffer);
 			buf = out->buffer;
 		} else {
 			out_frames = in_frames;
 			buf = (void *)buffer;
 		}
-
-    pcm_write(out->out_pcm, (void *)buf, out_frames * frame_size);
+	
+    pcm_write(out->out_pcm, (void *)buf, out_frames * out->out_config.channels * 2);
 
     pthread_mutex_unlock(&out->lock);
     pthread_mutex_unlock(&out->dev->lock);
@@ -1140,7 +1146,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
 {
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     struct aml_stream_in *in;
-    struct mixer *usb_mixer;
+    struct mixer *usb_mixer = NULL;
     int ret;
    
     in = (struct aml_stream_in *)calloc(1, sizeof(struct aml_stream_in));
@@ -1247,7 +1253,7 @@ static int adev_close(hw_device_t *device)
 {
     struct aml_audio_device *adev = (struct aml_audio_device *)device;
 
-   // LOGFUNC("%s(%p)", __FUNCTION__, device);
+    ALOGD("%s(%p)", __func__, device);
 
     free(device);
     return 0;
