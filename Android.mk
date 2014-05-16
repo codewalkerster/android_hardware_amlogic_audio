@@ -52,7 +52,8 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 		LOCAL_MODULE := audio.usb.amlogic
 		LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 		LOCAL_SRC_FILES := \
-			usb_audio_hw.c
+			usb_audio_hw.c \
+			audio_resampler.c
 		LOCAL_C_INCLUDES += \
 			external/tinyalsa/include \
 			system/media/audio_utils/include 
