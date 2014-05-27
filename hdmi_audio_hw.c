@@ -133,13 +133,13 @@ struct aml_stream_out {
 };
 
 typedef struct hdmi_stream_state{
-    struct aml_stream_out *pCurStreamOut;
-    struct aml_stream_out *pLastStreamOut;
+    void *pLastStreamOut;
     int LastStreamDirectFlag;
     int CurStreamDirectFlag;
     int LastStreamInUse;
     int CurStreamInUse;
     int init_flag;
+    int N8ch_out_flag;
     pthread_mutex_t  hdmi_state_mutex;
 
 }hdmi_stream_state_t;
@@ -429,6 +429,12 @@ static int start_output_stream(struct aml_stream_out *out)
 	 card = 	 PORT_MM;
     }	
     ALOGI("hdmi sound card id %d,device id %d \n",card,port);	
+    if(out->config.channels == 8){
+        port = 0;
+        out->config.format = PCM_FORMAT_S32_LE;
+        adev->out_device=AUDIO_DEVICE_OUT_SPEAKER;
+        ALOGI("[%s %d]8CH format output: set port/0 adev->out_device/%d\n",__FUNCTION__,__LINE__,AUDIO_DEVICE_OUT_SPEAKER);
+    }
     LOGFUNC("------------open on board audio-------");
     if(getprop_bool("media.libplayer.wfd")){
         out->config.period_size = PERIOD_SIZE;     
@@ -437,7 +443,7 @@ static int start_output_stream(struct aml_stream_out *out)
      * tinyalsa.
      */
     int codec_type=get_codec_type("/sys/class/audiodsp/digital_codec");
-    if(codec_type==4){
+    if(codec_type == 4 || codec_type == 5){
         out->config.period_size=PERIOD_SIZE*2;
         out->write_threshold = PLAYBACK_PERIOD_COUNT * PERIOD_SIZE*2;
         out->config.start_threshold = PLAYBACK_PERIOD_COUNT*PERIOD_SIZE*2;
@@ -446,45 +452,43 @@ static int start_output_stream(struct aml_stream_out *out)
         out->config.start_threshold = PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
     }
     out->config.avail_min = 0;//SHORT_PERIOD_SIZE;
-    
     if(HdmiStreamState.LastStreamInUse)
     { 
-        if(HdmiStreamState.LastStreamDirectFlag){
-             ALOGI("LatsStream/%p still inUse for Direct output!\n",HdmiStreamState.pLastStreamOut);
+        if(HdmiStreamState.LastStreamDirectFlag|| HdmiStreamState.N8ch_out_flag){
+             ALOGI("LatsStream/%p still inUse for Direct output/8ch output!\n",HdmiStreamState.pLastStreamOut);
              return -1;
         }else{
-             if(HdmiStreamState.pLastStreamOut!=NULL){
-                 if(HdmiStreamState.pLastStreamOut!=out){
-                      ALOGI("Force standy LastStream/%p\n",HdmiStreamState.pLastStreamOut);
-                      //------------------------------------------------------------
-                      //do_output_standby(HdmiStreamState.pLastStreamOut);
-                      struct aml_audio_device *adev_local = HdmiStreamState.pLastStreamOut->dev;
-                      if (!HdmiStreamState.pLastStreamOut->standby) 
-                      {
-                            ALOGI("[%s %d]pcm_opened/%d\n",__FUNCTION__,__LINE__,pcm_opened);
-                            pcm_close(HdmiStreamState.pLastStreamOut->pcm);
-                            pcm_opened=0;
-                            HdmiStreamState.pLastStreamOut->pcm = NULL;
-                            adev_local->active_output = 0;
-                            if (HdmiStreamState.pLastStreamOut->echo_reference != NULL) {
-                                HdmiStreamState.pLastStreamOut->echo_reference->write(HdmiStreamState.pLastStreamOut->echo_reference, NULL);
-                                HdmiStreamState.pLastStreamOut->echo_reference = NULL;
-                            }
-                            HdmiStreamState.pLastStreamOut->standby = 1;
-                      }
+             struct aml_stream_out *pLastStreamOut=(struct aml_stream_out *)HdmiStreamState.pLastStreamOut;
+             if(pLastStreamOut!=NULL && pLastStreamOut!=out && (codec_type||out->config.channels==8))//corruent output mode:digital_raw
+             {
+                  ALOGI("[%s %d]Force standy LastStream/%p\n",pLastStreamOut);
+                  //------------------------------------------------------------
+                  //do_output_standby(HdmiStreamState.pLastStreamOut);
+                  struct aml_audio_device *adev_local =pLastStreamOut->dev;
+                  if (!pLastStreamOut->standby) 
+                  {
+                        pcm_close(pLastStreamOut->pcm);
+                        pLastStreamOut->pcm = NULL;
+                        adev_local->active_output = 0;
+                        if (pLastStreamOut->echo_reference != NULL) {
+                            pLastStreamOut->echo_reference->write(pLastStreamOut->echo_reference, NULL);
+                            pLastStreamOut->echo_reference = NULL;
+                        }
+                        pLastStreamOut->standby = 1;
+                  }
                       //--------------------------------------
                  }
-             }else{
-                 ALOGI("[%s %d]ERR pLastStreamOut should not NULL here ",__FUNCTION__,__LINE__);
-                 HdmiStreamState.LastStreamInUse=0;
-                 HdmiStreamState.LastStreamDirectFlag=0;
-                 return -1;
-             }
         }
     }
+    
     HdmiStreamState.pLastStreamOut=out;
     HdmiStreamState.LastStreamInUse=1;
     HdmiStreamState.LastStreamDirectFlag=codec_type;
+    HdmiStreamState.N8ch_out_flag=0;
+    if(out->config.channels==8)
+    {
+       HdmiStreamState.N8ch_out_flag=1;
+    }
   
     if(out->config.rate!=DEFAULT_OUT_SAMPLING_RATE){
 	
@@ -507,14 +511,10 @@ static int start_output_stream(struct aml_stream_out *out)
 	ALOGI("channels=%d---format=%d---period_count%d---period_size%d---rate=%d---",
 		                 out->config.channels, out->config.format, out->config.period_count, 
 		                 out->config.period_size, out->config.rate);
-    ALOGI("[%s %d]pcm_opened/%d\n",__FUNCTION__,__LINE__,pcm_opened);
     out->pcm = pcm_open(card, port, PCM_OUT /*| PCM_MMAP | PCM_NOIRQ*/, &(out->config));
-    pcm_opened=1;
     if (!pcm_is_ready(out->pcm)) {
         ALOGE("cannot open pcm_out driver: %s", pcm_get_error(out->pcm));
-        ALOGI("[%s %d]pcm_opened/%d\n",__FUNCTION__,__LINE__,pcm_opened);
         pcm_close(out->pcm);
-        pcm_opened=0;
         adev->active_output = NULL;
         return -ENOMEM;
     }
@@ -684,7 +684,7 @@ static size_t out_get_buffer_size(const struct audio_stream *stream)
          */
     size_t size;
     int codec_type=get_codec_type("/sys/class/audiodsp/digital_codec");
-    if(codec_type==4)//dd+
+    if(codec_type == 4 || codec_type == 5)//dd+
         size = (PERIOD_SIZE*2* PLAYBACK_PERIOD_COUNT * DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
     else if(codec_type>0 && codec_type<4 )            //dd/dts
         size = (PERIOD_SIZE*4*DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
@@ -728,16 +728,16 @@ static int do_output_standby(struct aml_stream_out *out)
 {
     struct aml_audio_device *adev = out->dev;
     pthread_mutex_lock(&HdmiStreamState.hdmi_state_mutex);
+    if(HdmiStreamState.pLastStreamOut==out){
+       ALOGI("[%s %d]Clear LastStream/%p \n",__FUNCTION__,__LINE__,HdmiStreamState.pLastStreamOut);
+       HdmiStreamState.pLastStreamOut=NULL;
+       HdmiStreamState.LastStreamInUse=0;
+       HdmiStreamState.LastStreamDirectFlag=0;
+       HdmiStreamState.N8ch_out_flag=0;
+    }
+    pthread_mutex_unlock(&HdmiStreamState.hdmi_state_mutex);
     if (!out->standby) {
-        if(HdmiStreamState.pLastStreamOut==out){
-              ALOGI("[%s %d]Clear LastStream/%p\n",__FUNCTION__,__LINE__,HdmiStreamState.pLastStreamOut);
-              HdmiStreamState.pLastStreamOut=NULL;
-              HdmiStreamState.LastStreamInUse=0;
-              HdmiStreamState.LastStreamDirectFlag=0;
-        }
-        ALOGI("[%s %d]pcm_opened/%d\n",__FUNCTION__,__LINE__,pcm_opened);
         pcm_close(out->pcm);
-        pcm_opened=0;
         out->pcm = NULL;
 
         adev->active_output = 0;
@@ -759,7 +759,7 @@ static int do_output_standby(struct aml_stream_out *out)
         out->standby = 1;
         first_write_status = 0;
     }
-    pthread_mutex_unlock(&HdmiStreamState.hdmi_state_mutex);
+    
     return 0;
 }
 
@@ -900,7 +900,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
                          size_t bytes)
 {
 
-		int ret;
+		int ret=0;
 		struct aml_stream_out *out = (struct aml_stream_out *)stream;
 		struct aml_audio_device *adev = out->dev;
 		size_t frame_size = audio_stream_frame_size(&out->stream.common);
@@ -943,6 +943,29 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
+        //-----------8CH PCM judge-----------
+        #if 1
+        #define DOLBY_SYSTEM_CHANNEL "ds1.audio.multichannel.support"
+        char value[128]={0};
+        property_get(DOLBY_SYSTEM_CHANNEL,value,NULL);
+        if((!strcmp(value,"true") ||!strcmp(value,"1")) && out->config.channels!=8)
+        {     
+            if (!out->standby) {
+                   ALOGI("[%s %d]8ch PCM output,standby other outputs/%p...\n",__FUNCTION__,__LINE__,out);
+                   pcm_close(out->pcm);
+                   out->pcm = NULL;
+                   adev->active_output = 0;
+                   if (out->echo_reference != NULL) {/* stop writing to echo reference */
+                       out->echo_reference->write(out->echo_reference, NULL);
+                       out->echo_reference = NULL;
+                   }
+                   out->standby = 1;
+              }
+              pthread_mutex_unlock(&adev->lock);
+              goto exit;
+        }
+        #endif
+        //--------------------------------
 		if (out->standby) {
 			ret = start_output_stream(out);
 			if (ret != 0) {
@@ -1048,8 +1071,25 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
             }else{
                 first_write_status = 0;
             }
-    		ret = pcm_write(out->pcm, (void *)buf, out_frames * frame_size);
-    		//ret = pcm_mmap_write(out->pcm, (void *)buf, out_frames * frame_size);
+            if(out->config.channels==8){
+                int *p32=NULL;
+                short *p16=(short*)buf;
+                int i,NumSamps;
+                NumSamps=out_frames*frame_size/sizeof(short);
+                p32=malloc(NumSamps*sizeof(int));
+                if(p32!=NULL)
+                {  
+                    for(i=0;i<NumSamps;i++)//suppose 16bit/8ch PCM
+                    { 
+                        p32[i]=p16[i]<<16;
+                    }
+                    ret=pcm_write(out->pcm, (void *)p32, NumSamps*4);
+                    free(p32);
+                }
+            }
+            else
+                ret = pcm_write(out->pcm, (void *)buf, out_frames * frame_size);
+                //ret = pcm_mmap_write(out->pcm, (void *)buf, out_frames * frame_size);
         }
 	}
 
@@ -1886,6 +1926,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     struct aml_stream_out *out;
     int channel_count = popcount(config->channel_mask);
     int ret;
+    int dc;//digital_codec
 
     LOGFUNC("%s(devices=0x%04x,format=%d, chnum=0x%04x, SR=%d,io handle %d )", __FUNCTION__, devices,
                         config->format, channel_count, config->sample_rate,handle);
@@ -1913,11 +1954,13 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->stream.get_render_position = out_get_render_position;
     out->stream.get_next_write_timestamp = out_get_next_write_timestamp;
     out->config = pcm_config_out;
-    if(get_codec_type("/sys/class/audiodsp/digital_codec")==4)
-        out->config.period_size=pcm_config_out.period_size*2;;
-	if(channel_count > 2){
-		ALOGI("adev_open_output_stream channel :%d\n",channel_count);
-		out->multich = channel_count;
+    dc = get_codec_type("/sys/class/audiodsp/digital_codec");
+    if(dc == 4 || dc == 5)
+        out->config.period_size=pcm_config_out.period_size*2;
+    if(channel_count > 2){
+        ALOGI("[adev_open_output_stream]: out/%p channel/%d\n",out,channel_count);
+        out->multich = channel_count;
+        out->config.channels = channel_count;
     }
     out->dev = ladev;
     out->standby = 1;

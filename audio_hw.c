@@ -916,7 +916,7 @@ static int out_set_volume(struct audio_stream_out *stream, float left,
 static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
                          size_t bytes)
 {
-    int ret;
+    int ret=0;
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = out->dev;
     size_t frame_size = audio_stream_frame_size(&out->stream.common);
@@ -938,6 +938,29 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
      */
     pthread_mutex_lock(&adev->lock);
     pthread_mutex_lock(&out->lock);
+    #if 1
+    #define DOLBY_SYSTEM_CHANNEL "ds1.audio.multichannel.support"
+    char value[128]={0};
+    property_get(DOLBY_SYSTEM_CHANNEL,value,NULL);
+    if((!strcmp(value,"true") ||!strcmp(value,"1")) && out->config.channels!=8)
+    {     
+        if (!out->standby) {
+               ALOGI("[%s %d]8ch PCM output,standby other outputs/%p...\n",__FUNCTION__,__LINE__,out);
+               pcm_close(out->pcm);
+               out->pcm = NULL;
+               out->frame_count = 0;
+               adev->active_output = 0;
+               if (out->echo_reference != NULL) {/* stop writing to echo reference */
+                   out->echo_reference->write(out->echo_reference, NULL);
+                   out->echo_reference = NULL;
+               }
+               out->standby = 1;
+               output_standby = 1;
+          }
+          pthread_mutex_unlock(&adev->lock);
+          goto exit;
+    }
+    #endif
     if (out->standby) {
         ret = start_output_stream(out);
         if (ret != 0) {
