@@ -885,8 +885,12 @@ static char * out_get_parameters(const struct audio_stream *stream, const char *
 
 static uint32_t out_get_latency(const struct audio_stream_out *stream)
 {
-	struct aml_stream_out *out = (struct aml_stream_out *)stream;    
-	return (PERIOD_SIZE * PLAYBACK_PERIOD_COUNT * 1000) / out->config.rate;
+    struct aml_stream_out *out = (struct aml_stream_out *)stream;    
+
+    if (!out->pcm || !pcm_is_ready(out->pcm))
+        return (out->config.period_size * out->config.period_count * 1000) / out->config.rate;
+
+    return pcm_get_latency(out->pcm);
 }
 
 
