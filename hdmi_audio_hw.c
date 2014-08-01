@@ -176,6 +176,11 @@ struct aml_stream_in {
     size_t ref_frames_in;
     int read_status;
     int voip_mode;
+    //hdmi in volume parameters
+    int volume_index;  
+    float last_volume;
+    int indexMIn;
+    int indexMax; 
 
     struct aml_audio_device *dev;
 };
@@ -187,6 +192,111 @@ static void select_input_device(struct aml_audio_device *adev);
 static int adev_set_voice_volume(struct audio_hw_device *dev, float volume);
 static int do_input_standby(struct aml_stream_in *in);
 static int do_output_standby(struct aml_stream_out *out);
+
+// add compute hdmi in volume function, volume index between 0 and 15 ,this reference AudioPolicyManagerBase
+
+enum { VOLMIN = 0, VOLKNEE1 = 1, VOLKNEE2 = 2, VOLMAX = 3, VOLCNT = 4};
+
+struct VolumeCurvePoint
+{
+    int mIndex;
+    float mDBAttenuation;
+};
+
+struct VolumeCurvePoint sSpeakerMediaVolumeCurve[VOLCNT] = {
+    {1, -56.0f}, {20, -34.0f}, {60, -11.0f}, {100, 0.0f}
+};
+
+// stream descriptor used for volume control
+struct StreamDescriptor
+{
+    int mIndexMin;      // min volume index
+    int mIndexMax;      // max volume index
+    int mIndexCur[15];   // current volume index 
+
+    struct VolumeCurvePoint *mVolumeCurve;
+};
+
+
+float volIndexToAmpl(struct audio_stream_in *stream,int indexInUi)
+{
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    struct VolumeCurvePoint *curve=NULL;
+    struct StreamDescriptor *streamDesc= NULL;
+    
+    streamDesc = malloc(sizeof(struct StreamDescriptor));
+    streamDesc->mVolumeCurve = sSpeakerMediaVolumeCurve;
+   
+    curve = streamDesc->mVolumeCurve;
+    streamDesc->mIndexMin = in->indexMIn;
+    streamDesc->mIndexMax = in->indexMax;
+    // the volume index in the UI is relative to the min and max volume indices for this stream type
+    int nbSteps = 1 + curve[VOLMAX].mIndex -
+            curve[VOLMIN].mIndex;
+
+    ALOGD("volIndexToAmpl,nbSteps=%d",nbSteps);
+    int volIdx = (nbSteps * (indexInUi - streamDesc->mIndexMin)) /
+            (streamDesc->mIndexMax - streamDesc->mIndexMin);
+
+    // find what part of the curve this index volume belongs to, or if it's out of bounds
+    int segment = 0;
+    if (volIdx < curve[VOLMIN].mIndex) {         // out of bounds
+        return 0.0f;
+    } else if (volIdx < curve[VOLKNEE1].mIndex) {
+        segment = 0;
+    } else if (volIdx < curve[VOLKNEE2].mIndex) {
+        segment = 1;
+    } else if (volIdx <= curve[VOLMAX].mIndex) {
+        segment = 2;
+    } else {                                     // out of bounds
+        return 1.0f;
+    }
+
+    // linear interpolation in the attenuation table in dB
+    float decibels = curve[segment].mDBAttenuation +
+            ((float)(volIdx - curve[segment].mIndex)) *
+                ( (curve[segment+1].mDBAttenuation -
+                        curve[segment].mDBAttenuation) /
+                    ((float)(curve[segment+1].mIndex -
+                            curve[segment].mIndex)) );
+
+    float amplification = exp( decibels * 0.115129f); // exp( dB * ln(10) / 20 )
+
+    ALOGD("VOLUME vol index=[%d %d %d], dB=[%.1f %.1f %.1f] ampl=%.5f",
+            curve[segment].mIndex, volIdx,
+            curve[segment+1].mIndex,
+            curve[segment].mDBAttenuation,
+            decibels,
+            curve[segment+1].mDBAttenuation,
+            amplification);
+
+    return amplification;
+}
+
+float computeVolume(struct audio_stream_in *stream)
+{
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    float volume = 1.0f;
+    char prop[PROPERTY_VALUE_MAX];
+    
+    property_get("mbx.hdmiin.vol",prop,"15");
+    
+    int indexUI = atoi(prop);
+    if(indexUI > in->indexMax)
+        indexUI = in->indexMax;
+    else if(indexUI < in->indexMIn)
+        indexUI = in->indexMIn;
+    
+    if(in->volume_index !=indexUI){
+        in->volume_index = indexUI;
+
+        volume = volIndexToAmpl(stream,indexUI);
+        in->last_volume = volume;
+    }else{
+        volume = in->last_volume;
+    }
+    return volume;
+}
 
 static int getprop_bool(const char * path)
 {
@@ -1760,6 +1870,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer,
                        size_t bytes)
 {
 		int ret = 0;
+		int i =0;
 		struct aml_stream_in *in = (struct aml_stream_in *)stream;
 		struct aml_audio_device *adev = in->dev;
 		size_t frames_rq = bytes / audio_stream_frame_size(&stream->common);
@@ -1835,6 +1946,12 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer,
 			ret = read_frames(in, buffer, frames_rq);
 		else
 			ret = pcm_read(in->pcm, buffer, bytes);
+
+		float volume = computeVolume(stream);
+		int16_t *hdmi_buf = (int16_t *)buffer;
+		for(i=0;i<bytes/2;i++){
+			hdmi_buf[i] = (int16_t)(((float)hdmi_buf[i])*volume);
+		}
 	
 		if (ret > 0)
 			ret = 0;
@@ -2237,6 +2354,12 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     in->dev = ladev;
     in->standby = 1;
     in->device = devices & ~AUDIO_DEVICE_BIT_IN;
+
+    // init hdmi in volume parameters
+    in->volume_index = 0;
+    in->last_volume = 0.0f;
+    in->indexMIn = 0;
+    in->indexMax = 15;
 
     *stream_in = &in->stream;
     return 0;
