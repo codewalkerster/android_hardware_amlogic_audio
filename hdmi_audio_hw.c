@@ -463,9 +463,11 @@ static int start_output_stream(struct aml_stream_out *out)
              return -1;
         }else{
              struct aml_stream_out *pLastStreamOut=(struct aml_stream_out *)HdmiStreamState.pLastStreamOut;
-             if(pLastStreamOut!=NULL && pLastStreamOut!=out && (codec_type||out->config.channels==8))//corruent output mode:digital_raw
+             if(pLastStreamOut!=NULL && pLastStreamOut!=out &&
+                (codec_type || out->config.channels==8 || (out->config.channels==2 && out->config.rate>48000 && codec_type==0))
+                )//corruent output mode:digital_raw
              {
-                  ALOGI("[%s %d]Force standy LastStream/%p\n",pLastStreamOut);
+                  ALOGI("[%s %d]Force standy LastStream/%p\n",__FUNCTION__,__LINE__,pLastStreamOut);
                   //------------------------------------------------------------
                   //do_output_standby(HdmiStreamState.pLastStreamOut);
                   struct aml_audio_device *adev_local =pLastStreamOut->dev;
@@ -493,6 +495,12 @@ static int start_output_stream(struct aml_stream_out *out)
     {
        HdmiStreamState.N8ch_out_flag=1;
     }
+    if(out->config.channels==2 && out->config.rate>48000 && codec_type==0)
+    {
+        ALOGI("[%s %d]HD-PCM(Fs/%d>48000) use DirectOuput\n",__FUNCTION__,__LINE__,out->config.rate);
+        HdmiStreamState.LastStreamDirectFlag=1;
+    }
+
   
     if(out->config.rate!=DEFAULT_OUT_SAMPLING_RATE){
 	
