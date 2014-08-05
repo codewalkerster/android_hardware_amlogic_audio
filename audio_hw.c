@@ -44,7 +44,7 @@
 #include <audio_utils/echo_reference.h>
 #include <hardware/audio_effect.h>
 #include <audio_effects/effect_aec.h>
-#include "audio_route.h"
+#include <audio_route/audio_route.h>
 /* ALSA cards for AML */
 #define CARD_AMLOGIC_BOARD 0 
 #define CARD_AMLOGIC_USB 1
@@ -75,6 +75,7 @@ static unsigned int  DEFAULT_OUT_SAMPLING_RATE  = 48000;
 #define MM_FULL_POWER_SAMPLING_RATE 48000
 /* sampling rate when using VX port for narrow band */
 #define VX_NB_SAMPLING_RATE 8000
+#define MIXER_XML_PATH "/system/etc/mixer_paths.xml"
 
 struct pcm_config pcm_config_out = {
     .channels = 2,
@@ -112,6 +113,7 @@ struct aml_audio_device {
     struct aml_stream_out *active_output;
 
     bool mic_mute;
+    unsigned int card;
     struct audio_route *ar;
     struct echo_reference_itfe *echo_reference;
     bool low_power;
@@ -207,7 +209,7 @@ static void select_devices(struct aml_audio_device *adev)
     
     LOGFUNC("~~~~ %s : hs=%d , hp=%d, sp=%d, hdmi=0x%x,earpiece=0x%x", __func__, headset_on, headphone_on, speaker_on,hdmi_on,earpiece);
     LOGFUNC("~~~~ %s : in_device(%#x), mic_in(%#x), headset_mic(%#x)", __func__, adev->in_device, mic_in, headset_mic);
-    reset_mixer_state(adev->ar);
+    audio_route_reset(adev->ar);
     LOGFUNC("****%s : output_standby=%d,input_standby=%d",__func__,output_standby,input_standby);
     if (hdmi_on)
         audio_route_apply_path(adev->ar, "hdmi");
@@ -220,7 +222,7 @@ static void select_devices(struct aml_audio_device *adev)
     if (headset_mic)
         audio_route_apply_path(adev->ar, "headset-mic");
    
-    update_mixer_state(adev->ar);
+    audio_route_update_mixer(adev->ar);
 
 }
 
@@ -313,8 +315,6 @@ static void select_mode(struct aml_audio_device *adev)
     else
         adev->out_device &= ~AUDIO_DEVICE_OUT_SPEAKER;
     
-    select_output_device(adev);
-    select_input_device(adev);
     return;
 }
 #if 0
@@ -2138,6 +2138,7 @@ static int adev_open(const hw_module_t* module, const char* name,
                      hw_device_t** device)
 {
     struct aml_audio_device *adev;
+    int card = CARD_AMLOGIC_DEFAULT;
     int ret;
     
     if (strcmp(name, AUDIO_HARDWARE_INTERFACE) != 0)
@@ -2169,8 +2170,14 @@ static int adev_open(const hw_module_t* module, const char* name,
     adev->hw_device.open_input_stream = adev_open_input_stream;
     adev->hw_device.close_input_stream = adev_close_input_stream;
     adev->hw_device.dump = adev_dump;
-
-    adev->ar = audio_route_init();
+    card = get_aml_card();
+    if ((card < 0)||(card > 7)){
+        ALOGE("error to get audio card");
+		return -EINVAL;
+    }
+	
+    adev->card = card;
+    adev->ar = audio_route_init(adev->card, MIXER_XML_PATH);
 
     /* Set the default route before the PCM stream is opened */
     adev->mode = AUDIO_MODE_NORMAL;
