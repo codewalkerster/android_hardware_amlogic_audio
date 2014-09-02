@@ -27,23 +27,17 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 	LOCAL_MODULE := audio.primary.amlogic
 	LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 	LOCAL_SRC_FILES := \
-		audio_hw.c \
-		audio_route.c
+		audio_hw.c
 	LOCAL_C_INCLUDES += \
 		external/tinyalsa/include \
 		system/media/audio_utils/include \
 		system/media/audio_effects/include \
-		external/expat/lib 
+		system/media/audio_route/include
 	LOCAL_SHARED_LIBRARIES := \
 		liblog libcutils libtinyalsa \
-		libaudioutils libdl libexpat
+		libaudioutils libdl libaudioroute
 	LOCAL_MODULE_TAGS := optional
 
-#CONFIG_AML_CODEC
-	ifeq ($(BOARD_AUDIO_CODEC),rt5631)
-		LOCAL_CFLAGS += -DAML_AUDIO_RT5631
-	endif
-	
 	include $(BUILD_SHARED_LIBRARY)
 #build for USB audio
 	ifeq ($(strip $(BOARD_USE_USB_AUDIO)),true)

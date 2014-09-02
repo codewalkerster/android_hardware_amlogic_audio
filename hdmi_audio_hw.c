@@ -44,7 +44,6 @@
 #include <audio_utils/echo_reference.h>
 #include <hardware/audio_effect.h>
 #include <audio_effects/effect_aec.h>
-#include "audio_route.h"
 
 /* ALSA cards for AML */
 #define CARD_AMLOGIC_BOARD 0 
@@ -109,7 +108,6 @@ struct aml_audio_device {
 	struct aml_stream_out *active_output;
 
 	bool mic_mute;
-	struct audio_route *ar;
     struct echo_reference_itfe *echo_reference;
     bool bluetooth_nrec;
     bool low_power;
@@ -2454,8 +2452,6 @@ static int adev_open(const hw_module_t* module, const char* name,
     adev->hw_device.open_input_stream = adev_open_input_stream;
     adev->hw_device.close_input_stream = adev_close_input_stream;
     adev->hw_device.dump = adev_dump;
-
-    adev->ar = NULL;//audio_route_init();
 
     /* Set the default route before the PCM stream is opened */
     adev->mode = AUDIO_MODE_NORMAL;
