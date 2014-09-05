@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+    
 #define LOG_TAG "audio_hw_primary"
 //#define LOG_NDEBUG 0
 //#define LOG_NDEBUG_FUNCTION
@@ -711,7 +711,7 @@ static size_t out_get_buffer_size(const struct audio_stream *stream)
          */
     size_t size = (out->config.period_size * DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
     size = ((size + 15) / 16) * 16;
-    return size * audio_stream_frame_size((struct audio_stream *)stream);
+    return size * audio_stream_out_frame_size((struct audio_stream_out *)stream);
 }
 
 static audio_channel_mask_t out_get_channels(const struct audio_stream *stream)
@@ -896,7 +896,7 @@ static char * out_get_parameters(const struct audio_stream *stream, const char *
 {
     return strdup("");
 }
-
+#if 0
 static uint32_t out_get_latency(const struct audio_stream_out *stream)
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;    
@@ -915,7 +915,14 @@ static uint32_t out_get_latency(const struct audio_stream_out *stream)
 		}
     return ret;
 }
+#else
+static uint32_t out_get_latency(const struct audio_stream_out *stream)
+{
 
+    struct aml_stream_out *out = (struct aml_stream_out *)stream;    
+	return (out->config.period_size * out->config.period_count * 1000) / out->config.rate;
+}
+#endif
 static int out_set_volume(struct audio_stream_out *stream, float left,
                           float right)
 {
@@ -928,7 +935,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
     int ret=0;
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = out->dev;
-    size_t frame_size = audio_stream_frame_size(&out->stream.common);
+    size_t frame_size = audio_stream_out_frame_size(stream);
     size_t in_frames = bytes / frame_size;
     size_t out_frames;
     bool force_input_standby = false;
@@ -1072,7 +1079,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         //fixed me: It is not a good way to clear android audioflinger buffer,but when pcm write error, audioflinger can't break out.
         memset(in_buffer,0,bytes);
         if (ret != 0) {
-            usleep(bytes * 1000000 / audio_stream_frame_size(&stream->common) /
+            usleep(bytes * 1000000 / audio_stream_out_frame_size(stream) /
                    out_get_sample_rate(&stream->common));
         }
     
@@ -1527,7 +1534,7 @@ static int get_next_buffer(struct resampler_buffer_provider *buffer_provider,
         in->read_status = pcm_read(in->pcm,
                                    (void*)in->buffer,
                                    in->config.period_size *
-                                       audio_stream_frame_size(&in->stream.common));
+                                       audio_stream_in_frame_size(&in->stream));
         if (in->read_status != 0) {
             ALOGE("get_next_buffer() pcm_read error %d", in->read_status);
             buffer->raw = NULL;
@@ -1571,7 +1578,7 @@ static ssize_t read_frames(struct aml_stream_in *in, void *buffer, ssize_t frame
         if (in->resampler != NULL) {
             in->resampler->resample_from_provider(in->resampler,
                     (int16_t *)((char *)buffer +
-                            frames_wr * audio_stream_frame_size(&in->stream.common)),
+                            frames_wr * audio_stream_in_frame_size(&in->stream)),
                     &frames_rd);
         } else {
             struct resampler_buffer buf = {
@@ -1581,9 +1588,9 @@ static ssize_t read_frames(struct aml_stream_in *in, void *buffer, ssize_t frame
             get_next_buffer(&in->buf_provider, &buf);
             if (buf.raw != NULL) {
                 memcpy((char *)buffer +
-                           frames_wr * audio_stream_frame_size(&in->stream.common),
+                           frames_wr * audio_stream_in_frame_size(&in->stream),
                         buf.raw,
-                        buf.frame_count * audio_stream_frame_size(&in->stream.common));
+                        buf.frame_count * audio_stream_in_frame_size(&in->stream));
                 frames_rd = buf.frame_count;
             }
             release_buffer(&in->buf_provider, &buf);
@@ -1673,7 +1680,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer,
         int ret = 0;
         struct aml_stream_in *in = (struct aml_stream_in *)stream;
         struct aml_audio_device *adev = in->dev;
-        size_t frames_rq = bytes / audio_stream_frame_size(&stream->common);
+        size_t frames_rq = bytes / audio_stream_in_frame_size(&in->stream);
 
         /* acquiring hw device mutex systematically is useful if a low priority thread is waiting
          * on the input stream mutex - e.g. executing select_mode() while holding the hw device
@@ -1722,7 +1729,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer,
 
     exit:
         if (ret < 0)
-            usleep(bytes * 1000000 / audio_stream_frame_size(&stream->common) /
+            usleep(bytes * 1000000 / audio_stream_in_frame_size(stream) /
                    in_get_sample_rate(&stream->common));
     
         pthread_mutex_unlock(&in->lock);
@@ -2005,7 +2012,8 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
                                   audio_io_handle_t handle,
                                   audio_devices_t devices,
                                   struct audio_config *config,
-                                  struct audio_stream_in **stream_in)
+                                  struct audio_stream_in **stream_in,
+                                  audio_input_flags_t flags __unused)
 {
     struct aml_audio_device *ladev = (struct aml_audio_device *)dev;
     struct aml_stream_in *in;
@@ -2058,7 +2066,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
         ALOGE("Bad value of channel count : %d", in->config.channels);
     }
     in->buffer = malloc(in->config.period_size *
-                        audio_stream_frame_size(&in->stream.common));
+                        audio_stream_in_frame_size(&in->stream));
     if (!in->buffer) {
         ret = -ENOMEM;
         goto err_open;
