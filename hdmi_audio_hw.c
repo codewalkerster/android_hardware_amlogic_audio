@@ -44,7 +44,6 @@
 #include <audio_utils/echo_reference.h>
 #include <hardware/audio_effect.h>
 #include <audio_effects/effect_aec.h>
-#include "audio_route.h"
 
 /* ALSA cards for AML */
 #define CARD_AMLOGIC_BOARD 0 
@@ -109,7 +108,6 @@ struct aml_audio_device {
 	struct aml_stream_out *active_output;
 
 	bool mic_mute;
-	struct audio_route *ar;
     struct echo_reference_itfe *echo_reference;
     bool bluetooth_nrec;
     bool low_power;
@@ -176,6 +174,11 @@ struct aml_stream_in {
     size_t ref_frames_in;
     int read_status;
     int voip_mode;
+    //hdmi in volume parameters
+    int volume_index;  
+    float last_volume;
+    int indexMIn;
+    int indexMax; 
 
     struct aml_audio_device *dev;
 };
@@ -187,6 +190,111 @@ static void select_input_device(struct aml_audio_device *adev);
 static int adev_set_voice_volume(struct audio_hw_device *dev, float volume);
 static int do_input_standby(struct aml_stream_in *in);
 static int do_output_standby(struct aml_stream_out *out);
+
+// add compute hdmi in volume function, volume index between 0 and 15 ,this reference AudioPolicyManagerBase
+
+enum { VOLMIN = 0, VOLKNEE1 = 1, VOLKNEE2 = 2, VOLMAX = 3, VOLCNT = 4};
+
+struct VolumeCurvePoint
+{
+    int mIndex;
+    float mDBAttenuation;
+};
+
+struct VolumeCurvePoint sSpeakerMediaVolumeCurve[VOLCNT] = {
+    {1, -56.0f}, {20, -34.0f}, {60, -11.0f}, {100, 0.0f}
+};
+
+// stream descriptor used for volume control
+struct StreamDescriptor
+{
+    int mIndexMin;      // min volume index
+    int mIndexMax;      // max volume index
+    int mIndexCur[15];   // current volume index 
+
+    struct VolumeCurvePoint *mVolumeCurve;
+};
+
+
+float volIndexToAmpl(struct audio_stream_in *stream,int indexInUi)
+{
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    struct VolumeCurvePoint *curve=NULL;
+    struct StreamDescriptor *streamDesc= NULL;
+    
+    streamDesc = malloc(sizeof(struct StreamDescriptor));
+    streamDesc->mVolumeCurve = sSpeakerMediaVolumeCurve;
+   
+    curve = streamDesc->mVolumeCurve;
+    streamDesc->mIndexMin = in->indexMIn;
+    streamDesc->mIndexMax = in->indexMax;
+    // the volume index in the UI is relative to the min and max volume indices for this stream type
+    int nbSteps = 1 + curve[VOLMAX].mIndex -
+            curve[VOLMIN].mIndex;
+
+    ALOGD("volIndexToAmpl,nbSteps=%d",nbSteps);
+    int volIdx = (nbSteps * (indexInUi - streamDesc->mIndexMin)) /
+            (streamDesc->mIndexMax - streamDesc->mIndexMin);
+
+    // find what part of the curve this index volume belongs to, or if it's out of bounds
+    int segment = 0;
+    if (volIdx < curve[VOLMIN].mIndex) {         // out of bounds
+        return 0.0f;
+    } else if (volIdx < curve[VOLKNEE1].mIndex) {
+        segment = 0;
+    } else if (volIdx < curve[VOLKNEE2].mIndex) {
+        segment = 1;
+    } else if (volIdx <= curve[VOLMAX].mIndex) {
+        segment = 2;
+    } else {                                     // out of bounds
+        return 1.0f;
+    }
+
+    // linear interpolation in the attenuation table in dB
+    float decibels = curve[segment].mDBAttenuation +
+            ((float)(volIdx - curve[segment].mIndex)) *
+                ( (curve[segment+1].mDBAttenuation -
+                        curve[segment].mDBAttenuation) /
+                    ((float)(curve[segment+1].mIndex -
+                            curve[segment].mIndex)) );
+
+    float amplification = exp( decibels * 0.115129f); // exp( dB * ln(10) / 20 )
+
+    ALOGD("VOLUME vol index=[%d %d %d], dB=[%.1f %.1f %.1f] ampl=%.5f",
+            curve[segment].mIndex, volIdx,
+            curve[segment+1].mIndex,
+            curve[segment].mDBAttenuation,
+            decibels,
+            curve[segment+1].mDBAttenuation,
+            amplification);
+
+    return amplification;
+}
+
+float computeVolume(struct audio_stream_in *stream)
+{
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    float volume = 1.0f;
+    char prop[PROPERTY_VALUE_MAX];
+    
+    property_get("mbx.hdmiin.vol",prop,"15");
+    
+    int indexUI = atoi(prop);
+    if(indexUI > in->indexMax)
+        indexUI = in->indexMax;
+    else if(indexUI < in->indexMIn)
+        indexUI = in->indexMIn;
+    
+    if(in->volume_index !=indexUI){
+        in->volume_index = indexUI;
+
+        volume = volIndexToAmpl(stream,indexUI);
+        in->last_volume = volume;
+    }else{
+        volume = in->last_volume;
+    }
+    return volume;
+}
 
 static int getprop_bool(const char * path)
 {
@@ -447,6 +555,10 @@ static int start_output_stream(struct aml_stream_out *out)
         out->config.period_size=PERIOD_SIZE*2;
         out->write_threshold = PLAYBACK_PERIOD_COUNT * PERIOD_SIZE*2;
         out->config.start_threshold = PLAYBACK_PERIOD_COUNT*PERIOD_SIZE*2;
+    }else if(codec_type == 7){
+        out->config.period_size=PERIOD_SIZE*4*2;
+        out->write_threshold = PLAYBACK_PERIOD_COUNT * PERIOD_SIZE*4*2;
+        out->config.start_threshold = PLAYBACK_PERIOD_COUNT*PERIOD_SIZE*4*2;
     }else{
         out->write_threshold = PLAYBACK_PERIOD_COUNT * PERIOD_SIZE;
         out->config.start_threshold = PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
@@ -459,9 +571,11 @@ static int start_output_stream(struct aml_stream_out *out)
              return -1;
         }else{
              struct aml_stream_out *pLastStreamOut=(struct aml_stream_out *)HdmiStreamState.pLastStreamOut;
-             if(pLastStreamOut!=NULL && pLastStreamOut!=out && (codec_type||out->config.channels==8))//corruent output mode:digital_raw
+             if(pLastStreamOut!=NULL && pLastStreamOut!=out &&
+                (codec_type || out->config.channels==8 || (out->config.channels==2 && out->config.rate>48000 && codec_type==0))
+                )//corruent output mode:digital_raw
              {
-                  ALOGI("[%s %d]Force standy LastStream/%p\n",pLastStreamOut);
+                  ALOGI("[%s %d]Force standy LastStream/%p\n",__FUNCTION__,__LINE__,pLastStreamOut);
                   //------------------------------------------------------------
                   //do_output_standby(HdmiStreamState.pLastStreamOut);
                   struct aml_audio_device *adev_local =pLastStreamOut->dev;
@@ -489,6 +603,12 @@ static int start_output_stream(struct aml_stream_out *out)
     {
        HdmiStreamState.N8ch_out_flag=1;
     }
+    if(out->config.channels==2 && out->config.rate>48000 && codec_type==0)
+    {
+        ALOGI("[%s %d]HD-PCM(Fs/%d>48000) use DirectOuput\n",__FUNCTION__,__LINE__,out->config.rate);
+        HdmiStreamState.LastStreamDirectFlag=1;
+    }
+
   
     if(out->config.rate!=DEFAULT_OUT_SAMPLING_RATE){
 	
@@ -686,6 +806,8 @@ static size_t out_get_buffer_size(const struct audio_stream *stream)
     int codec_type=get_codec_type("/sys/class/audiodsp/digital_codec");
     if(codec_type == 4 || codec_type == 5)//dd+
         size = (PERIOD_SIZE*2* PLAYBACK_PERIOD_COUNT * DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
+    else if(codec_type == 7)
+        size = (PERIOD_SIZE*2 * 4* PLAYBACK_PERIOD_COUNT * DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
     else if(codec_type>0 && codec_type<4 )            //dd/dts
         size = (PERIOD_SIZE*4*DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
     else//pcm
@@ -885,8 +1007,17 @@ static char * out_get_parameters(const struct audio_stream *stream, const char *
 
 static uint32_t out_get_latency(const struct audio_stream_out *stream)
 {
-	struct aml_stream_out *out = (struct aml_stream_out *)stream;    
-	return (PERIOD_SIZE * PLAYBACK_PERIOD_COUNT * 1000) / out->config.rate;
+    struct aml_stream_out *out = (struct aml_stream_out *)stream;
+    uint32_t whole_latency;
+    uint32_t ret;
+    whole_latency = (out->config.period_size * out->config.period_count * 1000) / out->config.rate;
+    if (!out->pcm || !pcm_is_ready(out->pcm))
+        return whole_latency;
+    ret = pcm_get_latency(out->pcm);
+    if(ret == -1){
+    	return whole_latency;
+    }
+    return ret;
 }
 
 
@@ -1737,6 +1868,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer,
                        size_t bytes)
 {
 		int ret = 0;
+		int i =0;
 		struct aml_stream_in *in = (struct aml_stream_in *)stream;
 		struct aml_audio_device *adev = in->dev;
 		size_t frames_rq = bytes / audio_stream_frame_size(&stream->common);
@@ -1812,6 +1944,12 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer,
 			ret = read_frames(in, buffer, frames_rq);
 		else
 			ret = pcm_read(in->pcm, buffer, bytes);
+
+		float volume = computeVolume(stream);
+		int16_t *hdmi_buf = (int16_t *)buffer;
+		for(i=0;i<bytes/2;i++){
+			hdmi_buf[i] = (int16_t)(((float)hdmi_buf[i])*volume);
+		}
 	
 		if (ret > 0)
 			ret = 0;
@@ -1957,6 +2095,8 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     dc = get_codec_type("/sys/class/audiodsp/digital_codec");
     if(dc == 4 || dc == 5)
         out->config.period_size=pcm_config_out.period_size*2;
+    else if(dc == 7)
+        out->config.period_size=pcm_config_out.period_size*4*2;
     if(channel_count > 2){
         ALOGI("[adev_open_output_stream]: out/%p channel/%d\n",out,channel_count);
         out->multich = channel_count;
@@ -2213,6 +2353,12 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     in->standby = 1;
     in->device = devices & ~AUDIO_DEVICE_BIT_IN;
 
+    // init hdmi in volume parameters
+    in->volume_index = 0;
+    in->last_volume = 0.0f;
+    in->indexMIn = 0;
+    in->indexMax = 15;
+
     *stream_in = &in->stream;
     return 0;
 
@@ -2306,8 +2452,6 @@ static int adev_open(const hw_module_t* module, const char* name,
     adev->hw_device.open_input_stream = adev_open_input_stream;
     adev->hw_device.close_input_stream = adev_close_input_stream;
     adev->hw_device.dump = adev_dump;
-
-    adev->ar = NULL;//audio_route_init();
 
     /* Set the default route before the PCM stream is opened */
     adev->mode = AUDIO_MODE_NORMAL;
