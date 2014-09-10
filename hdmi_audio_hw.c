@@ -635,6 +635,7 @@ static int start_output_stream(struct aml_stream_out *out)
     if (!pcm_is_ready(out->pcm)) {
         ALOGE("cannot open pcm_out driver: %s", pcm_get_error(out->pcm));
         pcm_close(out->pcm);
+        out->pcm=NULL;
         adev->active_output = NULL;
         return -ENOMEM;
     }
