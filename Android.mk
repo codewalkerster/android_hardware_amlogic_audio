@@ -73,21 +73,6 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 		
 		include $(BUILD_SHARED_LIBRARY)
 
-	
-# The stub audio policy HAL module that can be used as a skeleton for
-# new implementations.
-#include $(CLEAR_VARS)
-
-#LOCAL_MODULE := audio_policy.amlogic
-#LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
-#LOCAL_SRC_FILES := audio_policy.c
-#LOCAL_SHARED_LIBRARIES := liblog libcutils
-#LOCAL_MODULE_TAGS := optional
-
-#include $(BUILD_SHARED_LIBRARY)
-
-#endif
-
 #########################################################
 
 ifdef DOLBY_UDC
@@ -106,4 +91,30 @@ include $(CLEAR_VARS)
 
 endif
 
-endif
+#########################################################
+# Audio Policy Manager
+ifeq ($(USE_CUSTOM_AUDIO_POLICY),1)
+include $(CLEAR_VARS)
+
+LOCAL_SRC_FILES := \
+	DLGAudioPolicyManager.cpp
+
+LOCAL_SHARED_LIBRARIES := \
+	libcutils \
+	liblog \
+	libutils \
+	libmedia \
+	libbinder \
+	libaudiopolicymanagerdefault
+
+LOCAL_C_INCLUDES := \
+	external/tinyalsa/include \
+	$(TOPDIR)frameworks/av/services/audiopolicy
+
+LOCAL_MODULE := libaudiopolicymanager
+LOCAL_MODULE_TAGS := optional
+
+include $(BUILD_SHARED_LIBRARY)
+endif # USE_CUSTOM_AUDIO_POLICY
+
+endif # BOARD_ALSA_AUDIO
