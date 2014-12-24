@@ -109,6 +109,8 @@ audio_devices_t DLGAudioPolicyManager::getDeviceForInputSource(audio_source_t in
           device = AUDIO_DEVICE_IN_REMOTE_SUBMIX;
       }
     }
+    else
+        device = AudioPolicyManager::getDeviceForInputSource(inputSource);
 
     ALOGV("getDeviceForInputSource() input source %d, device %08x", inputSource, device);
     return device;
