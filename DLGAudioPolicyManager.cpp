@@ -62,7 +62,7 @@ float DLGAudioPolicyManager::computeVolume(audio_stream_type_t stream,
     (void)index;
     (void)output;
     (void)device;
-    return 1.0;
+    return AudioPolicyManager::computeVolume(stream,index,output,device);
 }
 
 status_t DLGAudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
