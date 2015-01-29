@@ -556,11 +556,12 @@ static int start_output_stream(struct aml_stream_out *out)
         out->config.period_size=PERIOD_SIZE*2;
         out->write_threshold = PLAYBACK_PERIOD_COUNT * PERIOD_SIZE*2;
         out->config.start_threshold = PLAYBACK_PERIOD_COUNT*PERIOD_SIZE*2;
-    }else if(codec_type == 7){
-        out->config.period_size=PERIOD_SIZE*4*2;
-        out->write_threshold = PLAYBACK_PERIOD_COUNT * PERIOD_SIZE*4*2;
-        out->config.start_threshold = PLAYBACK_PERIOD_COUNT*PERIOD_SIZE*4*2;
+    }else if(codec_type == 7||codec_type == 8){
+        out->config.period_size=PERIOD_SIZE*4;
+        out->write_threshold = PLAYBACK_PERIOD_COUNT * PERIOD_SIZE*4;
+        out->config.start_threshold = PLAYBACK_PERIOD_COUNT*PERIOD_SIZE*4;
     }else{
+        out->config.period_size=PERIOD_SIZE;
         out->write_threshold = PLAYBACK_PERIOD_COUNT * PERIOD_SIZE;
         out->config.start_threshold = PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
     }
@@ -636,6 +637,7 @@ static int start_output_stream(struct aml_stream_out *out)
     if (!pcm_is_ready(out->pcm)) {
         ALOGE("cannot open pcm_out driver: %s", pcm_get_error(out->pcm));
         pcm_close(out->pcm);
+        out->pcm=NULL;
         adev->active_output = NULL;
         return -ENOMEM;
     }
@@ -807,8 +809,8 @@ static size_t out_get_buffer_size(const struct audio_stream *stream)
     int codec_type=get_codec_type("/sys/class/audiodsp/digital_codec");
     if(codec_type == 4 || codec_type == 5)//dd+
         size = (PERIOD_SIZE*2* PLAYBACK_PERIOD_COUNT * DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
-    else if(codec_type == 7)
-        size = (PERIOD_SIZE*2 * 4* PLAYBACK_PERIOD_COUNT * DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
+    else if(codec_type == 7||codec_type == 8)
+        size = ((int64_t)PERIOD_SIZE*4* PLAYBACK_PERIOD_COUNT * DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
     else if(codec_type>0 && codec_type<4 )            //dd/dts
         size = (PERIOD_SIZE*4*DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
     else//pcm
@@ -1169,7 +1171,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
 		total_len = out_frames*frame_size + cached_len;
 
 
-		LOGFUNC("total_len(%d) = resampler_out_len(%d) + cached_len111(%d)", total_len, out_frames*frame_size, cached_len);
+		//LOGFUNC("total_len(%d) = resampler_out_len(%d) + cached_len111(%d)", total_len, out_frames*frame_size, cached_len);
 
 		data_src = (char *)cache_buffer_bytes;
 		data_dst = (char *)output_buffer_bytes;
@@ -2101,8 +2103,8 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     dc = get_codec_type("/sys/class/audiodsp/digital_codec");
     if(dc == 4 || dc == 5)
         out->config.period_size=pcm_config_out.period_size*2;
-    else if(dc == 7)
-        out->config.period_size=pcm_config_out.period_size*4*2;
+    else if(dc == 7||dc == 8)
+        out->config.period_size=pcm_config_out.period_size*4;
     if(channel_count > 2){
         ALOGI("[adev_open_output_stream]: out/%p channel/%d\n",out,channel_count);
         out->multich = channel_count;

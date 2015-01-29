@@ -468,6 +468,22 @@ OUT:
     close(fd);
     return port;
 }
+
+#define NOTIFY_KERNEL_ANDROID50_NODE "/sys/class/amaudio/debug"
+static void NotifyKernelAndroid50()
+{
+    int fd=open(NOTIFY_KERNEL_ANDROID50_NODE,  O_RDWR | O_TRUNC, 0644);
+    int bytes,pos=0;
+    if (fd >= 0) {
+        char ubuf8[128]={0};
+        bytes=sprintf(ubuf8,"kernel_android_50");
+        write(fd, ubuf8, bytes);
+        close(fd);
+    }else{
+        ALOGI("[%s %d]open %s failed!\n",__FUNCTION__,__LINE__,NOTIFY_KERNEL_ANDROID50_NODE);
+    }
+}
+
 /* must be called with hw device and output stream mutexes locked */
 static int start_output_stream(struct aml_stream_out *out)
 {
@@ -477,7 +493,6 @@ static int start_output_stream(struct aml_stream_out *out)
     int ret;
 
     LOGFUNC("%s(adev->out_device=%#x, adev->mode=%d)", __FUNCTION__, adev->out_device, adev->mode);
-
     adev->active_output = out;
 
     if (adev->mode != AUDIO_MODE_IN_CALL) {
@@ -2142,16 +2157,16 @@ static int adev_close(hw_device_t *device)
     return 0;
 }
 
+
 static int adev_open(const hw_module_t* module, const char* name,
                      hw_device_t** device)
 {
     struct aml_audio_device *adev;
     int card = CARD_AMLOGIC_DEFAULT;
     int ret;
-    
     if (strcmp(name, AUDIO_HARDWARE_INTERFACE) != 0)
         return -EINVAL;
-
+    NotifyKernelAndroid50();
     adev = calloc(1, sizeof(struct aml_audio_device));
     if (!adev)
         return -ENOMEM;
