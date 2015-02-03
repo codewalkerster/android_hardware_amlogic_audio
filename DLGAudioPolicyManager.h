@@ -65,6 +65,7 @@ protected:
                                 audio_io_handle_t output,
                                 audio_devices_t device);
     audio_devices_t getDevicesForStream(audio_stream_type_t stream);
+    audio_devices_t getNewOutputDevice(audio_io_handle_t output, bool fromCache);
 private:
     // Flag which indicates whether to record from the submix device.
     bool mForceSubmixInputSelection;

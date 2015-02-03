@@ -468,6 +468,79 @@ audio_stream_type_t DLGAudioPolicyManager::streamTypefromAttributesInt(const aud
         return AUDIO_STREAM_MUSIC;
     }
 }
+audio_devices_t DLGAudioPolicyManager::getNewOutputDevice(audio_io_handle_t output, bool fromCache)
+{
+    audio_devices_t device = AUDIO_DEVICE_NONE;
+
+    sp<AudioOutputDescriptor> outputDesc = mOutputs.valueFor(output);
+
+    ssize_t index = mAudioPatches.indexOfKey(outputDesc->mPatchHandle);
+    if (index >= 0) {
+        sp<AudioPatch> patchDesc = mAudioPatches.valueAt(index);
+        if (patchDesc->mUid != mUidCached) {
+            ALOGV("getNewOutputDevice() device %08x forced by patch %d",
+                  outputDesc->device(), outputDesc->mPatchHandle);
+            return outputDesc->device();
+        }
+    }
+
+    // check the following by order of priority to request a routing change if necessary:
+    // 1: the strategy enforced audible is active and enforced on the output:
+    //      use device for strategy enforced audible
+    // 2: we are in call or the strategy phone is active on the output:
+    //      use device for strategy phone
+    // 3: the strategy for enforced audible is active but not enforced on the output:
+    //      use the device for strategy enforced audible
+    // 4: the strategy sonification is active on the output:
+    //      use device for strategy sonification
+    // 5: the strategy "respectful" sonification is active on the output:
+    //      use device for strategy "respectful" sonification
+    // 6: the strategy media is active on the output:
+    //      use device for strategy media
+    // 7: the strategy DTMF is active on the output:
+    //      use device for strategy DTMF
+    if (outputDesc->isStrategyActive(STRATEGY_ENFORCED_AUDIBLE) &&
+        mForceUse[AUDIO_POLICY_FORCE_FOR_SYSTEM] == AUDIO_POLICY_FORCE_SYSTEM_ENFORCED) {
+        device = getDeviceForStrategy(STRATEGY_ENFORCED_AUDIBLE, fromCache);
+    } else if (isInCall() ||
+                    outputDesc->isStrategyActive(STRATEGY_PHONE)) {
+        device = getDeviceForStrategy(STRATEGY_PHONE, fromCache);
+    } else if (outputDesc->isStrategyActive(STRATEGY_ENFORCED_AUDIBLE)) {
+        device = getDeviceForStrategy(STRATEGY_ENFORCED_AUDIBLE, fromCache);
+    } else if (outputDesc->isStrategyActive(STRATEGY_SONIFICATION)) {
+        device = getDeviceForStrategy(STRATEGY_SONIFICATION, fromCache);
+    } else if (outputDesc->isStrategyActive(STRATEGY_SONIFICATION_RESPECTFUL)) {
+        device = getDeviceForStrategy(STRATEGY_SONIFICATION_RESPECTFUL, fromCache);
+    } else if (outputDesc->isStrategyActive(STRATEGY_MEDIA)) {
+        device = getDeviceForStrategy(STRATEGY_MEDIA, fromCache);
+    } else if (outputDesc->isStrategyActive(STRATEGY_DTMF)) {
+        device = getDeviceForStrategy(STRATEGY_DTMF, fromCache);
+    }
+
+    int direct_in_use=0;
+    for (size_t i = 0; i < mOutputs.size(); i++) {
+        sp<AudioOutputDescriptor> desc = mOutputs.valueAt(i);
+        if (desc->mFlags & AUDIO_OUTPUT_FLAG_DIRECT)
+            direct_in_use=1;
+    }
+
+    audio_devices_t availableOutputDeviceTypes = mAvailableOutputDevices.types();
+    ALOGV("[%s %d]outputDesc->mDevice/0x%x device/%x direct_in_use/%d availableOutputDeviceTypes/0x%x isStrategyActive(STRATEGY_MEDIA)/%d fromCache/%d\n", __FUNCTION__,__LINE__,
+           outputDesc->mDevice,device,direct_in_use,availableOutputDeviceTypes,outputDesc->isStrategyActive(STRATEGY_MEDIA),fromCache);
+    if (outputDesc->mDevice == AUDIO_DEVICE_OUT_SPEAKER && outputDesc->isStrategyActive(STRATEGY_MEDIA) && (device == AUDIO_DEVICE_OUT_AUX_DIGITAL && !get_codec_type("/sys/class/audiodsp/digital_codec")) || direct_in_use)
+    {
+        device = availableOutputDeviceTypes & AUDIO_DEVICE_OUT_SPEAKER;
+        if (device == AUDIO_DEVICE_NONE)
+            device = AUDIO_DEVICE_OUT_AUX_DIGITAL;
+        if (device == AUDIO_DEVICE_OUT_SPEAKER)
+        {
+           ALOGV("[%s %d]direct_in_use/%d force change device from %x to %x\n",__FUNCTION__,__LINE__,
+           direct_in_use,AUDIO_DEVICE_OUT_AUX_DIGITAL,AUDIO_DEVICE_OUT_SPEAKER);
+        }
+    }
+    ALOGV("[%s %d]selected device %x", __FUNCTION__,__LINE__,device);
+    return device;
+}
 
 uint32_t DLGAudioPolicyManager::AudioPort::pickSamplingRate() const
 {
