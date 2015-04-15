@@ -40,6 +40,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 
 	include $(BUILD_SHARED_LIBRARY)
 #build for USB audio
+#BOARD_USE_USB_AUDIO := 1
 	ifeq ($(strip $(BOARD_USE_USB_AUDIO)),true)
 		include $(CLEAR_VARS)
 		

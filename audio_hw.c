@@ -188,6 +188,20 @@ static int getprop_bool(const char * path)
     }
     return 0;
 }
+static int get_sysfs_int(const char * path)
+{
+    int val = 0;
+    int fd = open(path, O_RDONLY);
+    if (fd >= 0) {
+        char  bcmd[16];
+        read(fd, bcmd, sizeof(bcmd));
+        val = strtol(bcmd, NULL, 10);
+        close(fd);
+    }else{
+         LOGFUNC("[%s]open %s node failed! return 0\n",path, __FUNCTION__);
+    }
+    return val;
+}
 static void select_devices(struct aml_audio_device *adev)
 {
     LOGFUNC("%s(mode=%d, out_device=%#x)", __FUNCTION__, adev->mode, adev->out_device);
@@ -468,22 +482,6 @@ OUT:
     close(fd);
     return port;
 }
-
-#define NOTIFY_KERNEL_ANDROID50_NODE "/sys/class/amaudio/debug"
-static void NotifyKernelAndroid50()
-{
-    int fd=open(NOTIFY_KERNEL_ANDROID50_NODE,  O_RDWR | O_TRUNC, 0644);
-    int bytes,pos=0;
-    if (fd >= 0) {
-        char ubuf8[128]={0};
-        bytes=sprintf(ubuf8,"kernel_android_50");
-        write(fd, ubuf8, bytes);
-        close(fd);
-    }else{
-        ALOGI("[%s %d]open %s failed!\n",__FUNCTION__,__LINE__,NOTIFY_KERNEL_ANDROID50_NODE);
-    }
-}
-
 /* must be called with hw device and output stream mutexes locked */
 static int start_output_stream(struct aml_stream_out *out)
 {
@@ -493,6 +491,7 @@ static int start_output_stream(struct aml_stream_out *out)
     int ret;
 
     LOGFUNC("%s(adev->out_device=%#x, adev->mode=%d)", __FUNCTION__, adev->out_device, adev->mode);
+
     adev->active_output = out;
 
     if (adev->mode != AUDIO_MODE_IN_CALL) {
@@ -961,6 +960,8 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
     char *data,  *data_dst;
     volatile char *data_src;
     uint i, total_len;
+    int codec_type = 0;
+    int samesource_flag = 0;
     //LOGFUNC("entring:%s(out->echo_reference=%p, in_frames=%d)", __FUNCTION__, out->echo_reference, in_frames);
 
     /* acquiring hw device mutex systematically is useful if a low priority thread is waiting
@@ -969,7 +970,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
      */
     pthread_mutex_lock(&adev->lock);
     pthread_mutex_lock(&out->lock);
-    #if 1
+    #if 0
     #define DOLBY_SYSTEM_CHANNEL "ds1.audio.multichannel.support"
     char value[128]={0};
     property_get(DOLBY_SYSTEM_CHANNEL,value,NULL);
@@ -1086,6 +1087,12 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         ret = pcm_write(out->pcm, in_buffer, out_frames * frame_size);
     }
 #else
+    codec_type = get_sysfs_int("/sys/class/audiodsp/digital_codec");
+    samesource_flag = get_sysfs_int("/sys/class/audiodsp/audio_samesource");
+    if (samesource_flag == 0  && codec_type == 0) {
+        ALOGI("to enable same source,need reset alsa,type %d,same source flag %d \n",codec_type,samesource_flag);
+        pcm_stop(out->pcm);
+    }
     ret = pcm_write(out->pcm, in_buffer, out_frames * frame_size);
     out->frame_count += out_frames;
 #endif
@@ -2157,7 +2164,6 @@ static int adev_close(hw_device_t *device)
     return 0;
 }
 
-
 static int adev_open(const hw_module_t* module, const char* name,
                      hw_device_t** device)
 {
@@ -2166,7 +2172,7 @@ static int adev_open(const hw_module_t* module, const char* name,
     int ret;
     if (strcmp(name, AUDIO_HARDWARE_INTERFACE) != 0)
         return -EINVAL;
-    NotifyKernelAndroid50();
+
     adev = calloc(1, sizeof(struct aml_audio_device));
     if (!adev)
         return -ENOMEM;

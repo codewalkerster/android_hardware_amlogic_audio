@@ -38,34 +38,13 @@ public:
                                               const char *device_address);
 
     virtual audio_devices_t getDeviceForInputSource(audio_source_t inputSource);
-    audio_io_handle_t getOutput(audio_stream_type_t stream,
-                                    uint32_t samplingRate,
-                                    audio_format_t format,
-                                    audio_channel_mask_t channelMask,
-                                    audio_output_flags_t flags,
-                                    const audio_offload_info_t *offloadInfo);
-    audio_io_handle_t getOutputForAttr(const audio_attributes_t *attr,
-                                    uint32_t samplingRate,
-                                    audio_format_t format,
-                                    audio_channel_mask_t channelMask,
-                                    audio_output_flags_t flags,
-                                    const audio_offload_info_t *offloadInfo);
-    audio_io_handle_t getOutputForDevice(
-                                    audio_devices_t device,
-                                    audio_stream_type_t stream,
-                                    uint32_t samplingRate,
-                                    audio_format_t format,
-                                    audio_channel_mask_t channelMask,
-                                    audio_output_flags_t flags,
-                                    const audio_offload_info_t *offloadInfo);
-    audio_stream_type_t streamTypefromAttributesInt(const audio_attributes_t *attr);
+
 protected:
     virtual float computeVolume(audio_stream_type_t stream,
                                 int index,
                                 audio_io_handle_t output,
                                 audio_devices_t device);
-    audio_devices_t getDevicesForStream(audio_stream_type_t stream);
-    audio_devices_t getNewOutputDevice(audio_io_handle_t output, bool fromCache);
+
 private:
     // Flag which indicates whether to record from the submix device.
     bool mForceSubmixInputSelection;
