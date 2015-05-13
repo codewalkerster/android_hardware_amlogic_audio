@@ -45,6 +45,9 @@
 #include <hardware/audio_effect.h>
 #include <audio_effects/effect_aec.h>
 #include <audio_route/audio_route.h>
+#include <time.h>
+#include <utils/Timers.h>
+
 /* ALSA cards for AML */
 #define CARD_AMLOGIC_BOARD 0 
 #define CARD_AMLOGIC_USB 1
@@ -133,6 +136,7 @@ struct aml_stream_out {
     int write_threshold;
     bool low_power;
     uint32_t frame_count;
+    int fram_write_sum;
 };
 
 #define MAX_PREPROCESSORS 3 /* maximum one AGC + one NS + one AEC per input stream */
@@ -175,7 +179,6 @@ static int adev_set_voice_volume(struct audio_hw_device *dev, float volume);
 static int do_input_standby(struct aml_stream_in *in);
 static int do_output_standby(struct aml_stream_out *out);
 static uint32_t out_get_sample_rate(const struct audio_stream *stream);
-
 static int getprop_bool(const char * path)
 {
     char buf[PROPERTY_VALUE_MAX];
@@ -1095,6 +1098,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
     }
     ret = pcm_write(out->pcm, in_buffer, out_frames * frame_size);
     out->frame_count += out_frames;
+    out->fram_write_sum+=out_frames;
 #endif
     exit:
         pthread_mutex_unlock(&out->lock);
@@ -1143,6 +1147,22 @@ static int out_get_next_write_timestamp(const struct audio_stream_out *stream,
     return -EINVAL;
 }
 
+//actually maybe it be not useful now  except pass CTS_TEST:
+//  run cts -c android.media.cts.AudioTrackTest -m testGetTimestamp
+static int out_get_presentation_position(const struct audio_stream_out *stream,uint64_t *frames, struct timespec *timestamp)
+{
+    struct aml_stream_out *out=(struct aml_stream_out *)stream;
+    if (frames != NULL)
+        *frames=out->fram_write_sum;
+    if (timestamp != NULL) {
+        //the timestame value got here does not match :
+        //   System.nanoTime() located in android_5.0\cts\tests\tests\media\src\android\media\cts\AudioTrackTest.java\< public void testGetTimestamp() >
+        //why???!!
+        clock_gettime(CLOCK_REALTIME,timestamp);
+    }
+
+    return 0;
+}
 static int get_next_buffer(struct resampler_buffer_provider *buffer_provider, 
                                                          struct resampler_buffer* buffer);
 static void release_buffer(struct resampler_buffer_provider *buffer_provider,
@@ -1880,13 +1900,14 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->stream.write = out_write;
     out->stream.get_render_position = out_get_render_position;
     out->stream.get_next_write_timestamp = out_get_next_write_timestamp;
+    out->stream.get_presentation_position=out_get_presentation_position;
     out->config = pcm_config_out;
 
     out->dev = ladev;
     out->standby = true;
     output_standby = true;
     out->frame_count = 0;
-
+    out->fram_write_sum=0;
    /* FIXME: when we support multiple output devices, we will want to
       * do the following:
       * adev->devices &= ~AUDIO_DEVICE_OUT_ALL;

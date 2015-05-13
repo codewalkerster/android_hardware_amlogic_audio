@@ -35,7 +35,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 		system/media/audio_route/include
 	LOCAL_SHARED_LIBRARIES := \
 		liblog libcutils libtinyalsa \
-		libaudioutils libdl libaudioroute
+		libaudioutils libdl libaudioroute libutils
 	LOCAL_MODULE_TAGS := optional
 
 	include $(BUILD_SHARED_LIBRARY)
@@ -52,7 +52,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 		LOCAL_C_INCLUDES += \
 			external/tinyalsa/include \
 			system/media/audio_utils/include 
-		LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils
+		LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils libutils
 		LOCAL_MODULE_TAGS := optional
 		
 		include $(BUILD_SHARED_LIBRARY)
@@ -69,7 +69,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 			system/media/audio_effects/include \
 			system/media/audio_utils/include 
 			
-		LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils
+		LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils libutils
 		LOCAL_MODULE_TAGS := optional
 		
 		include $(BUILD_SHARED_LIBRARY)
@@ -87,7 +87,7 @@ include $(CLEAR_VARS)
 		external/tinyalsa/include \
 		system/media/audio_utils/include \
 		system/media/audio_effects/include
-	LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils libdl
+	LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils libdl libutils
 	LOCAL_MODULE_TAGS := optional
 
 endif
@@ -106,7 +106,8 @@ LOCAL_SHARED_LIBRARIES := \
 	libutils \
 	libmedia \
 	libbinder \
-	libaudiopolicymanagerdefault
+	libaudiopolicymanagerdefault \
+	libutils
 
 LOCAL_C_INCLUDES := \
 	external/tinyalsa/include \
