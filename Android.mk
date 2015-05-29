@@ -25,7 +25,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 	include $(CLEAR_VARS)
 
 	LOCAL_MODULE := audio.primary.amlogic
-	LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+	LOCAL_MODULE_RELATIVE_PATH := hw
 	LOCAL_SRC_FILES := \
 		audio_hw.c
 	LOCAL_C_INCLUDES += \
@@ -45,7 +45,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 		include $(CLEAR_VARS)
 		
 		LOCAL_MODULE := audio.usb.amlogic
-		LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+		LOCAL_MODULE_RELATIVE_PATH := hw
 		LOCAL_SRC_FILES := \
 			usb_audio_hw.c \
 			audio_resampler.c
@@ -61,7 +61,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 		include $(CLEAR_VARS)
 		
 		LOCAL_MODULE := audio.hdmi.amlogic
-		LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+		LOCAL_MODULE_RELATIVE_PATH := hw
 		LOCAL_SRC_FILES := \
 			hdmi_audio_hw.c
 		LOCAL_C_INCLUDES += \
@@ -81,7 +81,7 @@ ifdef DOLBY_UDC
 include $(CLEAR_VARS)
 
 	LOCAL_MODULE := audio.hdmi6.amlogic
-	LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+	LOCAL_MODULE_RELATIVE_PATH := hw
 	LOCAL_SRC_FILES := hdmi_hw.c
 	LOCAL_C_INCLUDES += \
 		external/tinyalsa/include \
