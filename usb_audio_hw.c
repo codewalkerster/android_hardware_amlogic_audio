@@ -53,32 +53,32 @@ struct pcm_config pcm_out_config = {
 };
 
 struct pcm_config pcm_in_config = {
-	.channels = 1,
-	.rate = DEFAULT_OUT_SAMPLING_RATE,
-	.period_size = DEFAULT_PERIOD_SIZE,
-	.period_count = PERIOD_COUNT,
-	.format = PCM_FORMAT_S16_LE,
+    .channels = 1,
+    .rate = DEFAULT_OUT_SAMPLING_RATE,
+    .period_size = DEFAULT_PERIOD_SIZE,
+    .period_count = PERIOD_COUNT,
+    .format = PCM_FORMAT_S16_LE,
 };
 
 struct aml_audio_device {
     struct audio_hw_device hw_device;
 
-	pthread_mutex_t lock;       /* see note below on mutex acquisition order */
+    pthread_mutex_t lock;       /* see note below on mutex acquisition order */
     int card;
     int card_device;
     audio_devices_t in_device;
-	audio_devices_t out_device;
-	struct aml_stream_in *active_input;
-	struct aml_stream_out *active_output;
+    audio_devices_t out_device;
+    struct aml_stream_in *active_input;
+    struct aml_stream_out *active_output;
 
-	bool mic_mute;
+    bool mic_mute;
     bool standby;
 };
 
 struct aml_stream_out {
     struct audio_stream_out stream;
-	pthread_mutex_t lock;       /* see note below on mutex acquisition order */
-	struct pcm_config out_config;
+    pthread_mutex_t lock;       /* see note below on mutex acquisition order */
+    struct pcm_config out_config;
     struct pcm *out_pcm;
     struct resample_para resampler;
     void *buffer;
@@ -90,15 +90,15 @@ struct aml_stream_out {
 struct aml_stream_in {
     struct audio_stream_in stream;
     pthread_mutex_t lock;       /* see note below on mutex acquisition order */
-	struct pcm_config in_config;
-	struct pcm *in_pcm;
-	struct resampler_itfe *resampler;	
+    struct pcm_config in_config;
+    struct pcm *in_pcm;
+    struct resampler_itfe *resampler;
     struct resampler_buffer_provider buf_provider;
-	int16_t *buffer;
-	size_t frames_in;
+    int16_t *buffer;
+    size_t frames_in;
     unsigned int requested_rate;
     bool standby;
-	int read_status;
+    int read_status;
 
     struct aml_audio_device *dev;
 };
@@ -121,22 +121,22 @@ int getnumOfRates(char *ratesStr){
 
 static int get_usb_cap(char *type, uint *channels, uint *sampleRate, int card)
 {
-	ALOGV("getCap for %s",type);
+    ALOGV("getCap for %s",type);
     long unsigned fileSize;
     FILE *fp;
-	char path[32];
+    char path[32];
     char *buffer;
     int err = 1;
     int size = 0;
-	int needRsmp = 1;
+    int needRsmp = 1;
     int fd, i, lchannelsPlayback;
     char *read_buf, *str_start, *channel_start, *ratesStr, *ratesStrForVal,
     *ratesStrStart, *chString, *nextSRStr, *test, *nextSRString, *temp_ptr;
     struct stat st;
     memset(&st, 0x0, sizeof(struct stat));
-	err = sprintf(path,"/proc/asound/card%d/stream0", card);
-	ALOGD("path = %s",path);
-	
+    err = sprintf(path,"/proc/asound/card%d/stream0", card);
+    ALOGD("path = %s",path);
+
     fd = open(path, O_RDONLY);
     if (fd <0) {
         ALOGE("ERROR: failed to open config file %s error: %d\n", path, errno);
@@ -237,7 +237,7 @@ static int get_usb_cap(char *type, uint *channels, uint *sampleRate, int card)
     }
 
     ratesSupported[0] = atoi(nextSRString);
-	ALOGV("ratesSupported[0] for %s:: %d", type, ratesSupported[0]);
+    ALOGV("ratesSupported[0] for %s:: %d", type, ratesSupported[0]);
     for (i = 1; i<size; i++) {
         nextSRString = strtok_r(NULL, " ,.-", &temp_ptr);
         ratesSupported[i] = atoi(nextSRString);
@@ -246,14 +246,14 @@ static int get_usb_cap(char *type, uint *channels, uint *sampleRate, int card)
 
     for (i = 0; i<size; i++) {
         if((*sampleRate == ratesSupported[i]) && (ratesSupported[i] <= 48000)) {
-			needRsmp = 0;
-			ALOGV("**sampleRate supports**");
-		}
+            needRsmp = 0;
+            ALOGV("**sampleRate supports**");
+        }
     }
-	if(needRsmp){
-		*sampleRate = ratesSupported[size-1];
-		ALOGE("sampleRate do not support!! Using Need resampler!!");
-	}
+    if (needRsmp) {
+        *sampleRate = ratesSupported[size-1];
+        ALOGE("sampleRate do not support!! Using Need resampler!!");
+    }
     ALOGD("sampleRate: %d", *sampleRate);
 
     close(fd);
@@ -263,7 +263,7 @@ static int get_usb_cap(char *type, uint *channels, uint *sampleRate, int card)
     ratesStrForVal = NULL;
     ratesStr = NULL;
     read_buf = NULL;
-	return 0;
+    return 0;
 }
 
 /**
@@ -282,32 +282,32 @@ static int start_output_stream(struct aml_stream_out *out)
     if ((adev->card < 0) || (adev->card_device < 0)) {
         return -EINVAL;
     }
-	if(adev->out_device & AUDIO_DEVICE_OUT_USB_DEVICE){
-		err = get_usb_cap("Playback:", &out->out_config.channels, &out->out_config.rate, adev->card);
-		if (err) {
-			ALOGE("ERROR: Could not get playback capabilities from usb device");
-			return -EINVAL;
-		}
-	}
-	out->buffer = NULL;
-	if (out->out_config.rate != pcm_out_config.rate){
-		out->resampler.input_sr = pcm_out_config.rate;
-		out->resampler.output_sr = out->out_config.rate;
-		out->resampler.channels = out->out_config.channels;
-		resampler_init(&out->resampler);
-		int buffersize = DEFAULT_PERIOD_SIZE * out->out_config.rate / pcm_out_config.rate + 1;
-		out->buffer = malloc(buffersize*4);
-		ALOGE("out->buffer: %p, buffer_size = %d",out->buffer,buffersize);
-		if (!out->buffer)
-			return -ENOMEM;
-	}
+    if (adev->out_device & AUDIO_DEVICE_OUT_USB_DEVICE) {
+        err = get_usb_cap("Playback:", &out->out_config.channels, &out->out_config.rate, adev->card);
+        if (err) {
+            ALOGE("ERROR: Could not get playback capabilities from usb device");
+            return -EINVAL;
+        }
+    }
+    out->buffer = NULL;
+    if (out->out_config.rate != pcm_out_config.rate) {
+        out->resampler.input_sr = pcm_out_config.rate;
+        out->resampler.output_sr = out->out_config.rate;
+        out->resampler.channels = out->out_config.channels;
+        resampler_init(&out->resampler);
+        int buffersize = DEFAULT_PERIOD_SIZE * out->out_config.rate / pcm_out_config.rate + 1;
+        out->buffer = malloc(buffersize*4);
+        ALOGE("out->buffer: %p, buffer_size = %d",out->buffer,buffersize);
+        if (!out->buffer)
+            return -ENOMEM;
+    }
 
-	out->out_pcm = pcm_open(adev->card, adev->card_device, PCM_OUT, &out->out_config);
+    out->out_pcm = pcm_open(adev->card, adev->card_device, PCM_OUT, &out->out_config);
 
     if (!pcm_is_ready(out->out_pcm)) {
         ALOGE("pcm_open() failed: %s", pcm_get_error(out->out_pcm));
         pcm_close(out->out_pcm);
-		adev->active_output = NULL;
+        adev->active_output = NULL;
         return -ENOMEM;
     }
     return 0;
@@ -331,10 +331,10 @@ static size_t out_get_buffer_size(const struct audio_stream *stream)
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
 
-	/* take resampling into account and return the closest majoring
-        * multiple of 16 frames, as audioflinger expects audio buffers to
-        *be a multiple of 16 frames 
-        */
+    /* take resampling into account and return the closest majoring
+    * multiple of 16 frames, as audioflinger expects audio buffers to
+    * be a multiple of 16 frames
+    */
     size_t size = (pcm_out_config.period_size * DEFAULT_OUT_SAMPLING_RATE) / out->out_config.rate;
     size = ((size + 15) / 16) * 16;
     return size * audio_stream_frame_size((struct audio_stream *)stream);
@@ -342,34 +342,27 @@ static size_t out_get_buffer_size(const struct audio_stream *stream)
 
 static audio_channel_mask_t out_get_channels(const struct audio_stream *stream)
 {
-    return AUDIO_CHANNEL_OUT_STEREO;
-}
-/*
-static uint32_t out_get_channels(const struct audio_stream *stream)
-{
-    //LOGFUNC("%s(%p)", __FUNCTION__, stream);
-    struct aml_stream_out *out = (struct aml_stream_out *)stream;
+    //ALOGD("%s(%p)", __FUNCTION__, stream);
+    /*struct aml_stream_out *out = (struct aml_stream_out *)stream;
 
     if (out->config.channels == 1) {
         return AUDIO_CHANNEL_OUT_MONO;
     } else {
         return AUDIO_CHANNEL_OUT_STEREO;
     }
-    
+    */
     return AUDIO_CHANNEL_OUT_STEREO;
 }
-*/
+
 static audio_format_t out_get_format(const struct audio_stream *stream)
 {
-   // LOGFUNC("%s(%p)", __FUNCTION__, stream);
-
+    //ALOGD("%s(%p)", __FUNCTION__, stream);
     return AUDIO_FORMAT_PCM_16_BIT;
 }
 
 static int out_set_format(struct audio_stream *stream, audio_format_t format)
 {
-    ALOGD("%s(%p)", __FUNCTION__, stream);
-
+    //ALOGD("%s(%p)", __FUNCTION__, stream);
     return 0;
 }
 
@@ -379,13 +372,13 @@ static int do_output_standby(struct aml_stream_out *out)
     struct aml_audio_device *adev = out->dev;
 
     ALOGD("%s(%p)", __FUNCTION__, out);
-	
+
     if (!out->standby) {
         pcm_close(out->out_pcm);
         out->out_pcm = NULL;
 
         adev->active_output = 0;
-		
+
         if (out->buffer != NULL){
             free(out->buffer);
             out->buffer = NULL;
@@ -420,17 +413,18 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = out->dev;
-    int ret = get_usb_card(adev);
-	if (ret < 0){
-		ALOGE("out_set_parameters*****ERROR: Could not get usb card number");
-	}
-#if 0
+
+    //int ret = get_usb_card(adev);
+    //if (ret < 0){
+    //  ALOGE("out_set_parameters*****ERROR: Could not get usb card number");
+    //}
+
     struct str_parms *parms;
     char value[32];
     
-    int ret;
+    int ret = 0;
     int routing = 0;
-	ALOGD("******%s*****%s*", __func__, kvpairs);
+    ALOGD("******%s*****%s*", __func__, kvpairs);
 
     parms = str_parms_create_str(kvpairs);
     pthread_mutex_lock(&adev->lock);
@@ -444,19 +438,18 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
         adev->card_device = atoi(value);
     pthread_mutex_unlock(&adev->lock);
     str_parms_destroy(parms);
-#endif
     return 0;
 }
 
 static char * out_get_parameters(const struct audio_stream *stream, const char *keys)
 {
-    //LOGFUNC("%s(%p, %s)", __FUNCTION__, stream, keys);
+    //ALOGD("%s(%p, %s)", __FUNCTION__, stream, keys);
     return strdup("");
 }
 
 static uint32_t out_get_latency(const struct audio_stream_out *stream)
 {
-	struct aml_stream_out *out = (struct aml_stream_out *)stream;
+    struct aml_stream_out *out = (struct aml_stream_out *)stream;
     return (pcm_out_config.period_size * pcm_out_config.period_count * 1000) /
             out->out_config.rate;
 }
@@ -470,48 +463,47 @@ static int out_set_volume(struct audio_stream_out *stream, float left,
 static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
                          size_t bytes)
 {
-
-		int ret;
-		struct aml_stream_out *out = (struct aml_stream_out *)stream;
-		struct aml_audio_device *adev = out->dev;
-		size_t frame_size = audio_stream_frame_size(&out->stream.common);
-		size_t in_frames = bytes / frame_size;
-		size_t out_frames = RESAMPLER_BUFFER_SIZE / frame_size;
-		bool force_input_standby = false;
-		//struct aml_stream_in *in;
-		int kernel_frames;
-		void *buf;
-   // ALOGD("*****out_write**device=0x%x****",adev->out_device);
+    int ret;
+    struct aml_stream_out *out = (struct aml_stream_out *)stream;
+    struct aml_audio_device *adev = out->dev;
+    size_t frame_size = audio_stream_frame_size(&out->stream.common);
+    size_t in_frames = bytes / frame_size;
+    size_t out_frames = RESAMPLER_BUFFER_SIZE / frame_size;
+    bool force_input_standby = false;
+    //struct aml_stream_in *in;
+    int kernel_frames;
+    void *buf;
+    //ALOGD("*****out_write**device=0x%x****",adev->out_device);
     pthread_mutex_lock(&out->dev->lock);
     pthread_mutex_lock(&out->lock);
     if (out->standby) {
         ret = start_output_stream(out);
         if (ret != 0) {
-			pthread_mutex_unlock(&adev->lock);
+            pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
         out->standby = false;
     }
 #if 0
-FILE * fp=fopen("/data/audio_in","a+"); 
-	if(fp){ 
-		int flen=fwrite((char *)buffer,1,bytes,fp); 
-		LOGFUNC("flen = %d---audio_in=%d ", flen, bytes);
-		fclose(fp); 
-	}else{
-		LOGFUNC("could not open file: audio_in");
-}	
+    FILE * fp=fopen("/data/audio_in","a+");
+    if (fp) {
+        int flen=fwrite((char *)buffer,1,bytes,fp);
+        ALOGD("flen = %d---audio_in=%d ", flen, bytes);
+        fclose(fp);
+    }else{
+        ALOGD("could not open file: audio_in");
+    }
 #endif
-		/* only use resampler if required */
-		if (out->out_config.rate != DEFAULT_OUT_SAMPLING_RATE) {
-			out_frames = resample_process(&out->resampler, in_frames,
-							(short *)buffer, (short *)out->buffer);
-			buf = out->buffer;
-		} else {
-			out_frames = in_frames;
-			buf = (void *)buffer;
-		}
-	
+    /* only use resampler if required */
+    if (out->out_config.rate != DEFAULT_OUT_SAMPLING_RATE) {
+        out_frames = resample_process(&out->resampler, in_frames,
+                        (short *)buffer, (short *)out->buffer);
+        buf = out->buffer;
+    } else {
+        out_frames = in_frames;
+        buf = (void *)buffer;
+    }
+
     pcm_write(out->out_pcm, (void *)buf, out_frames * out->out_config.channels * 2);
 
     pthread_mutex_unlock(&out->lock);
@@ -519,21 +511,20 @@ FILE * fp=fopen("/data/audio_in","a+");
 
     return bytes;
 
-	exit:
-		pthread_mutex_unlock(&out->lock);
-	
-		if (ret != 0) {
-			usleep(bytes * 1000000 / audio_stream_frame_size(&stream->common) /
-				   out_get_sample_rate(&stream->common));
-		}
-	
+exit:
+    pthread_mutex_unlock(&out->lock);
+    if (ret != 0) {
+        usleep(bytes * 1000000 / audio_stream_frame_size(&stream->common) /
+               out_get_sample_rate(&stream->common));
+    }
+
     return bytes;
 }
 
 static int out_get_render_position(const struct audio_stream_out *stream,
                                    uint32_t *dsp_frames)
 {
-   // ALOGD("%s(%p, %p)", __FUNCTION__, stream, dsp_frames);
+    //ALOGD("%s(%p, %p)", __FUNCTION__, stream, dsp_frames);
     return -EINVAL;
 }
 
@@ -558,13 +549,13 @@ static uint32_t in_get_sample_rate(const struct audio_stream *stream)
 {
     struct aml_stream_in *in = (struct aml_stream_in *)stream;
 
-   // LOGFUNC("%s(%p)", __FUNCTION__, stream);
+    //ALOGD("%s(%p)", __FUNCTION__, stream);
     return in->requested_rate;
 }
 
 static int in_set_sample_rate(struct audio_stream *stream, uint32_t rate)
 {
-   // LOGFUNC("%s(%p, %d)", __FUNCTION__, stream, rate);
+    //ALOGD("%s(%p, %d)", __FUNCTION__, stream, rate);
     return 0;
 }
 static size_t get_input_buffer_size(uint32_t sample_rate, int format, int channel_count)
@@ -585,7 +576,7 @@ static size_t in_get_buffer_size(const struct audio_stream *stream)
 {
     struct aml_stream_in *in = (struct aml_stream_in *)stream;
 
-  //  LOGFUNC("%s(%p)", __FUNCTION__, stream);
+    //ALOGD("%s(%p)", __FUNCTION__, stream);
     return get_input_buffer_size(in->in_config.rate,
                                  AUDIO_FORMAT_PCM_16_BIT,
                                  in->in_config.channels);
@@ -593,38 +584,25 @@ static size_t in_get_buffer_size(const struct audio_stream *stream)
 
 static audio_channel_mask_t in_get_channels(const struct audio_stream *stream)
 {
-	 struct aml_stream_in *in = (struct aml_stream_in *)stream;
-    //LOGFUNC("%s(%p)", __FUNCTION__, stream);
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    //ALOGD("%s(%p)", __FUNCTION__, stream);
 
     if (in->in_config.channels == 1) {
         return AUDIO_CHANNEL_IN_MONO;
     } else {
         return AUDIO_CHANNEL_IN_STEREO;
     }
-    //return AUDIO_CHANNEL_IN_MONO;
 }
-/*
-static uint32_t in_get_channels(const struct audio_stream *stream)
-{
-    struct aml_stream_in *in = (struct aml_stream_in *)stream;
-    //LOGFUNC("%s(%p)", __FUNCTION__, stream);
 
-    if (in->config.channels == 1) {
-        return AUDIO_CHANNEL_IN_MONO;
-    } else {
-        return AUDIO_CHANNEL_IN_STEREO;
-    }
-}
-*/
 static audio_format_t in_get_format(const struct audio_stream *stream)
 {
-    //LOGFUNC("%s(%p)", __FUNCTION__, stream);
+    //ALOGD("%s(%p)", __FUNCTION__, stream);
     return AUDIO_FORMAT_PCM_16_BIT;
 }
 
 static int in_set_format(struct audio_stream *stream, audio_format_t format)
 {
-  //  LOGFUNC("%s(%p, %d)", __FUNCTION__, stream, format);
+    //ALOGD("%s(%p, %d)", __FUNCTION__, stream, format);
     return 0;
 }
 
@@ -632,7 +610,7 @@ static int in_set_format(struct audio_stream *stream, audio_format_t format)
 static int do_input_standby(struct aml_stream_in *in)
 {
     struct aml_audio_device *adev = in->dev;
-	ALOGD("******%s******", __func__);
+    ALOGD("******%s******", __func__);
 
     if (!in->standby) {
         pcm_close(in->in_pcm);
@@ -658,7 +636,7 @@ static int in_standby(struct audio_stream *stream)
 
 static int in_dump(const struct audio_stream *stream, int fd)
 {
-    //LOGFUNC("%s(%p, %d)", __FUNCTION__, stream, fd);
+    //ALOGD("%s(%p, %d)", __FUNCTION__, stream, fd);
     return 0;
 }
 
@@ -670,13 +648,13 @@ static int in_set_parameters(struct audio_stream *stream, const char *kvpairs)
 static char * in_get_parameters(const struct audio_stream *stream,
                                 const char *keys)
 {
-    //LOGFUNC("%s(%p, %s)", __FUNCTION__, stream, keys);
+    //ALOGD("%s(%p, %s)", __FUNCTION__, stream, keys);
     return strdup("");
 }
 
 static int in_set_gain(struct audio_stream_in *stream, float gain)
 {
-   // LOGFUNC("%s(%p, %f)", __FUNCTION__, stream, gain);
+    //ALOGD("%s(%p, %f)", __FUNCTION__, stream, gain);
     return 0;
 }
 
@@ -706,13 +684,13 @@ static int get_usb_card(struct aml_audio_device *dev)
     memset(read_buf, 0x0, str_len);
     err = read(fd, read_buf, string_length);
     memcpy(str,read_buf,8);
-   // ALOGD("****str=%s****",str);
+    //ALOGD("****str=%s****",str);
         
     usbid = strtoul(str, NULL, 16);
     card = atoi(read_buf + 9);
     adev->card = card;
     ALOGD("******get_usb_card***card=%d***",adev->card);
-	adev->card_device= 0;
+    adev->card_device= 0;
     
     free(read_buf);
     free(str);
@@ -723,45 +701,13 @@ static int get_usb_card(struct aml_audio_device *dev)
 
 
 }
-#if 0
-static int get_usb_card(struct aml_stream_in *in){
-    ALOGD("============get_usb_card=============");
-	int card = -1, err = 0;
-	int fd;
-	unsigned fileSize;
-	char *read_buf;
-	struct stat st;
-	struct aml_audio_device *adev = in->dev;
-	fd = open(USB_AUDIO_PCM, O_RDONLY);
-    if (fd <0) {
-        ALOGE("ERROR: failed to open config file %s error: %d\n", USB_AUDIO_PCM, errno);
-        close(fd);
-        return -EINVAL;
-    }
 
-    if (fstat(fd, &st) < 0) {
-        ALOGE("ERROR: failed to stat %s error %d\n", USB_AUDIO_PCM, errno);
-        close(fd);
-        return -EINVAL;
-    }
-	
-	fileSize = st.st_size;
-	read_buf = (char *)malloc(16);
-	err = read(fd, read_buf, 16);
-	card = atoi(read_buf);
-	
-	adev->card = card;
-	adev->card_device = 0;
-	close(fd);
-	return err;
-}
-#endif
 static int get_next_buffer(struct resampler_buffer_provider *buffer_provider,
                                    struct resampler_buffer* buffer)
 {
     struct aml_stream_in *in;
 
-    //LOGFUNC("%s(%p, %p)", __FUNCTION__, buffer_provider, buffer);
+    //ALOGD("%s(%p, %p)", __FUNCTION__, buffer_provider, buffer);
     if (buffer_provider == NULL || buffer == NULL)
         return -EINVAL;
 
@@ -803,7 +749,7 @@ static void release_buffer(struct resampler_buffer_provider *buffer_provider,
 {
     struct aml_stream_in *in;
 
-    //LOGFUNC("%s(%p, %p)", __FUNCTION__, buffer_provider, buffer);
+    //ALOGD("%s(%p, %p)", __FUNCTION__, buffer_provider, buffer);
     if (buffer_provider == NULL || buffer == NULL)
         return;
 
@@ -815,24 +761,24 @@ static void release_buffer(struct resampler_buffer_provider *buffer_provider,
 
 static int start_input_stream(struct aml_stream_in *in)
 {
-	int err;
-	struct aml_audio_device *adev = in->dev;
-	adev->active_input = in;
-	//get_usb_card(in);
-	if ((adev->card < 0) || (adev->card_device < 0)) {
-		ALOGE("ERROR: Could not get usb card info");
-		return -EINVAL;
-	}
+    int err;
+    struct aml_audio_device *adev = in->dev;
+    adev->active_input = in;
+    //get_usb_card(in);
+    if ((adev->card < 0) || (adev->card_device < 0)) {
+        ALOGE("ERROR: Could not get usb card info");
+        return -EINVAL;
+    }
 #if 0
-	err = get_usb_cap((char *)"Capture:", &in->in_config.channels, &in->in_config.rate, adev->card);
-	if (err) {
-		ALOGE("ERROR: Could not get capture capabilities from usb device");
-		return -EINVAL;
-	}
-	if (in->requested_rate != in->in_config.rate) {
+    err = get_usb_cap((char *)"Capture:", &in->in_config.channels, &in->in_config.rate, adev->card);
+    if (err) {
+        ALOGE("ERROR: Could not get capture capabilities from usb device");
+        return -EINVAL;
+    }
+    if (in->requested_rate != in->in_config.rate) {
         in->buf_provider.get_next_buffer = get_next_buffer;
         in->buf_provider.release_buffer = release_buffer;
-		ALOGD("Create resampler for input stream");
+        ALOGD("Create resampler for input stream");
         err = create_resampler(in->in_config.rate,
                                in->requested_rate,
                                in->in_config.channels,
@@ -854,19 +800,19 @@ static int start_input_stream(struct aml_stream_in *in)
         return -ENOMEM;
     }
     ALOGD("pcm_open in: card(%d), port(%d)", adev->card, adev->card_device);
-	return 0;
-	
+    return 0;
+
 err:
-		if (in->resampler)
-			release_resampler(in->resampler);
-	return err;
+    if (in->resampler)
+        release_resampler(in->resampler);
+    return err;
 }
 /* read_frames() reads frames from kernel driver, down samples to capture rate
  * if necessary and output the number of frames requested to the buffer specified */
 static ssize_t read_frames(struct aml_stream_in *in, void *buffer, ssize_t frames)
 {
     ssize_t frames_wr = 0;
-    //LOGFUNC("%s(in->resampler=%p, %ld)", __FUNCTION__, in->resampler, frames);
+    //ALOGD("%s(in->resampler=%p, %ld)", __FUNCTION__, in->resampler, frames);
     while (frames_wr < frames) {
         size_t frames_rd = frames - frames_wr;
         if (in->resampler != NULL) {
@@ -902,52 +848,51 @@ static ssize_t read_frames(struct aml_stream_in *in, void *buffer, ssize_t frame
 static ssize_t in_read(struct audio_stream_in *stream, void* buffer,
                        size_t bytes)
 {
-       // ALOGD("============in_read====bytes=%d=======",bytes);
-		int ret = 0;
-		struct aml_stream_in *in = (struct aml_stream_in *)stream;
-		struct aml_audio_device *adev = in->dev;
-		size_t frames_rq = bytes / audio_stream_frame_size(&stream->common);
-    //LOGFUNC("%s(in->num_preprocessors=%d, frames_rq=%d)", __FUNCTION__, in->num_preprocessors, frames_rq);
+    // ALOGD("============in_read====bytes=%d=======",bytes);
+    int ret = 0;
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    struct aml_audio_device *adev = in->dev;
+    size_t frames_rq = bytes / audio_stream_frame_size(&stream->common);
+    //ALOGD("%s(in->num_preprocessors=%d, frames_rq=%d)", __FUNCTION__, in->num_preprocessors, frames_rq);
 
-		/* acquiring hw device mutex systematically is useful if a low priority thread is waiting
-		 * on the input stream mutex - e.g. executing select_mode() while holding the hw device
-		 * mutex
-		 */
-		pthread_mutex_lock(&adev->lock);
-		pthread_mutex_lock(&in->lock);
-		if (in->standby) {
-			ret = start_input_stream(in);
-			if (ret == 0)
-				in->standby = 0;
-		}
-		pthread_mutex_unlock(&adev->lock);
+    /* acquiring hw device mutex systematically is useful if a low priority thread is waiting
+    * on the input stream mutex - e.g. executing select_mode() while holding the hw device
+    * mutex
+    */
+    pthread_mutex_lock(&adev->lock);
+    pthread_mutex_lock(&in->lock);
+    if (in->standby) {
+        ret = start_input_stream(in);
+        if (ret == 0)
+            in->standby = 0;
+    }
+    pthread_mutex_unlock(&adev->lock);
 
-	
 #if 0
-	FILE * fp=fopen("/data/audio_in/temp.data","a+"); 
-	if(fp){ 
-	int flen=fwrite((char *)buffer,1,bytes,fp); 
-	ALOGD("flen = %d---audio_in=%d ", flen, bytes);
-	fclose(fp); 
-	}else{
-	ALOGD("could not open file: audio_in");
-	} 
+    FILE * fp=fopen("/data/audio_in/temp.data","a+");
+    if (fp) {
+        int flen=fwrite((char *)buffer,1,bytes,fp);
+        ALOGD("flen = %d---audio_in=%d ", flen, bytes);
+        fclose(fp);
+    }else{
+        ALOGD("could not open file: audio_in");
+    }
 #endif
 
-	if (ret < 0)
-		goto exit;
+    if (ret < 0)
+        goto exit;
 
-	if (in->resampler != NULL)
-		ret = read_frames(in, buffer, frames_rq);
-	else
-		ret = pcm_read(in->in_pcm, buffer, bytes);
-	if (ret > 0)
-		ret = 0;
+    if (in->resampler != NULL)
+        ret = read_frames(in, buffer, frames_rq);
+    else
+        ret = pcm_read(in->in_pcm, buffer, bytes);
+    if (ret > 0)
+        ret = 0;
 
-	if (ret == 0 && adev->mic_mute){
-		memset(buffer, 0, bytes);
-	}
-		
+    if (ret == 0 && adev->mic_mute) {
+        memset(buffer, 0, bytes);
+    }
+
 #if 0
     FILE *dump_fp = NULL;
 
@@ -961,13 +906,13 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer,
     }
 #endif
 
-	exit:
-		if (ret < 0)
-			usleep(bytes * 1000000 / audio_stream_frame_size(&stream->common) /
-				   in_get_sample_rate(&stream->common));
-	
-		pthread_mutex_unlock(&in->lock);
-		return bytes;
+exit:
+    if (ret < 0)
+        usleep(bytes * 1000000 / audio_stream_frame_size(&stream->common) /
+                  in_get_sample_rate(&stream->common));
+
+    pthread_mutex_unlock(&in->lock);
+    return bytes;
 
 }
 
@@ -998,7 +943,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     struct aml_stream_out *out;
     struct mixer *usb_mixer;
-    int ret;
+    int ret = 0;
 
     out = (struct aml_stream_out *)calloc(1, sizeof(struct aml_stream_out));
     if (!out)
@@ -1025,11 +970,11 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->out_config = pcm_out_config;
 
     out->dev = adev;
-    ret = get_usb_card(adev);
-    if (ret < 0){
-        ALOGE("ERROR: Could not get usb card number");
-        goto err_open;
-    }
+    //ret = get_usb_card(adev);
+    //if (ret < 0){
+    //    ALOGE("ERROR: Could not get usb card number");
+    //    goto err_open;
+    //}
 
     usb_mixer = mixer_open(adev->card);
     if (!usb_mixer) {
@@ -1073,13 +1018,13 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
 static char * adev_get_parameters(const struct audio_hw_device *dev,
                                   const char *keys)
 {
-   // LOGFUNC("%s(%p, %s)", __FUNCTION__, dev, keys);
+    //ALOGD("%s(%p, %s)", __FUNCTION__, dev, keys);
     return strdup("");
 }
 
 static int adev_init_check(const struct audio_hw_device *dev)
 {
-   // LOGFUNC("%s(%p)", __FUNCTION__, dev);
+    //ALOGD("%s(%p)", __FUNCTION__, dev);
     return 0;
 }
 
@@ -1089,7 +1034,7 @@ static int adev_set_voice_volume(struct audio_hw_device *dev, float volume)
 
     //adev->voice_volume = volume;
 
-   // LOGFUNC("%s(%p, %f)", __FUNCTION__, dev, volume);
+    //ALOGD("%s(%p, %f)", __FUNCTION__, dev, volume);
     //if (adev->mode == AUDIO_MODE_IN_CALL)
     //    ril_set_call_volume(&adev->ril, SOUND_TYPE_VOICE, volume);
 
@@ -1098,7 +1043,7 @@ static int adev_set_voice_volume(struct audio_hw_device *dev, float volume)
 
 static int adev_set_master_volume(struct audio_hw_device *dev, float volume)
 {
-   // LOGFUNC("%s(%p, %f)", __FUNCTION__, dev, volume);
+    //ALOGD("%s(%p, %f)", __FUNCTION__, dev, volume);
     return -ENOSYS;
 }
 
@@ -1147,7 +1092,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     struct aml_stream_in *in;
     struct mixer *usb_mixer = NULL;
-    int ret;
+    int ret = 0;
    
     in = (struct aml_stream_in *)calloc(1, sizeof(struct aml_stream_in));
     if (!in)
@@ -1176,11 +1121,12 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     //memcpy(&in->in_config, &pcm_config_in, sizeof(pcm_config_in));
     in->dev = adev;
     in->in_config.rate = in->requested_rate;
-    ret = get_usb_card(adev);
-    if (ret < 0){
-        ALOGE("ERROR: Could not get usb card number");
-        goto err_open;
-    }
+
+    //ret = get_usb_card(adev);
+    //if (ret < 0){
+    //    ALOGE("ERROR: Could not get usb card number");
+    //    goto err_open;
+    //}
 
     usb_mixer = mixer_open(adev->card);
     if (!usb_mixer) {
@@ -1194,16 +1140,16 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
         ALOGE("ERROR: Could not get capture capabilities from usb device");
         goto err_open;
     }
-	if (in->requested_rate != in->in_config.rate) {
-		in->buffer = malloc(in->in_config.period_size *
-							audio_stream_frame_size(&in->stream.common));
-		if (!in->buffer) {
-			ret = -ENOMEM;
-			goto err_open;
-		}
+    if (in->requested_rate != in->in_config.rate) {
+        in->buffer = malloc(in->in_config.period_size *
+                            audio_stream_frame_size(&in->stream.common));
+        if (!in->buffer) {
+            ret = -ENOMEM;
+            goto err_open;
+        }
         in->buf_provider.get_next_buffer = get_next_buffer;
         in->buf_provider.release_buffer = release_buffer;
-		ALOGD("Create resampler for input stream");
+        ALOGD("Create resampler for input stream");
         ret = create_resampler(in->in_config.rate,
                                in->requested_rate,
                                in->in_config.channels,
@@ -1237,7 +1183,7 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
                                    struct audio_stream_in *stream)
 {
     struct aml_stream_in *in = (struct aml_stream_in *)stream;
-    ALOGD("******%s******", __func__);//
+    ALOGD("******%s******", __func__);
 
     in_standby(&stream->common);
     free(stream);
@@ -1245,7 +1191,7 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
 
 static int adev_dump(const audio_hw_device_t *device, int fd)
 {
-    //LOGFUNC("%s(%p, %d)", __FUNCTION__, device, fd);
+    //ALOGD("%s(%p, %d)", __FUNCTION__, device, fd);
     return 0;
 }
 
