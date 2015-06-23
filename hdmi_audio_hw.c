@@ -747,13 +747,13 @@ static size_t out_get_buffer_size(const struct audio_stream *stream)
     size_t size;
     int codec_type=get_codec_type("/sys/class/audiodsp/digital_codec");
     if(codec_type == 4 || codec_type == 5)//dd+
-        size = (PERIOD_SIZE*2* PLAYBACK_PERIOD_COUNT * DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
+        size = (PERIOD_SIZE*2* PLAYBACK_PERIOD_COUNT * (int64_t)DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
     else if(codec_type == 7)
-        size = (PERIOD_SIZE*2 * 4* PLAYBACK_PERIOD_COUNT * DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
+        size = (PERIOD_SIZE*2 * 4* PLAYBACK_PERIOD_COUNT * (int64_t)DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
     else if(codec_type>0 && codec_type<4 )            //dd/dts
-        size = (PERIOD_SIZE*4*DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
+        size = (PERIOD_SIZE*4*(int64_t)DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
     else//pcm
-        size = (PERIOD_SIZE * DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
+        size = (PERIOD_SIZE * (int64_t)DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
  
     size = ((size + 15) / 16) * 16;
     return size * audio_stream_out_frame_size(&out->stream);
