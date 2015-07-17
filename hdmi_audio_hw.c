@@ -1015,9 +1015,9 @@ out_set_parameters (struct audio_stream *stream, const char *kvpairs)
 	  pthread_mutex_lock (&out->lock);
 	  if (!out->standby && (out == adev->active_output))
 	 {
-	   do_output_standby (out);
-	   start_output_stream (out);
-	   out->standby = 0;
+	   //do_output_standby (out);
+	   //start_output_stream (out);
+	   //out->standby = 0;
 	 }
 	  pthread_mutex_unlock (&adev->lock);
 	  pthread_mutex_unlock (&out->lock);
@@ -1042,9 +1042,9 @@ out_set_parameters (struct audio_stream *stream, const char *kvpairs)
 	  pthread_mutex_lock (&out->lock);
 	  if (!out->standby && (out == adev->active_output))
 	 {
-	   do_output_standby (out);
-	   start_output_stream (out);
-	   out->standby = 0;
+	   //do_output_standby (out);
+	   //start_output_stream (out);
+	   //out->standby = 0;
 	 }
 	  pthread_mutex_unlock (&adev->lock);
 	  pthread_mutex_unlock (&out->lock);
