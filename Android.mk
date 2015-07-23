@@ -120,3 +120,4 @@ include $(BUILD_SHARED_LIBRARY)
 endif # USE_CUSTOM_AUDIO_POLICY
 
 endif # BOARD_ALSA_AUDIO
+include $(call all-makefiles-under,$(LOCAL_PATH))
