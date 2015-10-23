@@ -37,7 +37,9 @@ namespace android {
 extern "C" AudioPolicyInterface* createAudioPolicyManager(
         AudioPolicyClientInterface *clientInterface)
 {
-    return new DLGAudioPolicyManager(clientInterface);
+    //invalid new-expression of abstract class
+    //return new DLGAudioPolicyManager(clientInterface);
+    return NULL;
 }
 
 extern "C" void destroyAudioPolicyManager(AudioPolicyInterface *interface)
@@ -62,7 +64,7 @@ float DLGAudioPolicyManager::computeVolume(audio_stream_type_t stream,
     (void)index;
     (void)output;
     (void)device;
-    return AudioPolicyManager::computeVolume(stream,index,output,device);
+    return 0.0f;//return AudioPolicyManager::computeVolume(stream,index,output,device);
 }
 
 status_t DLGAudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
@@ -86,8 +88,8 @@ status_t DLGAudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
 
     status_t ret = 0;
     if (device != AUDIO_DEVICE_IN_REMOTE_SUBMIX) {
-      ret = AudioPolicyManager::setDeviceConnectionState(
-                    device, state, device_address);
+      //ret = AudioPolicyManager::setDeviceConnectionState(
+      //              device, state, device_address);
     }
 
     return ret;
