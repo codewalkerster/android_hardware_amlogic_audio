@@ -37,9 +37,7 @@ namespace android {
 extern "C" AudioPolicyInterface* createAudioPolicyManager(
         AudioPolicyClientInterface *clientInterface)
 {
-    //invalid new-expression of abstract class
-    //return new DLGAudioPolicyManager(clientInterface);
-    return NULL;
+    return new DLGAudioPolicyManager(clientInterface);
 }
 
 extern "C" void destroyAudioPolicyManager(AudioPolicyInterface *interface)
@@ -54,22 +52,21 @@ DLGAudioPolicyManager::DLGAudioPolicyManager(
 }
 
 float DLGAudioPolicyManager::computeVolume(audio_stream_type_t stream,
-                                           int index,
-                                           audio_io_handle_t output,
-                                           audio_devices_t device)
+                                            int index,
+                                            audio_devices_t device)
 {
     // We only use master volume, so all audio flinger streams
     // should be set to maximum
     (void)stream;
     (void)index;
-    (void)output;
     (void)device;
-    return 0.0f;//return AudioPolicyManager::computeVolume(stream,index,output,device);
+    return AudioPolicyManager::computeVolume(stream,index,device);
 }
 
 status_t DLGAudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
-                                                         audio_policy_dev_state_t state,
-                                                         const char *device_address)
+                                                      audio_policy_dev_state_t state,
+                                                      const char *device_address,
+                                                      const char *device_name)
 {
     audio_devices_t tmp = AUDIO_DEVICE_NONE;;
     ALOGV("setDeviceConnectionState %08x %x %s", device, state,
@@ -88,8 +85,8 @@ status_t DLGAudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
 
     status_t ret = 0;
     if (device != AUDIO_DEVICE_IN_REMOTE_SUBMIX) {
-      //ret = AudioPolicyManager::setDeviceConnectionState(
-      //              device, state, device_address);
+      ret = AudioPolicyManager::setDeviceConnectionState(
+                    device, state, device_address,device_name);
     }
 
     return ret;
