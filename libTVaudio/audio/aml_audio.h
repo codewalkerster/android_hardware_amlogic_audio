@@ -61,9 +61,6 @@ int set_left_gain(int left_gain);
 int set_right_gain(int right_gain);
 int buffer_read(struct circle_buffer *tmp, char* buffer, size_t bytes);
 int buffer_write(struct circle_buffer *tmp, char* buffer, size_t bytes);
-int getUSBCheckFlag();
-int set_android_volume_enable(int enable);
-int set_android_volume(int left, int right);
 int set_output_record_enable(int enable);
 
 #ifdef __cplusplus

@@ -219,9 +219,10 @@ extern int I2S_state;
 
 #define PCM_DATA 0
 #define RAW_DATA 1
-#define HDMI_IN_AUDIO_TYPE             "HDMI Audio Type"
+#define I2S_IN_AUDIO_TYPE              "I2SIN Audio Type"
 #define SPDIF_IN_AUDIO_TYPE            "SPDIFIN Audio Type"
 #define Audio_In_Source_TYPE           "Audio In Source"
+#define HW_RESAMPLE_ENABLE             "Hardware resample enable"
 #define AMAUDIO_IN                     "/dev/amaudio2_in"
 #define AMAUDIO_OUT                    "/dev/amaudio2_out"
 #define AMAUDIO2_PREENABLE             "/sys/class/amaudio2/aml_amaudio2_enable"
@@ -238,9 +239,6 @@ extern int I2S_state;
 #define AMAUDIO_IOC_GET_PTR_READ        _IOW(AMAUDIO_IOC_MAGIC, 0x08, int)
 #define AMAUDIO_IOC_UPDATE_APP_PTR_READ _IOW(AMAUDIO_IOC_MAGIC, 0x09, int)
 #define AMAUDIO_IOC_OUT_READ_ENABLE     _IOW(AMAUDIO_IOC_MAGIC, 0x0a, int)
-#define AMAUDIO_IOC_SET_ANDROID_VOLUME_ENABLE       _IOW(AMAUDIO_IOC_MAGIC, 0x0b, int)
-#define AMAUDIO_IOC_SET_ANDROID_LEFT_VOLUME         _IOW(AMAUDIO_IOC_MAGIC, 0x0c, int)
-#define AMAUDIO_IOC_SET_ANDROID_RIGHT_VOLUME        _IOW(AMAUDIO_IOC_MAGIC, 0x0d, int)
 
 #define CC_DUMP_SRC_TYPE_INPUT      (0)
 #define CC_DUMP_SRC_TYPE_OUTPUT     (1)
@@ -254,6 +252,7 @@ static int gDumpDataFd2 = -1;
 static int audioin_type = 0;
 static int omx_started = 0;
 static int raw_data_counter = 0;
+static int pcm_data_counter = 0;
 int output_record_enable = 0;
 pthread_mutex_t device_change_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -452,8 +451,6 @@ int buffer_write(struct circle_buffer *tmp, char* buffer, size_t bytes) {
     }
     size_t write_space = GetWriteSpace(buf->wr, buf->rd, buf->size);
     if (write_space < bytes) {
-        //tmp_buffer_reset(buf);
-        //ALOGD("%s, no space to write %d bytes to buffer.\n", __FUNCTION__,bytes);
         pthread_mutex_unlock(&buf->lock);
         return -1;
     }
@@ -474,8 +471,6 @@ int buffer_read(struct circle_buffer *tmp, char* buffer, size_t bytes) {
     }
     size_t read_space = GetReadSpace(buf->wr, buf->rd, buf->size);
     if (read_space < bytes) {
-        //tmp_buffer_reset(buf);
-        //ALOGD("%s, no space to read %d bytes to buffer.\n", __FUNCTION__,bytes);
         pthread_mutex_unlock(&buf->lock);
         return -1;
     }
@@ -496,12 +491,7 @@ static int set_input_stream_sample_rate(unsigned int sr,
     if (check_input_stream_sr(sr) == 0) {
         in->config.rate = sr;
     } else {
-        if (sr == 0) {
-            in->config.rate = pcm_config_in.rate;
-        } else {
-            ALOGE("%s, The sample rate (%u) is invalid!\n", __FUNCTION__, sr);
-            return -1;
-        }
+        in->config.rate = pcm_config_in.rate;
     }
     return 0;
 }
@@ -540,6 +530,46 @@ static int get_aml_card(void) {
     free(read_buf);
     close(fd);
     return card;
+}
+
+static int get_aml_device(int device_ID) {
+    int port = -1, err = 0;
+    int fd = -1;
+    unsigned fileSize = 512;
+    char *read_buf = NULL, *pd = NULL;
+    static const char *const SOUND_PCM_PATH = "/proc/asound/pcm";
+    fd = open(SOUND_PCM_PATH, O_RDONLY);
+    if (fd < 0) {
+        ALOGE("ERROR: failed to open config file %s error: %d\n", SOUND_PCM_PATH, errno);
+        close(fd);
+        return -EINVAL;
+    }
+
+    read_buf = (char *)malloc(fileSize);
+    if (!read_buf) {
+        ALOGE("Failed to malloc read_buf");
+        close(fd);
+        return -ENOMEM;
+    }
+    memset(read_buf, 0x0, fileSize);
+    err = read(fd, read_buf, fileSize);
+    if (fd < 0) {
+        ALOGE("ERROR: failed to read config file %s error: %d\n", SOUND_PCM_PATH, errno);
+        close(fd);
+        return -EINVAL;
+    }
+
+    if (device_ID == 1) {
+        pd = strstr(read_buf, "SPDIF");
+        port = *(pd -3) - '0';
+    } else if (device_ID == 0){
+        pd = strstr(read_buf, "I2S");
+        port = *(pd -3) - '0';
+    }
+OUT:
+    free(read_buf);
+    close(fd);
+    return port;
 }
 
 static int alsa_in_open(struct aml_stream_in *in) {
@@ -609,6 +639,13 @@ static int get_in_framesize(struct aml_stream_in *in) {
     return sample_format * in->config.channels;
 }
 
+static void apply_stream_volume(float vol,char *buf,int size) {
+    int i;
+    short *sample = (short*)buf;
+    for (i = 0; i < size/sizeof(short); i++)
+        sample[i] = vol*sample[i];
+}
+
 static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
     int ret;
 
@@ -633,6 +670,9 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
             return ret;
         }
 
+        float vol = get_android_stream_volume();
+        apply_stream_volume(vol,in->resample_temp_buffer,bytes);
+
         DoDumpData(in->resample_temp_buffer, bytes, CC_DUMP_SRC_TYPE_INPUT);
 
         output_size = resample_process(in, bytes >> 2,
@@ -645,6 +685,9 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
             pthread_mutex_unlock(&in->lock);
             return ret;
         }
+
+        float vol = get_android_stream_volume();
+        apply_stream_volume(vol,buffer,bytes);
 
         DoDumpData(buffer, bytes, CC_DUMP_SRC_TYPE_INPUT);
 
@@ -1241,7 +1284,7 @@ static int get_channel_status(void) {
         type_SPDIF = mixer_ctl_get_value(pctl, 0);
     }
 
-    pctl = mixer_get_ctl_by_name(pmixer, HDMI_IN_AUDIO_TYPE);
+    pctl = mixer_get_ctl_by_name(pmixer, I2S_IN_AUDIO_TYPE);
     if (NULL != pctl) {
         type_HDMI = mixer_ctl_get_value(pctl, 0);
     }
@@ -1253,13 +1296,35 @@ static int get_channel_status(void) {
         mixer_close(pmixer);
         return PCM_DATA;
     }
-    err_exit: if (NULL != pmixer) {
+err_exit:
+    if (NULL != pmixer) {
         mixer_close(pmixer);
     }
     return -1;
 }
 
-static int set_rawdata_in_enable(struct aml_stream_out *out) {
+static int set_Hardware_resample(int enable) {
+  struct mixer *pmixer;
+    struct mixer_ctl *pctl;
+   int card_id;
+    card_id = get_aml_card();
+    pmixer = mixer_open(card_id);
+    if (NULL == pmixer) {
+        ALOGE("[%s:%d] Failed to open mixer\n", __FUNCTION__, __LINE__);
+        goto err_exit;
+    }
+    pctl = mixer_get_ctl_by_name(pmixer, HW_RESAMPLE_ENABLE);
+    if (NULL != pctl) {
+        mixer_ctl_set_value(pctl, 0, enable);
+    }
+err_exit:
+    if (NULL != pmixer) {
+        mixer_close(pmixer);
+    }
+    return -1;
+ }
+
+ static int set_rawdata_in_enable(struct aml_stream_out *out) {
     if (out->output_device == CC_OUT_USE_AMAUDIO) {
         amaudio_out_close(out);
     } else if (out->output_device == CC_OUT_USE_ALSA) {
@@ -1268,13 +1333,14 @@ static int set_rawdata_in_enable(struct aml_stream_out *out) {
     }
     set_output_deviceID(2);
     out->output_device = CC_OUT_USE_ANDROID;
+    set_Hardware_resample(4);
     omx_codec_init();
     return 0;
 }
 
 static int set_rawdata_in_disable(struct aml_stream_out *out) {
     omx_codec_close();
-    if (gUSBCheckFlag == 0) {
+    if ((gUSBCheckFlag & AUDIO_DEVICE_OUT_SPEAKER) != 0) {
         if (out->user_set_device == CC_OUT_USE_AMAUDIO) {
             set_output_deviceID(0);
             amaudio_out_open(out);
@@ -1288,10 +1354,11 @@ static int set_rawdata_in_disable(struct aml_stream_out *out) {
             set_output_deviceID(0);
             out->output_device = CC_OUT_USE_ALSA;
         }
-    } else if (gUSBCheckFlag == 1) {
+    } else {
         set_output_deviceID(1);
         out->output_device = CC_OUT_USE_ANDROID;
     }
+    set_Hardware_resample(5);
     return 0;
 }
 
@@ -1316,16 +1383,19 @@ static int check_audio_type(struct aml_stream_out *out) {
     if (audioin_type == 1 && omx_started == 0) {
         raw_data_counter++;
     }
-
+    if (audioin_type == 0 && omx_started == 1) {
+        pcm_data_counter++;
+    }
     if (raw_data_counter >= 3 && omx_started == 0) {
         ALOGI("%s, audio type is changed to RAW data input!\n", __FUNCTION__);
         set_rawdata_in_enable(out);
         omx_started = 1;
         raw_data_counter = 0;
-    } else if (audioin_type == 0 && omx_started == 1) {
+    } else if (pcm_data_counter >= 3 && omx_started == 1) {
         ALOGI("%s, audio type is changed to PCM data input!\n", __FUNCTION__);
         set_rawdata_in_disable(out);
         omx_started = 0;
+        pcm_data_counter = 0;
     }
     return 0;
 }
@@ -1467,7 +1537,8 @@ int aml_audio_open(unsigned int sr, int input_device, int output_device) {
     struct sched_param param;
     int ret;
 
-    ALOGD("%s, sr = %d, output_device = %d\n", __FUNCTION__, sr, output_device);
+    ALOGD("%s, sr = %d, input_device = %d, output_device = %d\n",
+                __FUNCTION__, sr, input_device, output_device);
 
     aml_audio_close();
 
@@ -1498,8 +1569,7 @@ int aml_audio_open(unsigned int sr, int input_device, int output_device) {
         gpAmlDevice->out.user_set_device = CC_OUT_USE_AMAUDIO;
     }
 
-    gpAmlDevice->in.device = input_device;
-
+    gpAmlDevice->in.device = get_aml_device(input_device);
     ret = aml_device_init(gpAmlDevice);
     if (ret < 0) {
         ALOGE("%s, Devices fail opened!\n", __FUNCTION__);
@@ -1588,53 +1658,6 @@ int check_input_stream_sr(unsigned int sr) {
         return 0;
     }
     return -1;
-}
-
-int set_android_volume_enable(int enable) {
-    if (amaudio2_out_handle < 0) {
-        amaudio2_out_handle = open(AMAUDIO_OUT, O_RDWR);
-        if (amaudio2_out_handle < 0) {
-            ALOGE("%s, The device amaudio_out cant't be opened!\n",
-                    __FUNCTION__);
-            return -1;
-        }
-        ALOGI("%s, get amaudio2 handle = %d!\n", __FUNCTION__,
-                amaudio2_out_handle);
-    }
-
-    if (enable != 0 && enable != 1) {
-        ALOGE("invalid value: enable = %d. (warning: 0 or 1 is valid)\n",
-                enable);
-        return -1;
-    }
-
-    ioctl(amaudio2_out_handle, AMAUDIO_IOC_SET_ANDROID_VOLUME_ENABLE, enable);
-
-    return 0;
-}
-
-int set_android_volume(int left, int right) {
-    if (amaudio2_out_handle < 0) {
-        amaudio2_out_handle = open(AMAUDIO_OUT, O_RDWR);
-        if (amaudio2_out_handle < 0) {
-            ALOGE("%s, The device amaudio_out cant't be opened!\n",
-                    __FUNCTION__);
-            return -1;
-        }
-        ALOGI("%s, get amaudio2 handle = %d!\n", __FUNCTION__,
-                amaudio2_out_handle);
-    }
-
-    if (left < 0 || left > 256 || right < 0 || right > 256) {
-        ALOGE(
-                "invalid value: left = %d, right = %d. (warning: 0-256 is valid)\n",
-                left, right);
-        return -1;
-    }
-
-    ioctl(amaudio2_out_handle, AMAUDIO_IOC_SET_ANDROID_LEFT_VOLUME, left);
-    ioctl(amaudio2_out_handle, AMAUDIO_IOC_SET_ANDROID_RIGHT_VOLUME, right);
-    return 0;
 }
 
 int set_output_mode(int mode) {

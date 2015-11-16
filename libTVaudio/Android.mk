@@ -5,7 +5,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := libTVaudio
 
 LOCAL_SHARED_LIBRARIES := libcutils libutils libtinyalsa libdl \
-    libmedia libbinder libusbhost libstagefright
+    libmedia libbinder libstagefright
 
 LOCAL_C_INCLUDES := \
     external/tinyalsa/include \

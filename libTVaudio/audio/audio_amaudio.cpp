@@ -24,7 +24,7 @@
 #define LOG_TAG "LibAudioCtl"
 
 int amAudioOpen(unsigned int sr, int input_device, int output_device) {
-    return aml_audio_open(sr, input_device, output_device);
+    return aml_audio_open(sr, input_device, 2);
 }
 
 int amAudioClose(void) {
@@ -39,19 +39,10 @@ int amAudioSetInputSr(unsigned int sr, int input_device, int output_device) {
         return -1;
     }
 
-    ALOGD("%s, sr = %d\n", __FUNCTION__, sr);
-
     tmpRet |= amAudioClose();
     tmpRet |= amAudioOpen(sr, input_device, output_device);
 
     return tmpRet;
-}
-
-int amAudioSetOutputSr(unsigned int sr, int output_device) {
-    ALOGD("%s, sr = %d\n", __FUNCTION__, sr);
-    ALOGE("%s, amAudio not support set output sample rate\n", __FUNCTION__);
-
-    return 0;
 }
 
 int amAudioSetDumpDataFlag(int tmp_flag) {
@@ -76,14 +67,6 @@ int amAudioSetLeftGain(int gain) {
 
 int amAudioSetRightGain(int gain) {
     return set_right_gain(gain);
-}
-
-int amAudioSetAndroidVolumeEnable(int enable) {
-    return set_android_volume_enable(enable);
-}
-
-int amAudioSetAndroidVolume(int left, int right) {
-    return set_android_volume(left, right);
 }
 
 int amAudioSetEQGain(int gain_val_buf[], int buf_item_cnt) {
@@ -135,15 +118,6 @@ int amAudioGetEQEnable() {
     return 0;
 }
 
-int amAudioSetDoubleOutput(int en_val, unsigned int sr, int input_device,
-        int output_device) {
-    return amAudioSetInputSr(sr, input_device, output_device);
-}
-
-int amAudioSetOutputRecordEnable(int enable) {
-    return 0; //set_output_record_enable(enable);
-}
-
 #define CC_SET_TYPE_TRUBASS_SPEAKERSIZE     (0)
 #define CC_SET_TYPE_TRUBASS_GAIN            (1)
 #define CC_SET_TYPE_DIALOGCLARITY_GAIN      (2)
@@ -167,6 +141,10 @@ static int amAudioSetSRSParameter(int set_type, int gain_val) {
     tmp_buf[set_type] = gain_val;
 
     return srs_setParameter(tmp_buf);
+}
+
+int amAudioSetSRSGain(int input_gain, int output_gain) {
+    return srs_set_gain(input_gain, output_gain);
 }
 
 int amAudioSetSRSSurroundSwitch(int switch_val) {
@@ -207,3 +185,14 @@ int amAudioSetSRSTrubassSpeakerSize(int tmp_val) {
 
     return amAudioSetSRSParameter(CC_SET_TYPE_TRUBASS_SPEAKERSIZE, gain_val);
 }
+
+//---------------------------clear----------------------------------
+int amAudioSetAndroidVolumeEnable(int enable){return 0;}
+int amAudioSetAndroidVolume(int left, int right){return 0;}
+int amAudioSetOutputRecordEnable(int enable){return 0;}
+int amAudioSetDoubleOutput(int en_val, unsigned int sr, int input_device,
+        int output_device){return 0;}
+int amAudioSetOutputSr(unsigned int sr, int output_device){return 0;}
+int createMonitorUsbHostBusThread(){return 0;}
+
+//----------------------------------------------------------------------

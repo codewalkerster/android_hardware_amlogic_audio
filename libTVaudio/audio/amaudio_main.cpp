@@ -9,7 +9,6 @@
 #include <binder/IServiceManager.h>
 
 #include "../audio_amaudio.h"
-#include "audio_usb_check.h"
 
 using namespace android;
 
@@ -17,29 +16,21 @@ int main(int argc, char** argv) {
     sp < ProcessState > proc(ProcessState::self());
     sp < IServiceManager > sm = defaultServiceManager();
 
-    //test for audio volume control
-    amAudioSetAndroidVolumeEnable(1);
-    amAudioSetAndroidVolume(60, 60);
-    sleep(10);
-
     //test for S805 HDMI_IN BOX
     amAudioOpen(48000, CC_IN_USE_SPDIF_DEVICE, CC_OUT_USE_AMAUDIO);
-    amAudioOpen(48000, CC_IN_USE_SPDIF_DEVICE, CC_OUT_USE_ANDROID);
+    //amAudioOpen(48000, CC_IN_USE_SPDIF_DEVICE, CC_OUT_USE_ANDROID);
     sleep(100);
 
     //test for TV
     amAudioOpen(48000, CC_IN_USE_I2S_DEVICE, CC_OUT_USE_AMAUDIO);
-    amAudioOpen(48000, CC_IN_USE_I2S_DEVICE, CC_OUT_USE_ANDROID);
+    //amAudioOpen(48000, CC_IN_USE_I2S_DEVICE, CC_OUT_USE_ANDROID);
     sleep(100);
 
     //test for data mix mode and mix volume
-    sleep(10);
     amAudioSetOutputMode(2);
     amAudioSetMusicGain(60);
     sleep(10);
     amAudioSetMusicGain(256);
-    sleep(10);
-    amAudioSetAndroidVolumeEnable(0);
     sleep(10);
     amAudioSetOutputMode(0);
     amAudioSetLeftGain(256);
@@ -55,14 +46,14 @@ int main(int argc, char** argv) {
 
     //srs parameters
     amAudioSetSRSTrubassSpeakerSize(4);
-    amAudioSetSRSTrubassGain(0.3);
-    amAudioSetSRSDialogClarityGain(0.2);
-    amAudioSetSRSDefinitionGain(0.5);
-    amAudioSetSRSSurroundGain(0.6);
+    amAudioSetSRSTrubassGain(30);
+    amAudioSetSRSDialogClarityGain(20);
+    amAudioSetSRSDefinitionGain(50);
+    amAudioSetSRSSurroundGain(60);
+    amAudioSetSRSGain(50, 50);
     amAudioSetSRSDialogClaritySwitch(1);
     amAudioSetSRSSurroundSwitch(1);
     amAudioSetSRSTrubassSwitch(1);
-
     sleep(500);
 
     amAudioClose();
