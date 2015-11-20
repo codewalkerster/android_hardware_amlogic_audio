@@ -138,6 +138,7 @@ struct aml_stream_out {
     uint32_t frame_count;
     int fram_write_sum;
     int32_t *tmp_buffer;
+    int is_tv_platform;
 };
 
 #define MAX_PREPROCESSORS 3 /* maximum one AGC + one NS + one AEC per input stream */
@@ -173,7 +174,6 @@ static char cache_buffer_bytes[64];
 static uint cached_len=0;
 static bool input_standby = true;
 static bool output_standby = true;
-static int is_tv_platform = 0;
 static void select_output_device(struct aml_audio_device *adev);
 static void select_input_device(struct aml_audio_device *adev);
 static void select_devices(struct aml_audio_device *adev);
@@ -451,7 +451,8 @@ static int start_output_stream(struct aml_stream_out *out)
     unsigned int port = PORT_MM;
     int ret;
 
-    LOGFUNC("%s(adev->out_device=%#x, adev->mode=%d)", __FUNCTION__, adev->out_device, adev->mode);
+    LOGFUNC("%s(adev->out_device=%#x, adev->mode=%d)",
+                        __FUNCTION__, adev->out_device, adev->mode);
 
     adev->active_output = out;
 
@@ -478,7 +479,7 @@ static int start_output_stream(struct aml_stream_out *out)
     out->write_threshold = out->config.period_size*PLAYBACK_PERIOD_COUNT;
     out->config.start_threshold = out->config.period_size * PLAYBACK_PERIOD_COUNT;
     out->config.avail_min = 0;//SHORT_PERIOD_SIZE;
-
+    out->frame_count = 0;
     out->pcm = pcm_open(card, port, PCM_OUT /*| PCM_MMAP | PCM_NOIRQ*/, &(out->config));
 
     if (!pcm_is_ready(out->pcm)) {
@@ -502,7 +503,7 @@ static int start_output_stream(struct aml_stream_out *out)
             ALOGE("cannot create resampler for output");
             return -ENOMEM;
         }
-        out->buffer_frames = (pcm_config_out.period_size * out->config.rate) /
+        out->buffer_frames = (out->config.period_size * out->config.rate) /
                 out_get_sample_rate(&out->stream.common) + 1;
         out->buffer = malloc(pcm_frames_to_bytes(out->pcm, out->buffer_frames));
         if (out->buffer == NULL){
@@ -792,6 +793,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
         pthread_mutex_lock(&out->lock);
         if (((adev->out_device & AUDIO_DEVICE_OUT_ALL) != val) && (val != 0)) {
             if (out == adev->active_output) {
+                ALOGI("audio hw select device!\n");
                 do_output_standby(out);
                 /* a change in output device may change the microphone selection */
                 if (adev->active_input &&
@@ -827,8 +829,8 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
             DEFAULT_OUT_SAMPLING_RATE = sr;
             pcm_config_out.rate = DEFAULT_OUT_SAMPLING_RATE;
             out->config.rate = DEFAULT_OUT_SAMPLING_RATE;
-                  pthread_mutex_lock(&adev->lock);
-                  pthread_mutex_lock(&out->lock);           
+            pthread_mutex_lock(&adev->lock);
+            pthread_mutex_lock(&out->lock);
             if(!out->standby && (out == adev->active_output)){
                 do_output_standby(out);
                 start_output_stream(out);
@@ -836,7 +838,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
                 output_standby = 0;
             }
             pthread_mutex_unlock(&adev->lock);
-            pthread_mutex_unlock(&out->lock);               
+            pthread_mutex_unlock(&out->lock);
             
         }
 	 	goto exit;	
@@ -1054,7 +1056,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         ALOGI("to enable same source,need reset alsa,type %d,same source flag %d \n",codec_type,samesource_flag);
         pcm_stop(out->pcm);
     }
-    if (is_tv_platform == 1) {
+    if (out->is_tv_platform == 1) {
         for (i = 0; i < out_frames; i ++) {
             out->tmp_buffer[8*i] = ((int32_t)(in_buffer[2*i])) << 16;
             out->tmp_buffer[8*i + 1] = ((int32_t)(in_buffer[2*i + 1])) << 16;
@@ -1064,6 +1066,9 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
             out->tmp_buffer[8*i + 5] = 0;
             out->tmp_buffer[8*i + 6] = 0;
             out->tmp_buffer[8*i + 7] = 0;
+        }
+        if (out->frame_count < 5*1024) {
+            memset(out->tmp_buffer, 0, out_frames * frame_size * 8);
         }
         ret = pcm_write(out->pcm, out->tmp_buffer, out_frames * frame_size * 8);
     } else {
@@ -1873,7 +1878,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->stream.get_next_write_timestamp = out_get_next_write_timestamp;
     out->stream.get_presentation_position=out_get_presentation_position;
     out->config = pcm_config_out;
-
+    out->is_tv_platform = 0;
     out->dev = ladev;
     out->standby = true;
     output_standby = true;
@@ -1899,8 +1904,9 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     if (getprop_bool("ro.platform.has.tvuimode")) {
         pcm_config_out.channels = 8;
         pcm_config_out.format = PCM_FORMAT_S32_LE;
-        is_tv_platform = 1;
-        out->tmp_buffer = malloc(pcm_config_out.period_size * 4 * 8); //32bit, 8chnanel
+        pcm_config_out.period_size = DEFAULT_PERIOD_SIZE * 8; //8chnanel
+        out->is_tv_platform = 1;
+        out->tmp_buffer = malloc(pcm_config_out.period_size * 4); //32bit
         if (out->tmp_buffer == NULL) {
             ALOGE("cannot malloc memory for out->tmp_buffer");
             return -ENOMEM;
@@ -1920,7 +1926,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
 
     LOGFUNC("%s(%p, %p)", __FUNCTION__, dev, stream);
-    if (is_tv_platform == 1) {
+    if (out->is_tv_platform == 1) {
         free(out->tmp_buffer);
     }
     out_standby(&stream->common);
