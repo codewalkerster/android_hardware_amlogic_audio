@@ -1,14 +1,13 @@
-/*
- android_out.cpp
- New an audio track in android, but no data in this track. Only push FIFO pointer.
- */
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <strings.h>
+#include <sys/ioctl.h>
 #include <cutils/log.h>
-
+#include <cutils/properties.h>
 #include <media/AudioTrack.h>
 
 #include "audio_usb_check.h"
@@ -21,17 +20,49 @@ using namespace android;
 #define LOG_TAG "android_out"
 
 static AudioTrack *glpTracker = NULL;
+static AudioTrack *glpTracker_raw = NULL;
 
-#if ANDROID_PLATFORM_SDK_VERSION >= 19
 static sp<AudioTrack> gmpAudioTracker;
-#endif
+static sp<AudioTrack> gmpAudioTracker_raw;
 
 extern struct circle_buffer android_out_buffer;
 extern struct circle_buffer DDP_out_buffer;
+extern struct circle_buffer DD_out_buffer;
 extern int output_record_enable;
 extern pthread_mutex_t device_change_lock;
 
 int I2S_state = 0;
+static int raw_start_flag = 0;
+static int amsysfs_set_sysfs_int(const char *path, int val) {
+    int fd;
+    int bytes;
+    char bcmd[16];
+    fd = open(path, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    if (fd >= 0) {
+        sprintf(bcmd, "%d", val);
+        bytes = write(fd, bcmd, strlen(bcmd));
+        close(fd);
+        return 0;
+    } else {
+        ALOGE("unable to open file %s,err: %s", path, strerror(errno));
+    }
+    return -1;
+}
+
+static int amsysfs_get_sysfs_int(const char *path) {
+    int fd;
+    int val = 0;
+    char bcmd[16];
+    fd = open(path, O_RDONLY);
+    if (fd >= 0) {
+        read(fd, bcmd, sizeof(bcmd));
+        val = strtol(bcmd, NULL, 10);
+        close(fd);
+    }else {
+        ALOGE("unable to open file %s,err: %s", path, strerror(errno));
+    }
+    return val;
+}
 
 static void AudioTrackCallback(int event, void* user, void *info) {
     AudioTrack::Buffer *buffer = static_cast<AudioTrack::Buffer *>(info);
@@ -45,10 +76,17 @@ static void AudioTrackCallback(int event, void* user, void *info) {
     }
 
     int bytes = 0;
-
+    int bytes_raw = 0;
+    char raw_data[16384];
+    int user_raw_enable = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
     pthread_mutex_lock(&device_change_lock);
 
     if (GetOutputdevice() == 1) {
+        if (raw_start_flag == 1) {
+            glpTracker_raw->pause();
+            amsysfs_set_sysfs_int("/sys/class/audiodsp/digital_codec", 0);
+            raw_start_flag = 0;
+        }
         bytes = buffer_read(&android_out_buffer, (char *) buffer->raw,
                 buffer->size);
         if (bytes < 0)
@@ -58,7 +96,34 @@ static void AudioTrackCallback(int event, void* user, void *info) {
                 buffer->size);
         if (bytes < 0)
             buffer->size = 0;
+
+        //here handle raw data
+        if (user_raw_enable == 1) {
+            if (raw_start_flag == 0) {
+                ALOGI("glpTracker_raw start \n");
+                amsysfs_set_sysfs_int("/sys/class/audiodsp/digital_codec", 2);
+                glpTracker_raw->start();
+                raw_start_flag = 1;
+            }
+            bytes_raw = buffer_read(&DD_out_buffer, (char *) raw_data,
+                    buffer->size);
+            ALOGV("raw read got %d\n",bytes_raw);
+            if ( bytes_raw > 0) {
+                glpTracker_raw->write(raw_data,bytes_raw);
+            }
+        } else {
+            if (raw_start_flag == 1) {
+                glpTracker_raw->pause();
+                amsysfs_set_sysfs_int("/sys/class/audiodsp/digital_codec", 0);
+                raw_start_flag = 0;
+            }
+        }
     } else {
+        if (raw_start_flag == 1) {
+            glpTracker_raw->pause();
+            amsysfs_set_sysfs_int("/sys/class/audiodsp/digital_codec", 0);
+            raw_start_flag = 0;
+        }
         if (output_record_enable == 1) {
             bytes = buffer_read(&android_out_buffer, (char *) buffer->raw,
                     buffer->size);
@@ -75,13 +140,6 @@ static void AudioTrackCallback(int event, void* user, void *info) {
 }
 
 static int AudioTrackRelease(void) {
-#if ANDROID_PLATFORM_SDK_VERSION < 19
-    if (glpTracker != NULL) {
-        glpTracker->stop();
-        delete glpTracker;
-        glpTracker = NULL;
-    }
-#else
     if (glpTracker != NULL ) {
         glpTracker->stop();
         glpTracker = NULL;
@@ -90,7 +148,21 @@ static int AudioTrackRelease(void) {
     if (gmpAudioTracker != NULL ) {
         gmpAudioTracker.clear();
     }
-#endif
+    //raw here
+    if (glpTracker_raw != NULL ) {
+        if (raw_start_flag == 1)
+            glpTracker_raw->stop();
+        raw_start_flag = 0;
+        glpTracker_raw = NULL;
+    }
+    if (gmpAudioTracker_raw != NULL ) {
+        gmpAudioTracker_raw.clear();
+    }
+    int ret;
+    ret=property_set("media.libplayer.dtsopt0", "0");
+    ALOGI("property_set<media.libplayer.dtsopt0> ret/%d\n",ret);
+    amsysfs_set_sysfs_int("/sys/class/audiodsp/digital_codec",0);
+    // raw end
     return 0;
 }
 
@@ -101,20 +173,23 @@ static int AudioTrackInit(void) {
 
     I2S_state = 0;
 
-#if ANDROID_PLATFORM_SDK_VERSION < 19
-    glpTracker = new AudioTrack();
-    if (glpTracker == NULL) {
-        ALOGE("%s, new AudioTrack failed.\n", __FUNCTION__);
-        return -1;
-    }
-#else
     gmpAudioTracker = new AudioTrack();
     if (gmpAudioTracker == NULL) {
         ALOGE("%s, new AudioTrack failed.\n", __FUNCTION__);
         return -1;
     }
     glpTracker = gmpAudioTracker.get();
-#endif
+    //raw here
+    gmpAudioTracker_raw = new AudioTrack();
+    if (gmpAudioTracker_raw == NULL) {
+        ALOGE("%s, new gmpAudioTracker_raw failed.\n", __FUNCTION__);
+        return -1;
+    }
+    glpTracker_raw = gmpAudioTracker_raw.get();
+    int ret;
+    ret=property_set("media.libplayer.dtsopt0", "1");
+    ALOGI("property_set<media.libplayer.dtsopt0> ret/%d\n",ret);
+    // raw end
 
     Status = glpTracker->set(AUDIO_STREAM_MUSIC, 48000, AUDIO_FORMAT_PCM_16_BIT,
             AUDIO_CHANNEL_OUT_STEREO, 0, AUDIO_OUTPUT_FLAG_NONE,
@@ -134,6 +209,22 @@ static int AudioTrackInit(void) {
         AudioTrackRelease();
         return -1;
     }
+    // raw here
+    Status = glpTracker_raw->set(AUDIO_STREAM_MUSIC, 48000, AUDIO_FORMAT_AC3,
+            AUDIO_CHANNEL_OUT_STEREO, 0, AUDIO_OUTPUT_FLAG_DIRECT,
+            NULL/* AudioTrackCallback_raw */, NULL, 0, 0, false, 0);
+    if (Status != NO_ERROR) {
+        ALOGE("%s, AudioTrack raw set failed.\n", __FUNCTION__);
+        AudioTrackRelease();
+        return -1;
+    }
+    Status = glpTracker_raw->initCheck();
+    if (Status != NO_ERROR) {
+        ALOGE("%s, AudioTrack raw initCheck failed.\n", __FUNCTION__);
+        AudioTrackRelease();
+        return -1;
+    }
+    //raw end
 
     glpTracker->start();
 

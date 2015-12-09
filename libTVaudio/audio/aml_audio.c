@@ -29,8 +29,9 @@
 
 #define LOG_TAG "aml_audio"
 
-#define ANDROID_OUT_BUFFER_SIZE    (2048*8*2)//in byte
-#define DDP_OUT_BUFFER_SIZE        (2048*8*2)//in byte
+#define ANDROID_OUT_BUFFER_SIZE    (2048*8*2) //in byte
+#define DDP_OUT_BUFFER_SIZE        (2048*8*2*2*2) //in byte
+#define DD_61937_BUFFER_SIZE       (2048*8*2*2*2)
 #define DEFAULT_OUT_SAMPLE_RATE    (48000)
 #define DEFAULT_IN_SAMPLE_RATE     (48000)
 #define PLAYBACK_PERIOD_SIZE       (512)
@@ -203,6 +204,14 @@ struct circle_buffer android_out_buffer = {
 };
 
 struct circle_buffer DDP_out_buffer = {
+    .lock = PTHREAD_MUTEX_INITIALIZER,
+    .start_add = NULL,
+    .rd = NULL,
+    .wr = NULL,
+    .size = 0,
+};
+
+struct circle_buffer DD_out_buffer = {
     .lock = PTHREAD_MUTEX_INITIALIZER,
     .start_add = NULL,
     .rd = NULL,
@@ -670,9 +679,10 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
             return ret;
         }
 
-        float vol = get_android_stream_volume();
-        apply_stream_volume(vol,in->resample_temp_buffer,bytes);
-
+        if (GetOutputdevice() != 2) {
+            float vol = get_android_stream_volume();
+            apply_stream_volume(vol,in->resample_temp_buffer,bytes);
+        }
         DoDumpData(in->resample_temp_buffer, bytes, CC_DUMP_SRC_TYPE_INPUT);
 
         output_size = resample_process(in, bytes >> 2,
@@ -686,9 +696,10 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
             return ret;
         }
 
-        float vol = get_android_stream_volume();
-        apply_stream_volume(vol,buffer,bytes);
-
+        if (GetOutputdevice() != 2) {
+            float vol = get_android_stream_volume();
+            apply_stream_volume(vol,buffer,bytes);
+        }
         DoDumpData(buffer, bytes, CC_DUMP_SRC_TYPE_INPUT);
 
         output_size = bytes;
@@ -1094,7 +1105,12 @@ static int aml_device_init(struct aml_dev *device) {
         ALOGE("%s, malloc ddp buffer failed!\n", __FUNCTION__);
         goto error2;
     }
-
+    // add a temp buffer to store dd 61937 audio frame
+    ret = tmp_buffer_init(&DD_out_buffer, DD_61937_BUFFER_SIZE);
+    if (ret < 0) {
+        ALOGE("%s, malloc dd 61937 buffer failed!\n", __FUNCTION__);
+        goto error3;
+    }
     //open input device of tinyalsa
     ret = alsa_in_open(&device->in);
     if (ret < 0) {
@@ -1175,6 +1191,7 @@ static int aml_device_init(struct aml_dev *device) {
     error5: release_buffer(device);
     error4: alsa_in_close(&device->in);
     error3: tmp_buffer_release (&DDP_out_buffer);
+            tmp_buffer_release (&DD_out_buffer);
     error2: tmp_buffer_release (&android_out_buffer);
     error1: return ret;
 
@@ -1197,6 +1214,7 @@ static int aml_device_close(struct aml_dev *device) {
     omx_codec_close();
     omx_started = 0;
     tmp_buffer_release (&DDP_out_buffer);
+    tmp_buffer_release (&DD_out_buffer);
     tmp_buffer_release (&android_out_buffer);
     release_buffer(device);
     audio_effect_release();

@@ -10,19 +10,19 @@
 
 extern struct circle_buffer android_out_buffer;
 extern struct circle_buffer DDP_out_buffer;
-
+extern struct circle_buffer DD_out_buffer;
 namespace android {
 
 #define LOG_TAG "DDP_Media_Source"
 
-static DDPerr ddbs_init(DDPshort * buf, DDPshort bitptr,DDP_BSTRM *p_bstrm)
+static DDPerr ddbs_init(DDPshort * buf, DDPshort bitptr, DDP_BSTRM *p_bstrm)
 {
     p_bstrm->buf = buf;
     p_bstrm->bitptr = bitptr;
     p_bstrm->data = *buf;
     return 0;
 }
-static DDPerr ddbs_unprj(DDP_BSTRM    *p_bstrm,DDPshort *p_data,  DDPshort numbits)
+static DDPerr ddbs_unprj(DDP_BSTRM *p_bstrm, DDPshort *p_data,  DDPshort numbits)
 {
     DDPushort data;
     *p_data = (DDPshort)((p_bstrm->data << p_bstrm->bitptr) & msktab[numbits]);
@@ -40,7 +40,7 @@ static DDPerr ddbs_unprj(DDP_BSTRM    *p_bstrm,DDPshort *p_data,  DDPshort numbi
 }
 
 
-static int Get_DD_Parameters(void *buf, int *sample_rate, int *frame_size,int *ChNum)
+static int Get_DD_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChNum)
 {
     int numch=0;
     DDP_BSTRM bstrm={0};
@@ -617,31 +617,50 @@ int omx_codec_get_Nch() {
 
 void *decode_threadloop(void *args) {
     unsigned int outlen = 0;
+    unsigned int outlen_raw = 0;
+    unsigned int outlen_pcm = 0;
     int write_sucessed = 1;
     int ret = 0;
-    unsigned char tmp[8192];
+    char tmp[8192*2];
 
     ALOGI("[%s %d] enter!\n", __FUNCTION__, __LINE__);
     while (decode_ThreadStopFlag == 0) {
         if (write_sucessed == 1) {
             outlen = 0;
-            omx_codec_read(&tmp[0], &outlen, &(decode_ThreadStopFlag));
+            outlen_raw = 0;
+            outlen_pcm = 0;
+            omx_codec_read((unsigned char*)tmp, &outlen, &(decode_ThreadStopFlag));
         }
         if (decode_ThreadStopFlag == 1) {
             ALOGD("%s, exit threadloop! \n", __FUNCTION__);
             break;
         }
-        if (outlen > 0) {
-            ret = buffer_write(&DDP_out_buffer, (char *) (&tmp[0]), outlen);
-            if (ret < 0) {
-                write_sucessed = 0;
-                usleep(10 * 1000); //10ms
-            } else {
-                write_sucessed = 1;
+        if (outlen > 8) {
+            memcpy(&outlen_pcm,tmp,4);
+            memcpy(&outlen_raw,tmp+4+outlen_pcm,4);
+            if (outlen_pcm > 0) {
+                //ALOGI("pcm data size %d\n",outlen_pcm);
+                ret = buffer_write(&DDP_out_buffer, tmp+4, outlen_pcm);
+                if (ret < 0) {
+                    write_sucessed = 0;
+                    usleep(10 * 1000); //10ms
+                } else {
+                    write_sucessed = 1;
+                }
+            }
+            if (outlen_raw > 0) {
+                //ALOGI("raw data size %d\n",outlen_raw);
+                ret = buffer_write(&DD_out_buffer, tmp+4+outlen_pcm+4, outlen_raw);
+                if (ret < 0) {
+                    //write_sucessed = 0;
+                    ALOGI("raw data write failed\n");
+                    usleep(10 * 1000); //10ms
+                } else {
+                    //write_sucessed = 1;
+                }
             }
         }
     }
-
     decode_ThreadExitFlag = 0;
     ALOGD("%s, exiting...\n", __FUNCTION__);
     return NULL;
