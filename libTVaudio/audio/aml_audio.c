@@ -1459,7 +1459,7 @@ static void* aml_audio_threadloop(void *data) {
             if (output_size < 0) {
                 //ALOGE("%s, alsa_in_read fail!\n", __FUNCTION__);
             } else {
-                if (gpAmlDevice->has_EQ_lib && (GetOutputdevice() == 0)) {
+                if (gpAmlDevice->has_EQ_lib) {
                     HPEQ_process((short *) in->temp_buffer,
                             (short *) in->temp_buffer, output_size >> 2);
                 }
@@ -1483,7 +1483,7 @@ static void* aml_audio_threadloop(void *data) {
                     (char *) start_temp_buffer, TEMP_BUFFER_SIZE);
 
             output_size = out->max_bytes;
-            if (gpAmlDevice->has_SRS_lib && (GetOutputdevice() == 0)) {
+            if (gpAmlDevice->has_SRS_lib) {
                 output_size = srs_process((short *) out->temp_buffer,
                         (short *) out->temp_buffer, out->max_bytes >> 2);
             }
