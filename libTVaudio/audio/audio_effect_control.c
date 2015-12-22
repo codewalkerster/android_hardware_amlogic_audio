@@ -330,9 +330,9 @@ int srs_setParameter(int SRS_user_config[]) {
 
     truebass_spker_size = SRS_user_config[0];
     truebass_gain = (float) SRS_user_config[1] / (float) 100;
-    dialogclarity_gain = (float) SRS_user_config[1] / (float) 100;
-    definition_gain = (float) SRS_user_config[1] / (float) 100;
-    surround_gain = (float) SRS_user_config[1] / (float) 100;
+    dialogclarity_gain = (float) SRS_user_config[2] / (float) 100;
+    definition_gain = (float) SRS_user_config[3] / (float) 100;
+    surround_gain = (float) SRS_user_config[4] / (float) 100;
 
     ret = (*SRS_setParameter)(truebass_spker_size, truebass_gain,
             dialogclarity_gain, definition_gain, surround_gain);
