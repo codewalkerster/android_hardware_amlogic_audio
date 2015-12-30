@@ -29,15 +29,4 @@ int amAudioSetSRSGain(int input_gain, int output_gain);
 int amAudioSetDumpDataFlag(int tmp_flag);
 int amAudioGetDumpDataFlag();
 
-//---------------------------clear----------------------------------
-int amAudioSetAndroidVolumeEnable(int enable);
-int amAudioSetAndroidVolume(int left, int right);
-int amAudioSetOutputRecordEnable(int enable);
-int amAudioSetDoubleOutput(int en_val, unsigned int sr, int input_device,
-        int output_device);
-int amAudioSetOutputSr(unsigned int sr, int output_device);
-int createMonitorUsbHostBusThread();
-
-//----------------------------------------------------------------------
-
 #endif //__TV_AUDIO_AMAUDIO_H__

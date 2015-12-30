@@ -7,6 +7,7 @@ extern "C" {
 
 int GetUsbAudioCheckFlag(void);
 float get_android_stream_volume(void);
+int set_parameters(char parameters[], char parm_key[]);
 
 #ifdef __cplusplus
 }

@@ -98,15 +98,14 @@ struct aml_stream_out {
     int card;
     int device;
     int standby;
-    int max_bytes;
     void *temp_buffer;
     void *read_buffer;
     int output_device;
     int amAudio_OutHandle;
     struct buffer_status playback_buf;
-    struct buffer_status read_buf;
-    int amaudio_out_read_enable;
     int user_set_device;
+    int is_tv_platform;
+    void *buffer;
 };
 
 struct aml_dev {
@@ -119,8 +118,6 @@ struct aml_dev {
     int has_SRS_lib;
     int output_deviceID;
 };
-
-static void *start_temp_buffer = NULL;
 
 static struct aml_dev gmAmlDevice = {
     .in = {
@@ -164,7 +161,6 @@ static struct aml_dev gmAmlDevice = {
         .card = 0,
         .device = 0,
         .standby = 0,
-        .max_bytes = 0,
         .temp_buffer = NULL,
         .read_buffer = NULL,
         .output_device = 0,
@@ -176,15 +172,9 @@ static struct aml_dev gmAmlDevice = {
             .rd = 0,
             .wr = 0,
         },
-        .read_buf = {
-            .start_add = NULL,
-            .size = 0,
-            .level = 0,
-            .rd = 0,
-            .wr = 0,
-        },
-        .amaudio_out_read_enable = 0,
         .user_set_device = 0,
+        .is_tv_platform = 0,
+        .buffer = NULL,
     },
 
     .aml_Audio_ThreadID = 0,
@@ -219,6 +209,7 @@ struct circle_buffer DD_out_buffer = {
     .size = 0,
 };
 
+static void *start_temp_buffer = NULL;
 static struct aml_dev *gpAmlDevice = NULL;
 static pthread_mutex_t amaudio_dev_op_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -247,7 +238,6 @@ extern int I2S_state;
 #define AMAUDIO_IOC_MUSIC_GAIN         _IOW(AMAUDIO_IOC_MAGIC, 0x07, int)
 #define AMAUDIO_IOC_GET_PTR_READ        _IOW(AMAUDIO_IOC_MAGIC, 0x08, int)
 #define AMAUDIO_IOC_UPDATE_APP_PTR_READ _IOW(AMAUDIO_IOC_MAGIC, 0x09, int)
-#define AMAUDIO_IOC_OUT_READ_ENABLE     _IOW(AMAUDIO_IOC_MAGIC, 0x0a, int)
 
 #define CC_DUMP_SRC_TYPE_INPUT      (0)
 #define CC_DUMP_SRC_TYPE_OUTPUT     (1)
@@ -266,6 +256,21 @@ int output_record_enable = 0;
 pthread_mutex_t device_change_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void DoDumpData(void *data_buf, int size, int aud_src_type);
+
+static int getprop_bool(const char * path)
+{
+ #if 0
+    char buf[PROPERTY_VALUE_MAX];
+    int ret = -1;
+
+    ret = property_get(path, buf, NULL);
+    if (ret > 0) {
+        if (strcasecmp(buf, "true") == 0 || strcmp(buf, "1") == 0)
+            return 1;
+    }
+ #endif
+    return 0;
+}
 
 inline int GetWriteSpace(char *WritePoint, char *ReadPoint, int buffer_size) {
     int bytes;
@@ -657,6 +662,7 @@ static void apply_stream_volume(float vol,char *buf,int size) {
 
 static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
     int ret;
+    int resample_request = in->resample_request;
 
     pthread_mutex_lock(&in->lock);
     if (in->standby) {
@@ -666,11 +672,11 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
     }
     //if raw data in HDMI-in, no need to resample
     if (GetOutputdevice() == 2) {
-        in->resample_request == 0;
+        resample_request = 0;
     }
 
     int output_size = 0;
-    if (in->resample_request == 1) {
+    if (resample_request == 1) {
         ret = pcm_read(in->pcm, in->resample_temp_buffer, bytes);
         if (ret < 0) {
             //wait for next frame
@@ -709,19 +715,30 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
 }
 
 static int alsa_out_open(struct aml_stream_out *out) {
-    out->config.channels = pcm_config_out.channels;
+    if (getprop_bool("ro.platform.has.tvuimode")) {
+        out->config.channels = 8;
+        out->config.format = PCM_FORMAT_S32_LE;
+        out->config.period_size = pcm_config_out.period_size * 8;//8chnanel
+        out->is_tv_platform = 1;
+        out->buffer = malloc(out->config.period_size * 4); //32bit
+        if (out->buffer == NULL) {
+            ALOGE("cannot malloc memory for out->tmp_buffer");
+            return -ENOMEM;
+        }
+    }else {
+        out->config.channels = pcm_config_out.channels;
+        out->config.format = pcm_config_out.format;
+        out->config.period_size = pcm_config_out.period_size;
+        out->is_tv_platform = 0;
+    }
     out->config.rate = pcm_config_out.rate;
-    out->config.period_size = pcm_config_out.period_size;
     out->config.period_count = pcm_config_out.period_count;
-    out->config.format = pcm_config_out.format;
     out->config.stop_threshold = PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
     out->standby = 1;
-    out->max_bytes = out->config.period_size << 2;
-    out->amaudio_out_read_enable = 0;
 
     pthread_mutex_lock(&out->lock);
     out->card = get_aml_card();
-    out->pcm = pcm_open(out->card, out->device, PCM_OUT, &pcm_config_out);
+    out->pcm = pcm_open(out->card, out->device, PCM_OUT, &out->config);
     if (!pcm_is_ready(out->pcm)) {
         ALOGE("%s, Unable to open PCM device out: %s\n", __FUNCTION__,
                 pcm_get_error(out->pcm));
@@ -740,6 +757,10 @@ static int alsa_out_close(struct aml_stream_out *out) {
     ALOGD("%s, Do output close!\n", __FUNCTION__);
 
     pthread_mutex_lock(&out->lock);
+    if (out->is_tv_platform == 1) {
+        free(out->buffer);
+        out->is_tv_platform = 0;
+    }
     if (!out->standby) {
         pcm_close(out->pcm);
         out->pcm = NULL;
@@ -783,10 +804,6 @@ static int reset_amaudio(struct aml_stream_out *out, int delay_size) {
     buf->rd = 0;
     buf->wr = 0;
     buf->level = buf->size;
-    struct buffer_status *buf1 = &out->read_buf;
-    buf1->rd = 0;
-    buf1->wr = 0;
-    buf1->level = 0;
     int ret = ioctl(out->amAudio_OutHandle, AMAUDIO_IOC_RESET, delay_size);
     if (ret < 0) {
         ALOGE("%s, amaudio reset delay_size error!\n", __FUNCTION__);
@@ -869,16 +886,25 @@ static int release_audiotrack(struct aml_stream_out *out) {
 }
 
 static int amaudio_out_open(struct aml_stream_out *out) {
-
-    out->config.channels = pcm_config_out.channels;
+    if (getprop_bool("ro.platform.has.tvuimode")) {
+        out->config.channels = 8;
+        out->config.format = PCM_FORMAT_S32_LE;
+        out->config.period_size = pcm_config_out.period_size * 8;//8chnanel
+        out->is_tv_platform = 1;
+        out->buffer = malloc(out->config.period_size * 4); //32bit
+        if (out->buffer == NULL) {
+            ALOGE("cannot malloc memory for out->tmp_buffer");
+            return -ENOMEM;
+        }
+    }else {
+        out->config.channels = pcm_config_out.channels;
+        out->config.format = pcm_config_out.format;
+        out->config.period_size = pcm_config_out.period_size;
+        out->is_tv_platform = 0;
+    }
     out->config.rate = pcm_config_out.rate;
-    out->config.period_size = pcm_config_out.period_size;
     out->config.period_count = pcm_config_out.period_count;
-    out->config.format = pcm_config_out.format;
-
     out->standby = 1;
-    out->max_bytes = out->config.period_size << 2;
-    out->amaudio_out_read_enable = 0;
 
     pthread_mutex_lock(&out->lock);
     out->amAudio_OutHandle = -1;
@@ -905,9 +931,6 @@ static int amaudio_out_open(struct aml_stream_out *out) {
         return -1;
     }
 
-    struct buffer_status *buf1 = &out->read_buf;
-    buf1->size = buf->size;
-
     out->standby = 0;
     pthread_mutex_unlock(&out->lock);
     ALOGD("%s, Amaudio device is opened!\n", __FUNCTION__);
@@ -917,6 +940,9 @@ static int amaudio_out_open(struct aml_stream_out *out) {
 static int amaudio_out_close(struct aml_stream_out *out) {
     ALOGD("%s, Do amaudio device close!\n", __FUNCTION__);
     pthread_mutex_lock(&out->lock);
+    if (out->is_tv_platform == 1) {
+        free(out->buffer);
+    }
     if (out->amAudio_OutHandle > 0) {
         close(out->amAudio_OutHandle);
         out->amAudio_OutHandle = -1;
@@ -957,65 +983,6 @@ static int amaudio_out_write(struct aml_stream_out *out, void* buffer,
     ioctl(out->amAudio_OutHandle, AMAUDIO_IOC_UPDATE_APP_PTR, buf->wr);
     pthread_mutex_unlock(&out->lock);
 
-    return block;
-}
-
-int amaudio_out_read_enable(int enable) {
-    int ret;
-
-    if (gpAmlDevice == NULL) {
-        ALOGE("%s, aml audio is not open, must open it first!\n", __FUNCTION__);
-        return -1;
-    }
-
-    int OutHandle = gpAmlDevice->out.amAudio_OutHandle;
-    if (OutHandle < 0) {
-        ALOGE("%s, amaudio out handle error!\n", __FUNCTION__);
-        return -1;
-    }
-
-    pthread_mutex_lock(&gpAmlDevice->out.lock);
-    gpAmlDevice->out.amaudio_out_read_enable = enable;
-    reset_amaudio(&gpAmlDevice->out, 64 * 32 * 2);
-    ioctl(OutHandle, AMAUDIO_IOC_OUT_READ_ENABLE, enable);
-    ALOGD("%s, out read enable :%d!\n", __FUNCTION__, enable);
-    pthread_mutex_unlock(&gpAmlDevice->out.lock);
-    return 0;
-}
-
-static int amaudio_out_read(struct aml_stream_out *out, void* buffer,
-        size_t bytes) {
-    int block = bytes >> 6 << 6; //align 2^6
-    char *in = (char *) buffer;
-    struct buffer_status *buf = &out->read_buf;
-
-    pthread_mutex_lock(&out->lock);
-
-    buf->wr = ioctl(out->amAudio_OutHandle, AMAUDIO_IOC_GET_PTR_READ);
-    buf->level = (buf->size + buf->wr - buf->rd) % buf->size;
-
-    if (buf->level < block) {
-        usleep(5000);
-        pthread_mutex_unlock(&out->lock);
-        ALOGD("buf->level=%d,buf->rd = %d,buf->wr=%d\n", buf->level, buf->rd,
-                buf->wr);
-        return 0;
-    }
-
-    int Ret = read(out->amAudio_OutHandle, (char *) buffer, block);
-    if (Ret != block) {
-        ALOGE("%s, amAudio2 read from hardware buffer failed!\n", __FUNCTION__);
-        pthread_mutex_unlock(&out->lock);
-        return -1;
-    }
-
-    // update the read pointer
-    buf->rd += block;
-    buf->rd %= buf->size;
-    buf->level = (buf->size + buf->wr - buf->rd) % buf->size;
-
-    ioctl(out->amAudio_OutHandle, AMAUDIO_IOC_UPDATE_APP_PTR_READ, buf->rd);
-    pthread_mutex_unlock(&out->lock);
     return block;
 }
 
@@ -1278,7 +1245,7 @@ static int get_channel_status(void) {
     struct mixer *pmixer;
     struct mixer_ctl *pctl;
     int card_id;
-    int type_HDMI = -1;
+    int type_I2S = -1;
     int type_SPDIF = -1;
     int type_AUDIO_IN = -1;
 
@@ -1304,10 +1271,10 @@ static int get_channel_status(void) {
 
     pctl = mixer_get_ctl_by_name(pmixer, I2S_IN_AUDIO_TYPE);
     if (NULL != pctl) {
-        type_HDMI = mixer_ctl_get_value(pctl, 0);
+        type_I2S = mixer_ctl_get_value(pctl, 0);
     }
 
-    if (type_SPDIF == RAW_DATA || type_HDMI == RAW_DATA) {
+    if (type_SPDIF == RAW_DATA || type_I2S == RAW_DATA) {
         mixer_close(pmixer);
         return RAW_DATA;
     } else {
@@ -1418,7 +1385,18 @@ static int check_audio_type(struct aml_stream_out *out) {
     return 0;
 }
 
-static void* aml_audio_threadloop(void *data) {
+static int audio_effect_process(short* buffer, int frame_size) {
+    int output_size = frame_size << 2;
+    if (gpAmlDevice->has_SRS_lib) {
+        output_size = srs_process(buffer, buffer, frame_size);
+    }
+    if (gpAmlDevice->has_EQ_lib) {
+        HPEQ_process(buffer, buffer, frame_size);
+    }
+    return output_size;
+}
+
+static void* aml_audio_threadloop(void *data __unused) {
     struct aml_stream_in *in = NULL;
     struct aml_stream_out *out = NULL;
     int output_size = 0;
@@ -1432,7 +1410,6 @@ static void* aml_audio_threadloop(void *data) {
 
     in = &gpAmlDevice->in;
     out = &gpAmlDevice->out;
-    out->max_bytes = pcm_config_out.period_size << 2;
 
     gpAmlDevice->aml_Audio_ThreadExecFlag = 1;
     ALOGD("%s, set aml_Audio_ThreadExecFlag as 1.\n", __FUNCTION__);
@@ -1459,10 +1436,6 @@ static void* aml_audio_threadloop(void *data) {
             if (output_size < 0) {
                 //ALOGE("%s, alsa_in_read fail!\n", __FUNCTION__);
             } else {
-                if (gpAmlDevice->has_EQ_lib && (GetOutputdevice() != 2)) {
-                    HPEQ_process((short *) in->temp_buffer,
-                            (short *) in->temp_buffer, output_size >> 2);
-                }
                 write_to_buffer((char *) in->write_buffer,
                         (char *) in->temp_buffer, output_size,
                         (char *) start_temp_buffer, TEMP_BUFFER_SIZE);
@@ -1477,15 +1450,15 @@ static void* aml_audio_threadloop(void *data) {
         USB_check(out);
 
         if (GetReadSpace((char *) in->write_buffer, (char *) out->read_buffer,
-                TEMP_BUFFER_SIZE) > out->max_bytes) {
+                TEMP_BUFFER_SIZE) > pcm_config_out.period_size << 2) {
             read_from_buffer((char *) out->read_buffer,
-                    (char *) out->temp_buffer, out->max_bytes,
+                    (char *) out->temp_buffer, pcm_config_out.period_size << 2,
                     (char *) start_temp_buffer, TEMP_BUFFER_SIZE);
 
-            output_size = out->max_bytes;
-            if (gpAmlDevice->has_SRS_lib && (GetOutputdevice() != 2)) {
-                output_size = srs_process((short *) out->temp_buffer,
-                        (short *) out->temp_buffer, out->max_bytes >> 2);
+            output_size = pcm_config_out.period_size << 2;
+            if (GetOutputdevice() == 0) {
+                output_size = audio_effect_process((short*)out->temp_buffer,
+                        pcm_config_out.period_size);
             }
             if (gpAmlDevice->out.output_device == CC_OUT_USE_ALSA) {
                 output_size = alsa_out_write(out, out->temp_buffer,
