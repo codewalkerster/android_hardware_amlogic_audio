@@ -7,6 +7,8 @@ extern "C" {
 
 int new_android_audiotrack(void);
 int release_android_audiotrack(void);
+int amsysfs_get_sysfs_int(const char *path);
+
 
 #ifdef __cplusplus
 }

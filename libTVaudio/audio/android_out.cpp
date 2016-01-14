@@ -33,6 +33,7 @@ extern pthread_mutex_t device_change_lock;
 
 int I2S_state = 0;
 static int raw_start_flag = 0;
+static int last_raw_flag = 0;
 static int amsysfs_set_sysfs_int(const char *path, int val) {
     int fd;
     int bytes;
@@ -49,7 +50,7 @@ static int amsysfs_set_sysfs_int(const char *path, int val) {
     return -1;
 }
 
-static int amsysfs_get_sysfs_int(const char *path) {
+int amsysfs_get_sysfs_int(const char *path) {
     int fd;
     int val = 0;
     char bcmd[16];
@@ -163,6 +164,11 @@ static int AudioTrackRelease(void) {
     ALOGI("property_set<media.libplayer.dtsopt0> ret/%d\n",ret);
     amsysfs_set_sysfs_int("/sys/class/audiodsp/digital_codec",0);
     // raw end
+    if (last_raw_flag  == 2) {
+        ALOGI("change back digital raw to 2 for hdmi pass through\n");
+        amsysfs_set_sysfs_int("/sys/class/audiodsp/digital_raw",2);
+        last_raw_flag = 0;
+    }
     return 0;
 }
 
@@ -235,9 +241,14 @@ static int AudioTrackInit(void) {
         AudioTrackRelease();
         return -1;
     }
-
     ALOGD("%s, exit...\n", __FUNCTION__);
 
+    int digital_raw = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
+    if (digital_raw == 2) {
+        ALOGI("change digital raw to 2 for spdif pass through\n");
+        amsysfs_set_sysfs_int("/sys/class/audiodsp/digital_raw",1);
+        last_raw_flag = 2;
+    }
     return 0;
 }
 

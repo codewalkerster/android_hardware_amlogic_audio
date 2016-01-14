@@ -252,6 +252,7 @@ static int audioin_type = 0;
 static int omx_started = 0;
 static int raw_data_counter = 0;
 static int pcm_data_counter = 0;
+static int digital_raw_enable = 0;
 int output_record_enable = 0;
 pthread_mutex_t device_change_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -1319,6 +1320,7 @@ err_exit:
     set_output_deviceID(2);
     out->output_device = CC_OUT_USE_ANDROID;
     set_Hardware_resample(4);
+    digital_raw_enable = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
     omx_codec_init();
     return 0;
 }
@@ -1381,6 +1383,18 @@ static int check_audio_type(struct aml_stream_out *out) {
         set_rawdata_in_disable(out);
         omx_started = 0;
         pcm_data_counter = 0;
+    }
+    /*
+    if omx ddp decoder has been started, but user configure pcm ->raw output
+    we need reset decoder to enable decoder to dd/dd+ converter
+    */
+    else if (omx_started == 1) {
+        int digtal_out = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
+        if (digtal_out == 1 && digital_raw_enable == 0) {
+            ALOGI("pcm to digital ,reset decoder to reset \n");
+            set_rawdata_in_disable(out);
+            omx_started = 0;
+        }
     }
     return 0;
 }
