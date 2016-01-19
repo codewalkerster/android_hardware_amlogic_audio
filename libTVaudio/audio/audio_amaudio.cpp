@@ -25,7 +25,7 @@
 #define LOG_TAG "LibAudioCtl"
 
 int amAudioOpen(unsigned int sr, int input_device, int output_device) {
-    return aml_audio_open(sr, input_device, 2);
+    return aml_audio_open(sr, input_device, output_device);
 }
 
 int amAudioClose(void) {

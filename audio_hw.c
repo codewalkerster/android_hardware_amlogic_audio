@@ -432,8 +432,6 @@ static int start_output_stream(struct aml_stream_out *out)
     }
     LOGFUNC("*%s, open card(%d) port(%d)", __FUNCTION__,card,port);
 
-    out->config.period_size = PERIOD_SIZE;
-
     /* default to low power: will be corrected in out_write if necessary before first write to
      * tinyalsa.
      */
@@ -1864,14 +1862,13 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     if (getprop_bool("ro.platform.has.tvuimode")) {
         pcm_config_out.channels = 8;
         pcm_config_out.format = PCM_FORMAT_S32_LE;
-        pcm_config_out.period_size = DEFAULT_PERIOD_SIZE * 8; //8chnanel
         out->is_tv_platform = 1;
-        out->tmp_buffer_8ch = malloc(pcm_config_out.period_size * 4); //32bit
+        out->tmp_buffer_8ch = malloc(pcm_config_out.period_size * 4 * 8);
         if (out->tmp_buffer_8ch == NULL) {
             ALOGE("cannot malloc memory for out->tmp_buffer_8ch");
             return -ENOMEM;
         }
-        out->audioeffect_tmp_buffer = malloc(pcm_config_out.period_size); //32bit
+        out->audioeffect_tmp_buffer = malloc(pcm_config_out.period_size * 6);
         if (out->audioeffect_tmp_buffer == NULL) {
             ALOGE("cannot malloc memory for audioeffect_tmp_buffer");
             return -ENOMEM;
