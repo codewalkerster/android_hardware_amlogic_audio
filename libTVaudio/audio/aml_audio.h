@@ -43,7 +43,14 @@ struct circle_buffer {
     char *wr;
     int size;
 };
-
+enum  {
+    LPCM = 0,
+    AC3,
+    EAC3,
+    DTS,
+    DTSHD,
+    TRUEHD,
+};
 /*
  In this system, input stream sample rate can be set from 8K-48K, and output sample rate is fixed 48K.
  When input stream sample rate is different from output, inlined reample is in operation. If input stream sr is not set,
