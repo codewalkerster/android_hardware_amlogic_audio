@@ -34,5 +34,6 @@ int amAudioSetSRSDialogClaritySwitch(int switch_val);
 int amAudioSetSRSDialogClarityGain(int gain_val);
 int amAudioSetSRSDefinitionGain(int gain_val);
 int amAudioSetSRSTrubassSpeakerSize(int tmp_val);
+int amAudioSetSRSGain(int input_gain, int output_gain);
 
 #endif //__TV_AUDIO_AMAUDIO_H__

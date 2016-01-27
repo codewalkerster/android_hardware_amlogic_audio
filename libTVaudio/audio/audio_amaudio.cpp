@@ -169,6 +169,10 @@ static int amAudioSetSRSParameter(int set_type, int gain_val) {
     return srs_setParameter(tmp_buf);
 }
 
+int amAudioSetSRSGain(int input_gain, int output_gain) {
+    int ret = 0;
+    return ret;
+}
 int amAudioSetSRSSurroundSwitch(int switch_val) {
     return srs_surround_enable(switch_val);
 }
