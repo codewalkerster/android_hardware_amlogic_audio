@@ -35,11 +35,11 @@
 #include <cutils/log.h>
 #include <cutils/str_parms.h>
 #include <cutils/properties.h>
-
+#include <linux/ioctl.h>
 #include <hardware/hardware.h>
 #include <system/audio.h>
 #include <hardware/audio.h>
-
+#include <sound/asound.h>
 #include <tinyalsa/asoundlib.h>
 #include <audio_utils/resampler.h>
 #include <audio_utils/echo_reference.h>
@@ -898,9 +898,18 @@ static char * out_get_parameters(const struct audio_stream *stream __unused, con
 
 static uint32_t out_get_latency(const struct audio_stream_out *stream)
 {
-
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
-	return (out->config.period_size * out->config.period_count * 1000) / out->config.rate;
+    uint32_t whole_latency;
+    uint32_t ret;
+    snd_pcm_sframes_t frames = 0;
+    whole_latency = (out->config.period_size * out->config.period_count * 1000) / out->config.rate;
+    if (!out->pcm || !pcm_is_ready(out->pcm))
+        return whole_latency;
+    ret = pcm_ioctl(out->pcm,SNDRV_PCM_IOCTL_DELAY,&frames);
+    if (ret < 0) {
+        return whole_latency;
+    }
+    return (frames * 1000)/DEFAULT_OUT_SAMPLING_RATE/* (out->pcm->config.rate)*/;
 }
 
 static int out_set_volume(struct audio_stream_out *stream __unused, float left __unused, float right __unused)
@@ -997,15 +1006,17 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         out->echo_reference->write(out->echo_reference, &b);
     }
 
-#if 0
-        FILE *fp1=fopen("/data/audio_out","a+");
+#if 1
+    if (getprop_bool("media.audiohal.outdump")) {
+        FILE *fp1=fopen("/data/i2s_audio_out.pcm","a+");
         if (fp1) {
-            int flen=fwrite((char *)in_buffer,1,out_frames * frame_size,fp1);
-            LOGFUNC("flen = %d---outlen=%d ", flen, out_frames * frame_size);
-            fclose(fp1);
-        }else{
-            LOGFUNC("could not open file:audio_out");
+                int flen=fwrite((char *)in_buffer,1,out_frames * frame_size,fp1);
+                LOGFUNC("flen = %d---outlen=%d ", flen, out_frames * frame_size);
+                fclose(fp1);
+        } else {
+                LOGFUNC("could not open file:/data/i2s_audio_out.pcm");
         }
+    }
 #endif
 
     codec_type = get_sysfs_int("/sys/class/audiodsp/digital_codec");
