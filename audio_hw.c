@@ -1103,7 +1103,7 @@ static int out_get_presentation_position(const struct audio_stream_out *stream,u
     if (frames != NULL)
         *frames=out->fram_write_sum;
     if (timestamp != NULL) {
-        clock_gettime(CLOCK_REALTIME,timestamp);
+        clock_gettime(CLOCK_MONOTONIC, timestamp);
     }
 
     return 0;
