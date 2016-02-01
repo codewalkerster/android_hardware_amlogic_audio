@@ -1155,10 +1155,7 @@ static int out_get_presentation_position(const struct audio_stream_out *stream,u
     if (frames != NULL)
         *frames=out->fram_write_sum;
     if (timestamp != NULL) {
-        //the timestame value got here does not match :
-        //   System.nanoTime() located in android_5.0\cts\tests\tests\media\src\android\media\cts\AudioTrackTest.java\< public void testGetTimestamp() >
-        //why???!!
-        clock_gettime(CLOCK_REALTIME,timestamp);
+        clock_gettime(CLOCK_MONOTONIC, timestamp);
     }
 
     return 0;
