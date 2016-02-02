@@ -254,6 +254,7 @@ static int raw_data_counter = 0;
 static int pcm_data_counter = 0;
 static int digital_raw_enable = 0;
 int output_record_enable = 0;
+int spdif_audio_type = LPCM;
 pthread_mutex_t device_change_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void DoDumpData(void *data_buf, int size, int aud_src_type);
@@ -1342,7 +1343,7 @@ static int get_channel_status(void) {
     if (NULL != pctl) {
         type_I2S = mixer_ctl_get_value(pctl, 0);
     }
-
+#if 0
     if (type_SPDIF == RAW_DATA || type_I2S == RAW_DATA) {
         mixer_close(pmixer);
         return RAW_DATA;
@@ -1350,6 +1351,10 @@ static int get_channel_status(void) {
         mixer_close(pmixer);
         return PCM_DATA;
     }
+#else
+    mixer_close(pmixer);
+    return type_SPDIF;
+#endif
 err_exit:
     if (NULL != pmixer) {
         mixer_close(pmixer);
@@ -1434,20 +1439,20 @@ int set_output_record_enable(int enable) {
 
 static int check_audio_type(struct aml_stream_out *out) {
     audioin_type = get_channel_status();
-
-    if (audioin_type == 1 && omx_started == 0) {
+    spdif_audio_type = audioin_type;
+    if (audioin_type > LPCM && omx_started == 0) {
         raw_data_counter++;
     }
-    if (audioin_type == 0 && omx_started == 1) {
+    if (audioin_type == LPCM && omx_started == 1) {
         pcm_data_counter++;
     }
-    if (raw_data_counter >= 3 && omx_started == 0) {
-        ALOGI("%s, audio type is changed to RAW data input!\n", __FUNCTION__);
+    if (raw_data_counter >= 1 && omx_started == 0) {
+        ALOGI("%s, audio type is changed to RAW data input!,type %d\n", __FUNCTION__,audioin_type);
         set_rawdata_in_enable(out);
         omx_started = 1;
         raw_data_counter = 0;
-    } else if (pcm_data_counter >= 3 && omx_started == 1) {
-        ALOGI("%s, audio type is changed to PCM data input!\n", __FUNCTION__);
+    } else if (pcm_data_counter >= 1 && omx_started == 1) {
+        ALOGI("%s, audio type is changed to PCM data input!,type %d\n", __FUNCTION__,audioin_type);
         set_rawdata_in_disable(out);
         omx_started = 0;
         pcm_data_counter = 0;
@@ -1458,10 +1463,20 @@ static int check_audio_type(struct aml_stream_out *out) {
     */
     else if (omx_started == 1) {
         int digtal_out = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
-        if (digtal_out == 1 && digital_raw_enable == 0) {
-            ALOGI("pcm to digital ,reset decoder to reset \n");
+        int need_reset_config = 0;
+        if (audioin_type == EAC3 && digtal_out != digital_raw_enable) {
+            ALOGI("DD+ passthrough flag changed from %d to %d\n",digital_raw_enable,digtal_out);
+            need_reset_config = 1;
+        }
+        else if (digtal_out > 0  && digital_raw_enable == 0) {
+            ALOGI("PCM output  changed to RAW pass through\n");
+            need_reset_config = 1;
+        }
+        if (need_reset_config) {
+            ALOGI("pcm to pass through,decoder to reset \n");
             set_rawdata_in_disable(out);
-            omx_started = 0;
+            set_rawdata_in_enable(out);
+            //omx_started = 0;
         }
     }
     return 0;
