@@ -37,7 +37,7 @@ static int raw_start_flag = 0;
 static int mute_raw_data_size = 0;
 static audio_format_t last_aformat = AUDIO_FORMAT_AC3;
 //static int last_raw_flag = 0;
-static int  RawAudioTrackRelease(void);
+static int RawAudioTrackRelease(void);
 static int RawAudioTrackInit(audio_format_t aformat,int sr);
 static int amsysfs_set_sysfs_int(const char *path, int val) {
     int fd;
@@ -162,8 +162,8 @@ static void AudioTrackCallback(int event, void* user, void *info) {
     I2S_state += 1;
     return;
 }
-static int  RawAudioTrackRelease(void) {
-   //raw here
+static int RawAudioTrackRelease(void) {
+    //raw here
     if (glpTracker_raw != NULL ) {
         if (raw_start_flag == 1)
             glpTracker_raw->stop();
@@ -175,9 +175,9 @@ static int  RawAudioTrackRelease(void) {
         ALOGI("RawAudioTrackRelease done\n");
     }
     gmpAudioTracker_raw = NULL;
-// raw end
+    // raw end
 #if 0
-    if (last_raw_flag  == 2) {
+    if (last_raw_flag == 2) {
         ALOGI("change back digital raw to 2 for hdmi pass through\n");
         amsysfs_set_sysfs_int("/sys/class/audiodsp/digital_raw",2);
         last_raw_flag = 0;
@@ -212,14 +212,16 @@ static int RawAudioTrackInit(audio_format_t aformat,int sr)
         return -1;
     }
     glpTracker_raw = gmpAudioTracker_raw.get();
-    // raw end
-    // raw here
+
     Status = glpTracker_raw->set(AUDIO_STREAM_MUSIC, sr, aformat,
             AUDIO_CHANNEL_OUT_STEREO, 0, AUDIO_OUTPUT_FLAG_DIRECT,
             RawAudioTrackCallback/*NULL*/, NULL, 0, 0, false, 0);
     if (Status != NO_ERROR) {
         ALOGE("%s, AudioTrack raw set failed.\n", __FUNCTION__);
-        RawAudioTrackRelease();
+        if (gmpAudioTracker_raw != NULL ) {
+            gmpAudioTracker_raw.clear();
+            glpTracker_raw = NULL;
+        }
         return -1;
     }
     Status = glpTracker_raw->initCheck();
@@ -264,26 +266,25 @@ static int AudioTrackInit(void) {
 
     if (Status != NO_ERROR) {
         ALOGE("%s, AudioTrack set failed.\n", __FUNCTION__);
-
-        AudioTrackRelease();
+        if (gmpAudioTracker != NULL ) {
+            gmpAudioTracker.clear();
+            glpTracker = NULL;
+        }
         return -1;
     }
 
     Status = glpTracker->initCheck();
     if (Status != NO_ERROR) {
         ALOGE("%s, AudioTrack initCheck failed.\n", __FUNCTION__);
-
         AudioTrackRelease();
         return -1;
     }
-
 
     glpTracker->start();
 
     Status = glpTracker->setVolume(1.0, 1.0);
     if (Status != NO_ERROR) {
         ALOGE("%s, AudioTrack setVolume failed.\n", __FUNCTION__);
-
         AudioTrackRelease();
         return -1;
     }

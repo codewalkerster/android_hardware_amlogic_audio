@@ -228,6 +228,7 @@ extern int I2S_state;
 #define AMAUDIO_IN                     "/dev/amaudio2_in"
 #define AMAUDIO_OUT                    "/dev/amaudio2_out"
 #define AMAUDIO2_PREENABLE             "/sys/class/amaudio2/aml_amaudio2_enable"
+#define AMAUDIO2_INPUTDEVICE           "/sys/class/amaudio2/aml_input_device"
 
 #define AMAUDIO_IOC_MAGIC              'A'
 #define AMAUDIO_IOC_GET_SIZE           _IOW(AMAUDIO_IOC_MAGIC, 0x00, int)
@@ -593,7 +594,7 @@ static int alsa_in_open(struct aml_stream_in *in) {
     in->config.period_size = pcm_config_in.period_size;
     in->config.period_count = pcm_config_in.period_count;
     in->config.format = pcm_config_in.format;
-    in->config.stop_threshold = CAPTURE_PERIOD_SIZE * CAPTURE_PERIOD_COUNT * 4;
+    in->config.stop_threshold = CAPTURE_PERIOD_SIZE * CAPTURE_PERIOD_COUNT * 10;
     in->standby = 1;
     in->resample_request = 0;
     in->resample_temp_buffer = NULL;
@@ -699,6 +700,7 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
         if (ret < 0) {
             //wait for next frame
             usleep(bytes * 1000000 / get_in_framesize(in) / in->config.rate);
+            ALOGE("Can't read data from alsa!\n");
             pthread_mutex_unlock(&in->lock);
             return ret;
         }
@@ -853,6 +855,21 @@ static int set_amaudio2_enable(int flag) {
     close(fd);
     return 0;
 }
+
+static int set_input_device(int flag) {
+    int fd = 0;
+    char string[16];
+    fd = open(AMAUDIO2_INPUTDEVICE, O_CREAT | O_RDWR, 0664);
+    if (fd < 0) {
+        ALOGE("unable to open file %s \n", AMAUDIO2_INPUTDEVICE);
+        return -1;
+    }
+    sprintf(string, "%d", flag);
+    write(fd, string, strlen(string));
+    close(fd);
+    return 0;
+}
+
 static int new_audiotrack(struct aml_stream_out *out) {
     int i = 0, ret = 0;
     int dly_tm = 20 * 1000, dly_cnt = 1000; //20s
@@ -1509,7 +1526,7 @@ static void* aml_audio_threadloop(void *data __unused) {
     out = &gpAmlDevice->out;
 
     gpAmlDevice->aml_Audio_ThreadExecFlag = 1;
-    ALOGD("%s, set aml_Audio_ThreadExecFlag as 1.\n", __FUNCTION__);
+    /*ALOGD("%s, set aml_Audio_ThreadExecFlag as 1.\n", __FUNCTION__);*/
 
     if (gpAmlDevice->out.user_set_device == CC_OUT_USE_AMAUDIO) {
         int delay_size = 64 * 32 * 2; //less than 10.67*2 ms delay
@@ -1653,6 +1670,11 @@ int aml_audio_open(unsigned int sr, int input_device, int output_device) {
         gpAmlDevice->out.user_set_device = CC_OUT_USE_AMAUDIO;
     }
 
+    ret = set_input_device(input_device);
+    if (ret < 0) {
+        ALOGE("Fail to set input device for HW resample!\n");
+    }
+
     gpAmlDevice->in.device = get_aml_device(input_device);
     ret = aml_device_init(gpAmlDevice);
     if (ret < 0) {
@@ -1666,11 +1688,13 @@ int aml_audio_open(unsigned int sr, int input_device, int output_device) {
     pthread_attr_init(&attr);
     pthread_attr_setschedpolicy(&attr, SCHED_RR);
     param.sched_priority = sched_get_priority_max(SCHED_RR);
+    /*pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
+    param.sched_priority = sched_get_priority_max(SCHED_FIFO);
+    ALOGD("%s, aml_audio thread has %d priority!\n",
+                __FUNCTION__, param.sched_priority);*/
     pthread_attr_setschedparam(&attr, &param);
     gpAmlDevice->aml_Audio_ThreadTurnOnFlag = 1;
-    ALOGD("%s, set aml_Audio_ThreadTurnOnFlag as 1.\n", __FUNCTION__);
     gpAmlDevice->aml_Audio_ThreadExecFlag = 0;
-    ALOGD("%s, set aml_Audio_ThreadExecFlag as 0.\n", __FUNCTION__);
     ret = pthread_create(&gpAmlDevice->aml_Audio_ThreadID, &attr,
             &aml_audio_threadloop, NULL);
     pthread_attr_destroy(&attr);
