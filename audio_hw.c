@@ -211,6 +211,24 @@ static int get_sysfs_int(const char * path)
     }
     return val;
 }
+
+static int set_sysfs_type(const char *path, const char *type)
+{
+    int ret = -1;
+    int fd = open(path, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    if (fd >= 0) {
+        char set_type[10] = {0};
+        int length = snprintf(set_type, sizeof(set_type), "%s", type);
+        if (length > 0)
+            ret = write(fd, set_type, length);
+        LOGFUNC("%s , %s\n", path, set_type);
+        close(fd);
+    }else{
+        LOGFUNC("open hdmi-tx node:%s failed!\n", path);
+    }
+    return ret;
+}
+
 static void select_devices(struct aml_audio_device *adev)
 {
     LOGFUNC("%s(mode=%d, out_device=%#x)", __FUNCTION__, adev->mode, adev->out_device);
@@ -479,6 +497,11 @@ static int start_output_stream(struct aml_stream_out *out)
         out->echo_reference = adev->echo_reference;
     if (out->resampler){
         out->resampler->reset(out->resampler);
+    }
+
+    if (out->is_tv_platform == 1) {
+        set_sysfs_type("/sys/class/amhdmitx/amhdmitx0/aud_input_if", "i2s");
+        set_sysfs_type("/sys/class/amhdmitx/amhdmitx0/aud_output_chs", "2:1");
     }
 
     return 0;
