@@ -835,7 +835,7 @@ out_get_buffer_size (const struct audio_stream *stream)
 	   (int64_t) DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
   else if (codec_type == 7)
 	size =
-	  (PERIOD_SIZE * 4 * 4 * PLAYBACK_PERIOD_COUNT *
+	  (PERIOD_SIZE  * 4 * PLAYBACK_PERIOD_COUNT *
 	   (int64_t) DEFAULT_OUT_SAMPLING_RATE) / out->config.rate;
   else if (codec_type > 0 && codec_type < 4)	//dd/dts
 	size =
