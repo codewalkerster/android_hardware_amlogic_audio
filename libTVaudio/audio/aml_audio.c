@@ -219,8 +219,6 @@ extern int omx_codec_init(void);
 extern void omx_codec_close(void);
 extern int I2S_state;
 
-#define PCM_DATA 0
-#define RAW_DATA 1
 #define I2S_IN_AUDIO_TYPE              "I2SIN Audio Type"
 #define SPDIF_IN_AUDIO_TYPE            "SPDIFIN Audio Type"
 #define Audio_In_Source_TYPE           "Audio In Source"
@@ -1347,7 +1345,7 @@ static int get_channel_status(void) {
         type_AUDIO_IN = mixer_ctl_get_value(pctl, 0);
         if (type_AUDIO_IN != 2) {
             mixer_close(pmixer);
-            return PCM_DATA;
+            return LPCM;
         }
     }
 
@@ -1360,18 +1358,15 @@ static int get_channel_status(void) {
     if (NULL != pctl) {
         type_I2S = mixer_ctl_get_value(pctl, 0);
     }
-#if 0
-    if (type_SPDIF == RAW_DATA || type_I2S == RAW_DATA) {
+
+    if (type_SPDIF == LPCM && type_I2S == AC3) {
         mixer_close(pmixer);
-        return RAW_DATA;
-    } else {
-        mixer_close(pmixer);
-        return PCM_DATA;
+        return MUTE;
     }
-#else
+
     mixer_close(pmixer);
     return type_SPDIF;
-#endif
+
 err_exit:
     if (NULL != pmixer) {
         mixer_close(pmixer);
@@ -1456,6 +1451,8 @@ int set_output_record_enable(int enable) {
 
 static int check_audio_type(struct aml_stream_out *out) {
     audioin_type = get_channel_status();
+    if (audioin_type == MUTE)
+        return MUTE;
     spdif_audio_type = audioin_type;
     if (audioin_type > LPCM && omx_started == 0) {
         raw_data_counter++;
@@ -1550,13 +1547,14 @@ static void* aml_audio_threadloop(void *data __unused) {
             if (output_size < 0) {
                 //ALOGE("%s, alsa_in_read fail!\n", __FUNCTION__);
             } else {
+                if (check_audio_type(out) == MUTE)
+                    memset((char *) in->temp_buffer, 0, output_size);
                 write_to_buffer((char *) in->write_buffer,
                         (char *) in->temp_buffer, output_size,
                         (char *) start_temp_buffer, TEMP_BUFFER_SIZE);
                 in->write_buffer = update_pointer((char *) in->write_buffer,
                         output_size, (char *) start_temp_buffer,
                         TEMP_BUFFER_SIZE);
-                check_audio_type(out);
             }
 
         }

@@ -50,6 +50,7 @@ enum  {
     DTS,
     DTSHD,
     TRUEHD,
+    MUTE,
 };
 /*
  In this system, input stream sample rate can be set from 8K-48K, and output sample rate is fixed 48K.
