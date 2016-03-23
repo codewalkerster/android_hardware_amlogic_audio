@@ -20,6 +20,7 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/prctl.h>
 #include <cutils/log.h>
 #include <cutils/properties.h>
 #include "tinyalsa/asoundlib.h"
@@ -118,6 +119,7 @@ struct aml_dev {
     int has_EQ_lib;
     int has_SRS_lib;
     int output_deviceID;
+    pthread_t android_check_ThreadID;
 };
 
 static struct aml_dev gmAmlDevice = {
@@ -185,6 +187,7 @@ static struct aml_dev gmAmlDevice = {
     .has_EQ_lib = 0,
     .has_SRS_lib = 0,
     .output_deviceID = 0,
+    .android_check_ThreadID = 0,
 };
 
 struct circle_buffer android_out_buffer = {
@@ -1273,8 +1276,8 @@ static int aml_device_close(struct aml_dev *device) {
     return 0;
 }
 
-static int gUSBCheckLastFlag = 0;
-static int gUSBCheckFlag = 0;
+static unsigned int gUSBCheckLastFlag = 0;
+static unsigned int gUSBCheckFlag = 0;
 
 static void USB_check(struct aml_stream_out *out) {
 
@@ -1704,6 +1707,9 @@ int aml_audio_open(unsigned int sr, int input_device, int output_device) {
         pthread_mutex_unlock(&amaudio_dev_op_mutex);
         return -1;
     }
+    prctl(PR_SET_NAME, (unsigned long)"aml_TV_audio");
+
+    creat_pthread_for_android_check(&gpAmlDevice->android_check_ThreadID);
 
     pthread_mutex_unlock(&amaudio_dev_op_mutex);
 
@@ -1743,6 +1749,9 @@ int aml_audio_close(void) {
 
         pthread_join(gpAmlDevice->aml_Audio_ThreadID, NULL);
         gpAmlDevice->aml_Audio_ThreadID = 0;
+
+        exit_pthread_for_android_check(gpAmlDevice->android_check_ThreadID);
+        gpAmlDevice->android_check_ThreadID = 0;
 
         aml_device_close(gpAmlDevice);
         clrDevice(gpAmlDevice);
