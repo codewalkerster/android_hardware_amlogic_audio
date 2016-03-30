@@ -3,6 +3,8 @@
 
 #include "audio/aml_audio.h"
 
+int amSetAudioDelay(int delay_ms);
+int amGetAudioDelay(void);
 int amAudioOpen(unsigned int sr, int input_device, int output_device);
 int amAudioClose(void);
 int amAudioSetInputSr(unsigned int sr, int input_device, int output_device);

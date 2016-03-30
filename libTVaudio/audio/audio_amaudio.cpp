@@ -24,8 +24,19 @@
 
 #define LOG_TAG "LibAudioCtl"
 
+int amSetAudioDelay(int delay_ms) {
+    return set_audio_delay(delay_ms);
+}
+
+int amGetAudioDelay(void) {
+    return get_audio_delay();
+}
+
 int amAudioOpen(unsigned int sr, int input_device, int output_device) {
-    return aml_audio_open(sr, input_device, output_device);
+    int ret;
+    ret = aml_audio_open(sr, input_device, output_device);
+    ret |= set_audio_delay(60);
+    return ret;
 }
 
 int amAudioClose(void) {
