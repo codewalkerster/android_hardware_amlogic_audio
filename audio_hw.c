@@ -500,7 +500,6 @@ static int start_output_stream(struct aml_stream_out *out)
     }
 
     if (out->is_tv_platform == 1) {
-        set_sysfs_type("/sys/class/amhdmitx/amhdmitx0/aud_input_if", "i2s");
         set_sysfs_type("/sys/class/amhdmitx/amhdmitx0/aud_output_chs", "2:1");
     }
 
