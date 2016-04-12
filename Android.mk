@@ -73,27 +73,26 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 			system/media/audio_utils/include 
 			
 		LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils libutils
-		LOCAL_MODULE_TAGS := optional
-		
-		include $(BUILD_SHARED_LIBRARY)
+#ifdef DOLBY_UDC_PASSTHROUGH_HDMI_PACK
+LOCAL_SRC_FILES += spdifenc_wrap.cpp
+LOCAL_C_INCLUDES += \
+    $(call include-path-for, audio-utils)
+LOCAL_SHARED_LIBRARIES += \
+    libaudiospdif
+#endif # DOLBY_UDC_PASSTHROUGH_HDMI_PACK
+ifdef DOLBY_EAC3_TO_AC3_CONVERTER
+LOCAL_SHARED_LIBRARIES += \
+    libdlb_converter
+endif
+LOCAL_SRC_FILES += audio_hw_profile.c
+LOCAL_SRC_FILES += audio_hw_utils.c
+LOCAL_SRC_FILES += audio_hwsync.c
+LOCAL_MODULE_TAGS := optional
+include $(BUILD_SHARED_LIBRARY)
 
 #########################################################
 
-ifdef DOLBY_UDC
 
-include $(CLEAR_VARS)
-
-	LOCAL_MODULE := audio.hdmi6.amlogic
-	LOCAL_MODULE_RELATIVE_PATH := hw
-	LOCAL_SRC_FILES := hdmi_hw.c
-	LOCAL_C_INCLUDES += \
-		external/tinyalsa/include \
-		system/media/audio_utils/include \
-		system/media/audio_effects/include
-	LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils libdl libutils
-	LOCAL_MODULE_TAGS := optional
-
-endif
 
 #########################################################
 # Audio Policy Manager
