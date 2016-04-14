@@ -217,6 +217,8 @@ struct circle_buffer DD_out_buffer = {
 static void *start_temp_buffer = NULL;
 static struct aml_dev *gpAmlDevice = NULL;
 static pthread_mutex_t amaudio_dev_op_mutex = PTHREAD_MUTEX_INITIALIZER;
+static unsigned int gUSBCheckLastFlag = 0;
+static unsigned int gUSBCheckFlag = 0;
 
 extern int omx_codec_init(void);
 extern void omx_codec_close(void);
@@ -706,7 +708,8 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
             return ret;
         }
 
-        if (GetOutputdevice() != 2) {
+        if (GetOutputdevice() != 2 &&
+                (gUSBCheckFlag & AUDIO_DEVICE_OUT_SPEAKER) != 0) {
             float vol = get_android_stream_volume();
             apply_stream_volume(vol,buffer,bytes);
         }
@@ -1275,9 +1278,6 @@ static int aml_device_close(struct aml_dev *device) {
     audio_effect_release();
     return 0;
 }
-
-static unsigned int gUSBCheckLastFlag = 0;
-static unsigned int gUSBCheckFlag = 0;
 
 static void USB_check(struct aml_stream_out *out) {
 
