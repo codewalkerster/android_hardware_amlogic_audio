@@ -1,3 +1,5 @@
+#define LOG_TAG "LibAudioCtl"
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -21,8 +23,6 @@
 #include "audio_usb_check.h"
 #include "audio_effect_control.h"
 #include "../audio_amaudio.h"
-
-#define LOG_TAG "LibAudioCtl"
 
 int amSetAudioDelay(int delay_ms) {
     return set_audio_delay(delay_ms);
@@ -223,3 +223,21 @@ int amAudioSetSRSTrubassSpeakerSize(int tmp_val) {
     return amAudioSetSRSParameter(CC_SET_TYPE_TRUBASS_SPEAKERSIZE, tmp_val);
 }
 
+int amAudioSetPreGain(float gain)
+{
+    return aml_audio_set_pregain(gain);
+}
+
+int amAudioGetPreGain(float *gain)
+{
+    return aml_audio_get_pregain(gain);
+}
+int amAudioSetPreMute(uint mute)
+{
+    return aml_audio_set_pre_mute(mute);
+}
+
+int amAudioGetPreMute(uint *mute)
+{
+    return aml_audio_get_pre_mute(mute);
+}

@@ -31,4 +31,9 @@ int amAudioSetSRSGain(int input_gain, int output_gain);
 int amAudioSetDumpDataFlag(int tmp_flag);
 int amAudioGetDumpDataFlag();
 
+// gain is in dB float format
+int amAudioSetPreGain(float gain);
+int amAudioGetPreGain(float *gain);
+int amAudioSetPreMute(uint mute);
+int amAudioGetPreMute(uint *mute);
 #endif //__TV_AUDIO_AMAUDIO_H__

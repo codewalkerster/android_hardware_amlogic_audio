@@ -6,6 +6,9 @@
  ** Email: Zhe.Wang@amlogic.com
  **
  */
+
+#define LOG_TAG "aml_audio"
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -27,8 +30,6 @@
 
 #include "android_out.h"
 #include "aml_audio.h"
-
-#define LOG_TAG "aml_audio"
 
 #define ANDROID_OUT_BUFFER_SIZE    (2048*8*2) //in byte
 #define DDP_OUT_BUFFER_SIZE        (2048*8*2*2*2) //in byte
@@ -93,6 +94,8 @@ struct aml_stream_in {
     int delay_time;
     int last_delay_time;
     struct circle_buffer delay_buf;
+    float pre_gain;
+    uint pre_mute;
 };
 
 struct aml_stream_out {
@@ -161,6 +164,7 @@ static struct aml_dev gmAmlDevice = {
             .wr = NULL,
             .size = 0,
         },
+        .pre_gain = 1.0,
     },
 
     .out = {
@@ -672,11 +676,11 @@ static int get_in_framesize(struct aml_stream_in *in) {
     return sample_format * in->config.channels;
 }
 
-static void apply_stream_volume(float vol,char *buf,int size) {
+static void apply_stream_volume_and_pregain(float vol, float gain, char *buf, int size) {
     int i;
     short *sample = (short*)buf;
     for (i = 0; i < size/sizeof(short); i++)
-        sample[i] = vol*sample[i];
+        sample[i] = gain*vol*sample[i];
 }
 
 static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
@@ -704,9 +708,15 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
             return ret;
         }
 
-        if (GetOutputdevice() != 2) {
+        if (GetOutputdevice() != 2 &&
+                (gUSBCheckFlag & AUDIO_DEVICE_OUT_SPEAKER) != 0) {
             float vol = get_android_stream_volume();
-            apply_stream_volume(vol,in->resample_temp_buffer,bytes);
+            float gain = in->pre_gain;
+            uint pre_mute = in->pre_mute;
+            if (!pre_mute)
+                apply_stream_volume_and_pregain(vol,gain,in->resample_temp_buffer,bytes);
+            else
+                memset(in->resample_temp_buffer, 0, bytes);
         }
         DoDumpData(in->resample_temp_buffer, bytes, CC_DUMP_SRC_TYPE_INPUT);
 
@@ -725,7 +735,12 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
         if (GetOutputdevice() != 2 &&
                 (gUSBCheckFlag & AUDIO_DEVICE_OUT_SPEAKER) != 0) {
             float vol = get_android_stream_volume();
-            apply_stream_volume(vol,buffer,bytes);
+            float gain = in->pre_gain;
+            uint pre_mute = in->pre_mute;
+            if (!pre_mute)
+                apply_stream_volume_and_pregain(vol,gain,buffer,bytes);
+            else
+                memset(buffer, 0, bytes);
         }
         DoDumpData(buffer, bytes, CC_DUMP_SRC_TYPE_INPUT);
 
@@ -2069,4 +2084,56 @@ static void DoDumpData(void *data_buf, int size, int aud_src_type) {
             write(gDumpDataFd1, data_buf, size);
         }
     }
+}
+
+int aml_audio_set_pregain(float gain)
+{
+    ALOGD("%s, pre-gain = %f dB\n", __FUNCTION__, gain);
+
+    pthread_mutex_lock(&amaudio_dev_op_mutex);
+
+    if (gpAmlDevice != NULL) {
+        gpAmlDevice->in.pre_gain = powf(10, gain/20);
+    }
+
+    pthread_mutex_unlock(&amaudio_dev_op_mutex);
+
+    return 0;
+}
+
+int aml_audio_get_pregain(float *gain)
+{
+    if (gpAmlDevice != NULL) {
+        *gain = 20*log10f(gpAmlDevice->in.pre_gain);
+        return 0;
+    }
+
+    ALOGE("%s, no active gpAmlDevice!\n", __FUNCTION__);
+    return -1;
+}
+
+int aml_audio_set_pre_mute(uint mute)
+{
+    ALOGD("%s, mute = %d\n", __FUNCTION__, mute);
+
+    pthread_mutex_lock(&amaudio_dev_op_mutex);
+
+    if (gpAmlDevice != NULL) {
+        gpAmlDevice->in.pre_mute = mute;
+    }
+
+    pthread_mutex_unlock(&amaudio_dev_op_mutex);
+
+    return 0;
+}
+
+int aml_audio_get_pre_mute(uint *mute)
+{
+    if (gpAmlDevice != NULL) {
+        *mute = gpAmlDevice->in.pre_mute;
+        return 0;
+    }
+
+    ALOGE("%s, no active gpAmlDevice!\n", __FUNCTION__);
+    return -1;
 }

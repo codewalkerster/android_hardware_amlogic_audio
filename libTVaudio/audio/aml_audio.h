@@ -72,6 +72,10 @@ int buffer_write(struct circle_buffer *tmp, char* buffer, size_t bytes);
 int set_output_record_enable(int enable);
 int set_audio_delay(int delay_ms);
 int get_audio_delay(void);
+int aml_audio_set_pregain(float gain);
+int aml_audio_get_pregain(float *gain);
+int aml_audio_set_pre_mute(uint mute);
+int aml_audio_get_pre_mute(uint *mute);
 
 #ifdef __cplusplus
 }
