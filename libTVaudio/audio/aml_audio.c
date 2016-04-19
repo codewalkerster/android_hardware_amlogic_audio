@@ -90,6 +90,9 @@ struct aml_stream_in {
     int max_bytes;
     void *temp_buffer;
     void *write_buffer;
+    int delay_time;
+    int last_delay_time;
+    struct circle_buffer delay_buf;
 };
 
 struct aml_stream_out {
@@ -148,6 +151,15 @@ static struct aml_dev gmAmlDevice = {
         .max_bytes = 0,
         .temp_buffer = NULL,
         .write_buffer = NULL,
+        .delay_time = 0,
+        .last_delay_time = 0,
+        .delay_buf = {
+            .lock = PTHREAD_MUTEX_INITIALIZER,
+            .start_add = NULL,
+            .rd = NULL,
+            .wr = NULL,
+            .size = 0,
+        },
     },
 
     .out = {
@@ -1146,6 +1158,14 @@ static int set_output_deviceID(int deviceID) {
     return 0;
 }
 
+static int get_output_deviceID(void) {
+    if (gpAmlDevice == NULL) {
+        ALOGE("%s, aml audio is not open, must open it first!\n", __FUNCTION__);
+        return -1;
+    }
+    return gpAmlDevice->output_deviceID;
+}
+
 static int aml_device_init(struct aml_dev *device) {
     int ret;
 
@@ -1260,6 +1280,10 @@ static int aml_device_close(struct aml_dev *device) {
     struct aml_stream_out *out = &device->out;
 
     alsa_in_close(in);
+
+    if (in->delay_buf.size != 0) {
+        free(in->delay_buf.start_add);
+    }
 
     if (out->output_device == CC_OUT_USE_ALSA) {
         alsa_out_close(out);
@@ -1485,7 +1509,7 @@ static int check_audio_type(struct aml_stream_out *out) {
             ALOGI("DD+ passthrough flag changed from %d to %d\n",digital_raw_enable,digtal_out);
             need_reset_config = 1;
         }
-        else if (digtal_out > 0  && digital_raw_enable == 0) {
+        else if (digtal_out > 0 && digital_raw_enable == 0) {
             ALOGI("PCM output  changed to RAW pass through\n");
             need_reset_config = 1;
         }
@@ -1508,6 +1532,45 @@ static int audio_effect_process(short* buffer, int frame_size) {
         HPEQ_process(buffer, buffer, frame_size);
     }
     return output_size;
+}
+
+static int set_delay(struct aml_stream_in *in, int frame_size) {
+    unsigned char *buffer_ptr = NULL;
+    int delay_buffer_size = in->delay_time * 192;
+    int buffer_size = delay_buffer_size + frame_size;
+
+    if (in->delay_buf.size < buffer_size) {
+        in->delay_buf.start_add = (char *)realloc(
+            in->delay_buf.start_add, buffer_size * sizeof(char));
+        if (!in->delay_buf.start_add) {
+            ALOGE("realloc delay buffer failed\n");
+            return -1;
+        }
+        memset(in->delay_buf.start_add, 0, in->delay_buf.size);
+        in->delay_buf.size = buffer_size;
+        in->delay_buf.rd = in->delay_buf.start_add;
+        in->delay_buf.wr = in->delay_buf.start_add + delay_buffer_size;
+        ALOGI("realloc delay buffer size %d byte\n", buffer_size);
+    }
+
+    if (in->last_delay_time != in->delay_time) {
+        in->delay_buf.wr = in->delay_buf.rd + delay_buffer_size;
+        if (in->delay_buf.wr >= (in->delay_buf.start_add + in->delay_buf.size))
+            in->delay_buf.wr -= in->delay_buf.size;
+        in->last_delay_time = in->delay_time;
+    }
+
+    write_to_buffer(in->delay_buf.wr, in->temp_buffer, frame_size,
+                    in->delay_buf.start_add, in->delay_buf.size);
+    in->delay_buf.wr = update_pointer(in->delay_buf.wr, frame_size,
+                    in->delay_buf.start_add, in->delay_buf.size);
+
+    read_from_buffer(in->delay_buf.rd, in->temp_buffer, frame_size,
+                    in->delay_buf.start_add, in->delay_buf.size);
+    in->delay_buf.rd = update_pointer(in->delay_buf.rd, frame_size,
+                    in->delay_buf.start_add, in->delay_buf.size);
+
+    return 0;
 }
 
 static void* aml_audio_threadloop(void *data __unused) {
@@ -1552,6 +1615,9 @@ static void* aml_audio_threadloop(void *data __unused) {
             } else {
                 if (check_audio_type(out) == MUTE)
                     memset((char *) in->temp_buffer, 0, output_size);
+                if (in->delay_time != 0 && get_output_deviceID() == 0) {
+                    set_delay(in, output_size);
+                }
                 write_to_buffer((char *) in->write_buffer,
                         (char *) in->temp_buffer, output_size,
                         (char *) start_temp_buffer, TEMP_BUFFER_SIZE);
@@ -1864,6 +1930,16 @@ int set_right_gain(int right_gain) {
     ALOGD("%s, right mic gain :%d!\n", __FUNCTION__, right_gain);
     pthread_mutex_unlock(&gpAmlDevice->out.lock);
     return 0;
+}
+
+int set_audio_delay(int delay_ms) {
+    gpAmlDevice->in.delay_time = delay_ms;
+    ALOGI("Set audio delay time %d ms!\n", delay_ms);
+    return 0;
+}
+
+int get_audio_delay(void) {
+    return gpAmlDevice->in.delay_time;
 }
 
 int SetDumpDataFlag(int tmp_flag) {

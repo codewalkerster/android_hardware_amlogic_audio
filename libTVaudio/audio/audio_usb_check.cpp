@@ -7,8 +7,10 @@
 #include <sys/prctl.h>
 #include <media/AudioSystem.h>
 #include <media/AudioParameter.h>
+#include <cutils/properties.h>
 
 #include "audio_usb_check.h"
+#include "aml_audio.h"
 
 #define LOG_TAG "aml_audio"
 
@@ -82,6 +84,16 @@ static int GetStreamVolume(void) {
     return 0;
 }
 
+static int SetAudioDelay(void) {
+    char value[PROPERTY_VALUE_MAX];
+    if (property_get("media.TV.audio.delay", value, NULL) > 0) {
+        int delay = atoi(value);
+        if (delay > 0 && get_audio_delay() != delay)
+            set_audio_delay(delay);
+    }
+    return 0;
+}
+
 }
 
 static int running_flag = 0;
@@ -91,6 +103,7 @@ void* android_check_threadloop(void *data __unused) {
     while (running_flag) {
         android::GetStreamVolume();
         android::GetDeviceID();
+        android::SetAudioDelay();
         usleep(100*1000);
     }
     //ALOGI("Exit thread loop for android check!\n");

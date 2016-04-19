@@ -70,6 +70,8 @@ int set_right_gain(int right_gain);
 int buffer_read(struct circle_buffer *tmp, char* buffer, size_t bytes);
 int buffer_write(struct circle_buffer *tmp, char* buffer, size_t bytes);
 int set_output_record_enable(int enable);
+int set_audio_delay(int delay_ms);
+int get_audio_delay(void);
 
 #ifdef __cplusplus
 }
