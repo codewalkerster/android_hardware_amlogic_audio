@@ -169,6 +169,7 @@ struct aml_stream_out {
     int has_SRS_lib;
     int has_EQ_lib;
     unsigned char pause_status;
+    int has_aml_IIR_lib;
 };
 
 #define MAX_PREPROCESSORS 3 /* maximum one AGC + one NS + one AEC per input stream */
@@ -1135,11 +1136,23 @@ static int audio_effect_process(struct audio_stream_out *stream,
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
     int output_size = frame_size << 2;
+
     if (out->has_SRS_lib) {
         output_size = srs_process(buffer, buffer, frame_size);
     }
     if (out->has_EQ_lib) {
         HPEQ_process(buffer, buffer, frame_size);
+    }
+    if (out->has_aml_IIR_lib) {
+        short *ptr = buffer;
+        short data;
+        int i;
+        for (i = 0; i < frame_size; i++) {
+            data = (short)aml_IIR_process((int)(*ptr), 0);
+            *ptr++ = data;
+            data = (short)aml_IIR_process((int)(*ptr), 1);
+            *ptr++ = data;
+        }
     }
     return output_size;
 }
@@ -2492,6 +2505,20 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
             } else {
                 out->has_SRS_lib = 1;
             }
+        }
+        //load aml_IIR lib
+        ret = load_aml_IIR_lib();
+        if (ret < 0) {
+            ALOGE("%s, Load aml_IIR lib fail!\n", __FUNCTION__);
+            out->has_aml_IIR_lib = 0;
+        } else {
+            char value[PROPERTY_VALUE_MAX];
+            int paramter = 0;
+            if (property_get("media.audio.LFP.paramter", value, NULL) > 0) {
+                paramter = atoi(value);
+            }
+            aml_IIR_init(paramter);
+            out->has_aml_IIR_lib = 1;
         }
     }
     return 0;

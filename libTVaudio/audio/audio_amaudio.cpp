@@ -35,7 +35,6 @@ int amGetAudioDelay(void) {
 int amAudioOpen(unsigned int sr, int input_device, int output_device) {
     int ret;
     ret = aml_audio_open(sr, input_device, output_device);
-    ret |= set_audio_delay(60);
     return ret;
 }
 

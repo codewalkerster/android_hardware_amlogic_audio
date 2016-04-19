@@ -121,6 +121,7 @@ struct aml_dev {
     int aml_Audio_ThreadExecFlag;
     int has_EQ_lib;
     int has_SRS_lib;
+    int has_aml_IIR_lib;
     int output_deviceID;
     pthread_t android_check_ThreadID;
 };
@@ -198,6 +199,7 @@ static struct aml_dev gmAmlDevice = {
     .aml_Audio_ThreadExecFlag = 0,
     .has_EQ_lib = 0,
     .has_SRS_lib = 0,
+    .has_aml_IIR_lib = 0,
     .output_deviceID = 0,
     .android_check_ThreadID = 0,
 };
@@ -922,7 +924,7 @@ static int new_audiotrack(struct aml_stream_out *out) {
 static int new_audiotrack_nowait(struct aml_stream_out *out) {
     int ret = 0;
     pthread_mutex_lock(&out->lock);
-    ALOGD("%s, entering...\n", __FUNCTION__);
+    //ALOGD("%s, entering...\n", __FUNCTION__);
     set_amaudio2_enable(1);
     ret = new_android_audiotrack();
     if (ret < 0) {
@@ -1142,6 +1144,7 @@ static int release_buffer(struct aml_dev *device) {
 static int audio_effect_release() {
     unload_EQ_lib();
     unload_SRS_lib();
+    unload_aml_IIR_lib();
     return 0;
 }
 
@@ -1252,7 +1255,7 @@ static int aml_device_init(struct aml_dev *device) {
     //load srs lib and init it. SRS is behand resampling, so sample rate is as default sr.
     ret = load_SRS_lib();
     if (ret < 0) {
-        ALOGE("%s, Load EQ lib fail!\n", __FUNCTION__);
+        ALOGE("%s, Load SRS lib fail!\n", __FUNCTION__);
         device->has_SRS_lib = 0;
     } else {
         ret = srs_init(device->out.config.rate);
@@ -1261,6 +1264,21 @@ static int aml_device_init(struct aml_dev *device) {
         } else {
             device->has_SRS_lib = 1;
         }
+    }
+
+    //load aml_IIR lib
+    ret = load_aml_IIR_lib();
+    if (ret < 0) {
+        ALOGE("%s, Load aml_IIR lib fail!\n", __FUNCTION__);
+        device->has_aml_IIR_lib = 0;
+    } else {
+        char value[PROPERTY_VALUE_MAX];
+        int paramter = 0;
+        if (property_get("media.audio.LFP.paramter", value, NULL) > 0) {
+            paramter = atoi(value);
+        }
+        aml_IIR_init(paramter);
+        device->has_aml_IIR_lib = 1;
     }
 
     ALOGD("%s, exiting...\n", __FUNCTION__);
@@ -1530,6 +1548,17 @@ static int audio_effect_process(short* buffer, int frame_size) {
     }
     if (gpAmlDevice->has_EQ_lib) {
         HPEQ_process(buffer, buffer, frame_size);
+    }
+    if (gpAmlDevice->has_aml_IIR_lib) {
+        short *ptr = buffer;
+        short data;
+        int i;
+        for (i = 0; i < frame_size; i++) {
+            data = (short)aml_IIR_process((int)(*ptr), 0);
+            *ptr++ = data;
+            data = (short)aml_IIR_process((int)(*ptr), 1);
+            *ptr++ = data;
+        }
     }
     return output_size;
 }
