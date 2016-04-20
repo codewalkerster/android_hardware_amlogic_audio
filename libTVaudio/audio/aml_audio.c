@@ -887,39 +887,6 @@ static int set_input_device(int flag) {
 }
 
 static int new_audiotrack(struct aml_stream_out *out) {
-    int i = 0, ret = 0;
-    int dly_tm = 20 * 1000, dly_cnt = 1000; //20s
-
-    pthread_mutex_lock(&out->lock);
-
-    ALOGD("%s, entering...\n", __FUNCTION__);
-    set_amaudio2_enable(1);
-    ret = new_android_audiotrack();
-    if (ret < 0) {
-        ALOGE("%s, New an audio track is fail!\n", __FUNCTION__);
-        pthread_mutex_unlock(&out->lock);
-        return -1;
-    }
-
-    while (I2S_state < 10) {
-        usleep(dly_tm);
-
-        i++;
-        if (i >= dly_cnt) {
-            release_android_audiotrack();
-            pthread_mutex_unlock(&out->lock);
-            ALOGE("%s, Time out error: wait %d ms for waiting I2S ready.\n",
-                    __FUNCTION__, i * dly_tm / 1000);
-            return -1;
-        }
-    }
-    ALOGD("%s, sucess: wait %d ms for waiting I2S ready.\n", __FUNCTION__,
-            i * dly_tm / 1000);
-    pthread_mutex_unlock(&out->lock);
-    return 0;
-}
-
-static int new_audiotrack_nowait(struct aml_stream_out *out) {
     int ret = 0;
     pthread_mutex_lock(&out->lock);
     ALOGD("%s, entering...\n", __FUNCTION__);
@@ -1227,7 +1194,7 @@ static int aml_device_init(struct aml_dev *device) {
         }
     } else if (device->out.user_set_device == CC_OUT_USE_ANDROID) {
         set_output_deviceID(1);
-        ret = new_audiotrack_nowait(&device->out);
+        ret = new_audiotrack(&device->out);
         if (ret < 0) {
             ALOGE("%s, open android out device error!\n", __FUNCTION__);
             goto error5;
@@ -1330,7 +1297,7 @@ static void USB_check(struct aml_stream_out *out) {
             out->output_device = CC_OUT_USE_ANDROID;
         } else if (out->output_device == CC_OUT_USE_ALSA && omx_started == 0) {
             alsa_out_close(out);
-            new_audiotrack_nowait(out);
+            new_audiotrack(out);
             set_output_deviceID(1);
             out->output_device = CC_OUT_USE_ANDROID;
         }
@@ -1427,7 +1394,7 @@ err_exit:
         amaudio_out_close(out);
     } else if (out->output_device == CC_OUT_USE_ALSA) {
         alsa_out_close(out);
-        new_audiotrack_nowait(out);
+        new_audiotrack(out);
     }
     set_output_deviceID(2);
     out->output_device = CC_OUT_USE_ANDROID;
@@ -1577,8 +1544,7 @@ static void* aml_audio_threadloop(void *data __unused) {
     struct aml_stream_in *in = NULL;
     struct aml_stream_out *out = NULL;
     int output_size = 0;
-
-    ALOGD("%s, entering...\n", __FUNCTION__);
+    int i = 0;
 
     if (gpAmlDevice == NULL) {
         ALOGE("%s, gpAmlDevice is NULL\n", __FUNCTION__);
@@ -1588,16 +1554,19 @@ static void* aml_audio_threadloop(void *data __unused) {
     in = &gpAmlDevice->in;
     out = &gpAmlDevice->out;
 
-    gpAmlDevice->aml_Audio_ThreadExecFlag = 1;
-    /*ALOGD("%s, set aml_Audio_ThreadExecFlag as 1.\n", __FUNCTION__);*/
-
-    if (gpAmlDevice->out.user_set_device == CC_OUT_USE_AMAUDIO) {
-        int delay_size = 64 * 32 * 2; //less than 10.67*2 ms delay
-        reset_amaudio(out, delay_size);
-    }
-
     gUSBCheckLastFlag = 0;
     gUSBCheckFlag = 0;
+
+    gpAmlDevice->aml_Audio_ThreadExecFlag = 1;
+
+    while (I2S_state < 5 && gpAmlDevice->aml_Audio_ThreadTurnOnFlag == 0) {
+        usleep(10 * 1000);
+        i++;
+        if (i >= 500) {
+            ALOGE("Time out error: wait %d s for waiting I2S ready.\n", i/100);
+        }
+    }
+    ALOGD("Wait %d times for waiting I2S ready.\n", i);
 
     while (gpAmlDevice != NULL && gpAmlDevice->aml_Audio_ThreadTurnOnFlag) {
         //exit threadloop
