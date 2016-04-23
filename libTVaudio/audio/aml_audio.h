@@ -43,7 +43,15 @@ struct circle_buffer {
     char *wr;
     int size;
 };
-
+enum  {
+    LPCM = 0,
+    AC3,
+    EAC3,
+    DTS,
+    DTSHD,
+    TRUEHD,
+    MUTE,
+};
 /*
  In this system, input stream sample rate can be set from 8K-48K, and output sample rate is fixed 48K.
  When input stream sample rate is different from output, inlined reample is in operation. If input stream sr is not set,
@@ -61,10 +69,9 @@ int set_left_gain(int left_gain);
 int set_right_gain(int right_gain);
 int buffer_read(struct circle_buffer *tmp, char* buffer, size_t bytes);
 int buffer_write(struct circle_buffer *tmp, char* buffer, size_t bytes);
-int getUSBCheckFlag();
-int set_android_volume_enable(int enable);
-int set_android_volume(int left, int right);
 int set_output_record_enable(int enable);
+int set_audio_delay(int delay_ms);
+int get_audio_delay(void);
 
 #ifdef __cplusplus
 }

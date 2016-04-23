@@ -36,6 +36,7 @@ int srs_init(int sample_rate);
 int srs_release(void);
 int srs_setParameter(int SRS_user_config[]);
 int srs_getParameter(int SRS_user_config[]);
+int srs_set_gain(int input_gain, int output_gain);
 int srs_truebass_enable(int enable);
 int srs_dialogclarity_enable(int enable);
 int srs_surround_enable(int enable);

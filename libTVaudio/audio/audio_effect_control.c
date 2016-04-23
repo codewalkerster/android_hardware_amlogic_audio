@@ -12,7 +12,7 @@
 #include "aml_audio.h"
 #include "audio_effect_control.h"
 
-#define LOG_TAG "audioeffect"
+#define LOG_TAG "effect_ctl"
 
 //------------------------------------EQ control------------------------------------------------
 int (*EQ_process)(short *in, short *out, int framecount);
@@ -189,7 +189,7 @@ int (*SRS_TRUEBASS_ENABLE)(int value);
 int (*SRS_DIALOGCLARITY_ENABLE)(int value);
 int (*SRS_SURROUND_ENABLE)(int value);
 int (*SRS_process)(short *in, short *out, int framecount);
-
+int (*SRS_set_gain)(float input_gain, float output_gain);
 static void *gSRSLibHandler = NULL;
 
 int unload_SRS_lib(void) {
@@ -205,7 +205,7 @@ int unload_SRS_lib(void) {
     SRS_TRUEBASS_ENABLE = NULL;
     SRS_DIALOGCLARITY_ENABLE = NULL;
     SRS_SURROUND_ENABLE = NULL;
-
+    SRS_set_gain = NULL;
     if (gSRSLibHandler != NULL) {
         dlclose(gSRSLibHandler);
         gSRSLibHandler = NULL;
@@ -273,10 +273,13 @@ int load_SRS_lib(void) {
         ALOGE("%s, fail find fun SRS_SURROUND_ENABLE_api\n", __FUNCTION__);
         goto Error;
     }
-
+    SRS_set_gain = (int (*)(float,float))dlsym(gSRSLibHandler, "SRS_set_gain_api");
+    if (SRS_set_gain == NULL) {
+        ALOGE("%s, fail find fun SRS_set_gain_api\n", __FUNCTION__);
+        goto Error;
+    }
     return 0;
-
-    Error: //
+Error:
     unload_SRS_lib();
     return -1;
 }
@@ -327,9 +330,9 @@ int srs_setParameter(int SRS_user_config[]) {
 
     truebass_spker_size = SRS_user_config[0];
     truebass_gain = (float) SRS_user_config[1] / (float) 100;
-    dialogclarity_gain = (float) SRS_user_config[1] / (float) 100;
-    definition_gain = (float) SRS_user_config[1] / (float) 100;
-    surround_gain = (float) SRS_user_config[1] / (float) 100;
+    dialogclarity_gain = (float) SRS_user_config[2] / (float) 100;
+    definition_gain = (float) SRS_user_config[3] / (float) 100;
+    surround_gain = (float) SRS_user_config[4] / (float) 100;
 
     ret = (*SRS_setParameter)(truebass_spker_size, truebass_gain,
             dialogclarity_gain, definition_gain, surround_gain);
@@ -365,6 +368,16 @@ int srs_getParameter(int SRS_user_config[]) {
     SRS_user_config[4] = (int) (surround_gain * 100);
 
     return 0;
+}
+
+int srs_set_gain(int input_gain, int output_gain) {
+    int ret = 0;
+    if (SRS_set_gain == NULL) {
+        ALOGE("%s, pls load lib first.\n", __FUNCTION__);
+        return -1;
+    }
+    ret = (*SRS_set_gain)((float)input_gain/(float)100, (float)output_gain/(float)100);
+    return ret;
 }
 
 int srs_truebass_enable(int enable) {
@@ -409,7 +422,7 @@ int srs_surround_enable(int enable) {
 int srs_process(short *in, short *out, int framecount) {
     int output_framecount = 0;
 
-    //In SRS prosess, framecount  must be aligned by 64.
+    //In SRS prosess, framecount must be aligned by 64.
     int input_framecount = framecount >> 6 << 6;
 
     if (SRS_process == NULL) {

@@ -27,12 +27,15 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 	LOCAL_MODULE := audio.primary.amlogic
 	LOCAL_MODULE_RELATIVE_PATH := hw
 	LOCAL_SRC_FILES := \
-		audio_hw.c
+		audio_hw.c \
+		libTVaudio/audio/audio_effect_control.c
 	LOCAL_C_INCLUDES += \
 		external/tinyalsa/include \
 		system/media/audio_utils/include \
 		system/media/audio_effects/include \
-		system/media/audio_route/include
+		system/media/audio_route/include \
+		libTVaudio/audio
+
 	LOCAL_SHARED_LIBRARIES := \
 		liblog libcutils libtinyalsa \
 		libaudioutils libdl libaudioroute libutils

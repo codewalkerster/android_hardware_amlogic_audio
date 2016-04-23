@@ -1206,17 +1206,16 @@ out_write (struct audio_stream_out *stream, const void *buffer, size_t bytes)
 	  out->echo_reference->write (out->echo_reference, &b);
 	}
 
-#if 0
-  FILE *fp = fopen ("/data/audio_out.pcm", "a+");
-  if (fp)
-	{
-	  int flen = fwrite ((char *) buffer, 1, out_frames * frame_size, fp);
-	  LOGFUNC ("flen = %d---outlen=%d ", flen, out_frames * frame_size);
-	  fclose (fp);
-	}
-  else
-	{
-	  LOGFUNC ("could not open file:audio_out");
+#if   1
+        if (getprop_bool("media.audiohal.outdump")) {
+	    FILE *fp1=fopen("/data/hdmi_audio_out.pcm","a+");
+            if (fp1) {
+		int flen=fwrite((char *)buffer,1,out_frames * frame_size,fp1);
+		LOGFUNC("flen = %d---outlen=%d ", flen, out_frames * frame_size);
+		fclose(fp1);
+	    } else {
+		LOGFUNC("could not open file:/data/hdmi_audio_out.pcm");
+	    }
 	}
 #endif
 

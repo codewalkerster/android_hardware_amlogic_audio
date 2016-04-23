@@ -5,24 +5,109 @@
 #include <cutils/properties.h>
 #include <pthread.h>
 
+//code here for sys write service
+#ifdef USE_SYS_WRITE_SERVICE
+#include <binder/Binder.h>
+#include <binder/IServiceManager.h>
+#include <utils/Atomic.h>
+#include <utils/Log.h>
+#include <utils/RefBase.h>
+#include <utils/String8.h>
+#include <utils/String16.h>
+#include <utils/threads.h>
+#include <unistd.h>
+#if ANDROID_PLATFORM_SDK_VERSION >= 21 //5.0
+#include <systemcontrol/ISystemControlService.h>
+#else
+#include <systemwrite/ISystemWriteService.h>
+#endif
+// code end
+#endif
+
 #include "DDP_media_source.h"
 #include "aml_audio.h"
-
 extern struct circle_buffer android_out_buffer;
 extern struct circle_buffer DDP_out_buffer;
-
+extern struct circle_buffer DD_out_buffer;
+extern int spdif_audio_type;
 namespace android {
 
 #define LOG_TAG "DDP_Media_Source"
 
-static DDPerr ddbs_init(DDPshort * buf, DDPshort bitptr,DDP_BSTRM *p_bstrm)
+#ifdef USE_SYS_WRITE_SERVICE
+//code here for system write service
+class DeathNotifier: public IBinder::DeathRecipient
+{
+    public:
+        DeathNotifier() {
+        }
+
+        void binderDied(const wp<IBinder>& who) {
+            ALOGW("system_write died!");
+        }
+};
+
+
+#if ANDROID_PLATFORM_SDK_VERSION >= 21 //5.0
+//used ISystemControlService
+#define SYST_SERVICES_NAME "system_control"
+#else
+//used amSystemWriteService
+#define ISystemControlService ISystemWriteService
+#define SYST_SERVICES_NAME "system_write"
+#endif
+
+static sp<ISystemControlService> amSystemWriteService;
+static sp<DeathNotifier> amDeathNotifier;
+static  Mutex            amLock;
+static  Mutex            amgLock;
+
+const sp<ISystemControlService>& getSystemWriteService()
+{
+    Mutex::Autolock _l(amgLock);
+    if (amSystemWriteService.get() == 0) {
+        sp<IServiceManager> sm = defaultServiceManager();
+#if 0
+        sp<IBinder> binder;
+        do {
+            binder = sm->getService(String16("system_write"));
+            if (binder != 0)
+                break;
+            ALOGW("SystemWriteService not published, waiting...");
+            usleep(500000); // 0.5 s
+        } while(true);
+        if (amDeathNotifier == NULL) {
+            amDeathNotifier = new DeathNotifier();
+        }
+        binder->linkToDeath(amDeathNotifier);
+        amSystemWriteService = interface_cast<ISystemWriteService>(binder);
+#endif
+
+
+        amSystemWriteService = interface_cast<ISystemControlService>(sm->getService(String16(SYST_SERVICES_NAME)));
+
+    }
+    ALOGE_IF(amSystemWriteService==0, "no SystemWrite Service!?");
+
+    return amSystemWriteService;
+}
+void amSystemWriteSetProperty(const char* key, const char* value)
+{
+    const sp<ISystemControlService>& sws = getSystemWriteService();
+    if (sws != 0) {
+        sws->setProperty(String16(key), String16(value));
+    }
+}
+//code end for system write service
+#endif
+static DDPerr ddbs_init(DDPshort * buf, DDPshort bitptr, DDP_BSTRM *p_bstrm)
 {
     p_bstrm->buf = buf;
     p_bstrm->bitptr = bitptr;
     p_bstrm->data = *buf;
     return 0;
 }
-static DDPerr ddbs_unprj(DDP_BSTRM    *p_bstrm,DDPshort *p_data,  DDPshort numbits)
+static DDPerr ddbs_unprj(DDP_BSTRM *p_bstrm, DDPshort *p_data,  DDPshort numbits)
 {
     DDPushort data;
     *p_data = (DDPshort)((p_bstrm->data << p_bstrm->bitptr) & msktab[numbits]);
@@ -40,7 +125,7 @@ static DDPerr ddbs_unprj(DDP_BSTRM    *p_bstrm,DDPshort *p_data,  DDPshort numbi
 }
 
 
-static int Get_DD_Parameters(void *buf, int *sample_rate, int *frame_size,int *ChNum)
+static int Get_DD_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChNum)
 {
     int numch=0;
     DDP_BSTRM bstrm={0};
@@ -419,20 +504,23 @@ status_t DDP_Media_Source::read(MediaBuffer **out, const ReadOptions *options) {
 //-------------------------------OMX codec------------------------------------------------
 
 const char *MEDIA_MIMETYPE_AUDIO_AC3 = "audio/ac3";
+const char *MEDIA_MIMETYPE_AUDIO_EAC3 = "audio/eac3";
 Aml_OMX_Codec::Aml_OMX_Codec(void) {
-    ALOGI("[Aml_OMX_Codec::%s: %d]\n", __FUNCTION__, __LINE__);
+    ALOGI("[Aml_OMX_Codec::%s: %d],atype %d\n", __FUNCTION__, __LINE__,spdif_audio_type);
     m_codec = NULL;
     status_t m_OMXClientConnectStatus = m_OMXClient.connect();
     lock_init();
     locked();
     buf_decode_offset = 0;
     buf_decode_offset_pre = 0;
-
     if (m_OMXClientConnectStatus != OK) {
         ALOGE("Err:omx client connect error\n");
     } else {
         const char *mine_type = NULL;
-        mine_type = MEDIA_MIMETYPE_AUDIO_AC3;
+        if (spdif_audio_type == EAC3)
+            mine_type = MEDIA_MIMETYPE_AUDIO_EAC3;
+        else
+            mine_type = MEDIA_MIMETYPE_AUDIO_AC3;
         m_OMXMediaSource = new DDP_Media_Source();
         sp < MetaData > metadata = m_OMXMediaSource->getFormat();
         metadata->setCString(kKeyMIMEType, mine_type);
@@ -617,32 +705,58 @@ int omx_codec_get_Nch() {
 
 void *decode_threadloop(void *args) {
     unsigned int outlen = 0;
+    unsigned int outlen_raw = 0;
+    unsigned int outlen_pcm = 0;
     int write_sucessed = 1;
     int ret = 0;
-    unsigned char tmp[8192];
-
+    char *tmp = NULL;
+    tmp = (char*)malloc(6144*4+6144+8);
+    if (tmp == NULL) {
+        ALOGE("malloc buffer failed\n");
+        return NULL;
+    }
     ALOGI("[%s %d] enter!\n", __FUNCTION__, __LINE__);
     while (decode_ThreadStopFlag == 0) {
         if (write_sucessed == 1) {
             outlen = 0;
-            omx_codec_read(&tmp[0], &outlen, &(decode_ThreadStopFlag));
+            outlen_raw = 0;
+            outlen_pcm = 0;
+            omx_codec_read((unsigned char*)tmp, &outlen, &(decode_ThreadStopFlag));
         }
         if (decode_ThreadStopFlag == 1) {
             ALOGD("%s, exit threadloop! \n", __FUNCTION__);
             break;
         }
-        if (outlen > 0) {
-            ret = buffer_write(&DDP_out_buffer, (char *) (&tmp[0]), outlen);
-            if (ret < 0) {
-                write_sucessed = 0;
-                usleep(10 * 1000); //10ms
-            } else {
-                write_sucessed = 1;
+        if (outlen > 8) {
+            memcpy(&outlen_pcm,tmp,4);
+            memcpy(&outlen_raw,tmp+4+outlen_pcm,4);
+            if (outlen_pcm > 0) {
+                //ALOGI("pcm data size %d\n",outlen_pcm);
+                ret = buffer_write(&DDP_out_buffer, tmp+4, outlen_pcm);
+                if (ret < 0) {
+                    write_sucessed = 0;
+                    usleep(10 * 1000); //10ms
+                } else {
+                    write_sucessed = 1;
+                }
+            }
+            if (outlen_raw > 0) {
+                //ALOGI("raw data size %d\n",outlen_raw);
+                ret = buffer_write(&DD_out_buffer, tmp+4+outlen_pcm+4, outlen_raw);
+                if (ret < 0) {
+                    //write_sucessed = 0;
+                    //ALOGI("raw data write failed\n");
+                    usleep(10 * 1000); //10ms
+                } else {
+                    //write_sucessed = 1;
+                }
             }
         }
     }
-
     decode_ThreadExitFlag = 0;
+    if (tmp) {
+        free(tmp);
+    }
     ALOGD("%s, exiting...\n", __FUNCTION__);
     return NULL;
 }
@@ -709,6 +823,12 @@ extern "C" {
 int omx_codec_init(void) {
     int ret = 0;
     ALOGI("omx_codec_init!\n");
+#ifndef USE_SYS_WRITE_SERVICE
+    ret=property_set("media.libplayer.dtsopt0", "1");
+    ALOGI("property_set<media.libplayer.dtsopt0> ret/%d\n",ret);
+#else
+    amSystemWriteSetProperty("media.libplayer.dtsopt0", "1");
+#endif
     arm_omx_codec = new android::Aml_OMX_Codec();
     if (arm_omx_codec == NULL) {
         ALOGE("Err:arm_omx_codec_init failed!\n");
@@ -733,6 +853,12 @@ int omx_codec_init(void) {
 
 void omx_codec_close(void) {
     int ret = 0;
+#ifndef USE_SYS_WRITE_SERVICE
+    ret=property_set("media.libplayer.dtsopt0", "0");
+    ALOGI("property_set<media.libplayer.dtsopt0> ret/%d\n",ret);
+#else
+    amSystemWriteSetProperty("media.libplayer.dtsopt0", "0");
+#endif
     if (arm_omx_codec == NULL) {
         ALOGI(
                 "NOTE:arm_omx_codec==NULL arm_omx_codec_close() do nothing! %s %d \n",
