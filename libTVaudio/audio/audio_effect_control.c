@@ -26,8 +26,7 @@ int (*EQ_release)(void);
 static void *gEQLibHandler = NULL;
 
 int unload_EQ_lib(void) {
-    ALOGD("%s, entering...\n", __FUNCTION__);
-
+    /*ALOGD("%s, entering...\n", __FUNCTION__);*/
     HPEQ_release();
 
     EQ_process = NULL;
@@ -50,7 +49,7 @@ int load_EQ_lib(void) {
 
     unload_EQ_lib();
 
-    ALOGD("%s, entering...\n", __FUNCTION__);
+    /*ALOGD("%s, entering...\n", __FUNCTION__);*/
 
     gEQLibHandler = dlopen("/system/lib/soundfx/libhpeq.so", RTLD_NOW);
     if (!gEQLibHandler) {
@@ -94,7 +93,7 @@ int load_EQ_lib(void) {
 
     return 0;
 
-    Error: //
+    Error:
     unload_EQ_lib();
     return -1;
 }
@@ -193,7 +192,7 @@ int (*SRS_set_gain)(float input_gain, float output_gain);
 static void *gSRSLibHandler = NULL;
 
 int unload_SRS_lib(void) {
-    ALOGD("%s, entering...\n", __FUNCTION__);
+    /*ALOGD("%s, entering...\n", __FUNCTION__);*/
 
     srs_release();
 
@@ -219,7 +218,7 @@ int load_SRS_lib(void) {
 
     unload_SRS_lib();
 
-    ALOGD("%s, entering...\n", __FUNCTION__);
+    /*ALOGD("%s, entering...\n", __FUNCTION__);*/
 
     gSRSLibHandler = dlopen("/system/lib/soundfx/libsrs.so", RTLD_NOW);
     if (!gSRSLibHandler) {
@@ -433,4 +432,65 @@ int srs_process(short *in, short *out, int framecount) {
     output_framecount = (*SRS_process)(in, out, input_framecount);
 
     return output_framecount << 2;
+}
+
+//----------------------aml_IIR-------------------------------------------------
+int (*audio_IIR_process_api)(int input, int channel);
+void (*audio_IIR_init_api)(int param_index);
+static void *gAML_IIR_LibHandler = NULL;
+
+int aml_IIR_process(int input, int channel) {
+    int ret = 0;
+    if (audio_IIR_process_api == NULL) {
+        return input;
+    }
+    ret = (*audio_IIR_process_api)(input, channel);
+    return ret;
+}
+
+void aml_IIR_init(int param_index) {
+    if (audio_IIR_init_api == NULL) {
+        return;
+    }
+    (*audio_IIR_init_api)(param_index);
+    return;
+}
+
+int unload_aml_IIR_lib(void) {
+    audio_IIR_process_api = NULL;
+    audio_IIR_init_api = NULL;
+    if (gAML_IIR_LibHandler != NULL) {
+        dlclose(gAML_IIR_LibHandler);
+        gAML_IIR_LibHandler = NULL;
+    }
+    return 0;
+}
+
+int load_aml_IIR_lib(void) {
+    char *error;
+
+    unload_aml_IIR_lib();
+
+    gAML_IIR_LibHandler = dlopen("/system/lib/soundfx/libaml_IIR.so", RTLD_NOW);
+    if (!gAML_IIR_LibHandler) {
+        ALOGE("%s, failed to load aml_IIR lib (libaml_IIR.so)\n", __FUNCTION__);
+        goto Error;
+    }
+
+    audio_IIR_init_api = (void (*)(int))dlsym(gAML_IIR_LibHandler, "audio_IIR_init");
+    if (audio_IIR_init_api == NULL) {
+        ALOGE("%s, fail find func audio_IIR_init()\n", __FUNCTION__);
+        goto Error;
+    }
+
+    audio_IIR_process_api = (int (*)(int, int))
+                dlsym(gAML_IIR_LibHandler, "audio_IIR_process");
+    if (audio_IIR_process_api == NULL) {
+        ALOGE("%s, fail find func audio_IIR_process()\n", __FUNCTION__);
+        goto Error;
+    }
+    return 0;
+Error:
+    unload_aml_IIR_lib();
+    return -1;
 }

@@ -42,6 +42,14 @@ int srs_dialogclarity_enable(int enable);
 int srs_surround_enable(int enable);
 int srs_process(short *in, short *out, int framecount);
 
+/*
+ IIR Lowpass Filter from amlogic
+*/
+int unload_aml_IIR_lib(void);
+int load_aml_IIR_lib(void);
+int aml_IIR_process(int input, int channel);
+void aml_IIR_init(int param_index);
+
 #ifdef __cplusplus
 }
 #endif
