@@ -467,6 +467,7 @@ out_flush(const struct audio_stream *stream)
     pthread_mutex_lock(&out->lock);
     out->spdif_enc_init_frame_write_sum =  0;
     out->frame_write_sum  = 0;
+    out->frame_skip_sum = 0;	
     pthread_mutex_unlock(&out->lock);
     return 0;
 }
@@ -581,6 +582,7 @@ out_set_parameters(struct audio_stream *stream, const char *kvpairs)
         pthread_mutex_lock(&out->lock);
         adev->hw_sync_mode = sync_enable;
         out->frame_write_sum = 0;
+	 out->frame_skip_sum = 0;	
         pthread_mutex_unlock(&adev->lock);
         pthread_mutex_unlock(&out->lock);
         goto exit;
@@ -722,6 +724,8 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
     char prop[PROPERTY_VALUE_MAX];
     int codec_type = out->codec_type;
     int samesource_flag = 0;
+    uint32_t latency_frames;
+    uint64_t total_frame = 0;
     audio_hwsync_t  *p_hwsync = &adev->hwsync;
     /* acquiring hw device mutex systematically is useful if a low priority thread is waiting
     * on the output stream mutex - e.g. executing select_mode() while holding the hw device
@@ -837,9 +841,21 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
                                 insert_size -= once_write_size;
                             }
                             free(insert_buf);
-                        } else {
+                        }
+                        //audio pts smaller than pcr,need skip frame. 						
+			    else if ((pcr - apts) > APTS_DISCONTINUE_THRESHOLD_MIN && (pcr - apts) < APTS_DISCONTINUE_THRESHOLD_MAX) {
+				 //we assume one frame duration is 32 ms for DD+(6 blocks X 1536 frames,48K sample rate)
+			        if (out->codec_type == TYPE_EAC3 && outsize > 0) {
+				      ALOGI("audio slow 0x%x,skip frame @pts 0x%llx,pcr 0x%x,cur apts 0x%x\n",(pcr - apts),cur_pts,pcr,apts);		
+				      out->frame_skip_sum  +=  	1536;
+				      bytes = 	outsize; 
+				      pthread_mutex_unlock(&adev->lock);
+					goto exit;
+			        }
+			    }
+			    else {
                             sprintf(tempbuf, "0x%lx", apts);
-                            ALOGI("tsync -> reset pcrscr 0x%x -> 0x%x, diff %d ms", pcr, apts, abs(apts - pcr) / 90);
+                            ALOGI("tsync -> reset pcrscr 0x%x -> 0x%x, %s big,diff %d ms", pcr, apts,apts>pcr?"apts":"pcr", abs(apts - pcr) / 90);
                             int ret_val = sysfs_set_sysfs_str(TSYNC_APTS, tempbuf);
                             if (ret_val == -1) {
                                 ALOGE("unable to open file %s,err: %s", TSYNC_APTS, strerror(errno));
@@ -878,7 +894,6 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
         DEBUG("IEC61937 write size %d,hw_sync_mode %d,flag %x\n", out_frames * frame_size, adev->hw_sync_mode, out->flags);
         if (out->codec_type  > 0) {
             // compressed audio DD/DD+
-            out->write_status = 1;
             bytes = spdifenc_write((void *) buf, out_frames * frame_size);
             //need return actual size of this burst write
             if (adev->hw_sync_mode == 1) {
@@ -890,7 +905,6 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
             } else {
                 out->frame_write_sum = spdifenc_get_total() / 4 + out->spdif_enc_init_frame_write_sum;
             }
-            out->write_status = 0;
             DEBUG("out %p,spdifenc_get_total() / 4 %lld\n", out, spdifenc_get_total() / 16);
         }
         goto exit;
@@ -950,11 +964,17 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
             DEBUG("write size %d\n", out_frames * frame_size);
             ret = pcm_write(out->pcm, (void *) buf, out_frames * frame_size);
             if (ret == 0) {
-                out->frame_write_sum += out_frames;
+               out->frame_write_sum += out_frames;
             }
         }
     }
 exit:
+     total_frame = out->frame_write_sum + out->frame_skip_sum;
+     latency_frames = out_get_latency(out) * out->config.rate / 1000;
+     if (total_frame>= latency_frames)
+	 	out->last_frames_postion = total_frame - latency_frames;
+     else
+	 	out->last_frames_postion = total_frame;
     pthread_mutex_unlock(&out->lock);
     if (ret != 0) {
         usleep(bytes * 1000000 / audio_stream_out_frame_size(stream) /
@@ -995,25 +1015,11 @@ out_get_next_write_timestamp(const struct audio_stream_out *stream,
 static int out_get_presentation_position(const struct audio_stream_out *stream, uint64_t *frames, struct timespec *timestamp)
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
-    //pthread_mutex_lock (&out->lock);
 #if 1
     if (frames != NULL) {
-
-        if (0/*out->write_status == 1*/) {
-            *frames = out->last_frames_pos;
-        } else {
-            uint32_t latency_frames = out_get_latency(out) * out->config.rate / 1000;
-            DEBUG("out %p,adev %p latency_frames %d,out->frame_write_sum %lld\n", out, out->dev, latency_frames, out->frame_write_sum);
-            if (out->frame_write_sum >= latency_frames) {
-                *frames = out->frame_write_sum - latency_frames;
-            } else {
-                *frames = out->frame_write_sum;
-            }
-            out->last_frames_pos = *frames;
-        }
-
+        *frames = out->last_frames_postion;		
     }
-    DEBUG("write_status %d,%p,*frames %lld\n", out->write_status, out, *frames);
+    DEBUG("%p,*frames %lld\n", out, *frames);
     if (timestamp != NULL) {
         clock_gettime(CLOCK_MONOTONIC, timestamp);
     }
@@ -1039,7 +1045,6 @@ static int out_get_presentation_position(const struct audio_stream_out *stream, 
     }
 #undef  TIME_TO_MS
 #endif
-    //pthread_mutex_unlock (&out->lock);
     return 0;
 }
 /** audio_stream_in implementation **/

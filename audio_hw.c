@@ -90,7 +90,7 @@ static unsigned int  DEFAULT_OUT_SAMPLING_RATE  = 48000;
 #define TSYNC_EVENT     "/sys/class/tsync/event"
 #define TSYNC_APTS      "/sys/class/tsync/pts_audio"
 #define SYSTIME_CORRECTION_THRESHOLD        (90000*10/100)
-#define APTS_DISCONTINUE_THRESHOLD_MIN    (90000/2)
+#define APTS_DISCONTINUE_THRESHOLD_MIN    (90000/1000*100)
 #define APTS_DISCONTINUE_THRESHOLD_MAX    (5*90000)
 struct pcm_config pcm_config_out = {
     .channels = 2,
@@ -155,8 +155,8 @@ struct aml_stream_out {
     struct aml_audio_device *dev;
     int write_threshold;
     bool low_power;
-    uint32_t frame_count;
-    int frame_write_sum;
+    uint64_t frame_write_sum;
+    uint64_t last_frames_postion;	
     uint8_t hw_sync_header[16];
     int hw_sync_header_cnt;
     int hw_sync_state;
@@ -862,7 +862,7 @@ out_flush(const struct audio_stream *stream)
     struct aml_audio_device *adev = out->dev;
     pthread_mutex_lock(&out->lock);
     out->frame_write_sum  = 0;
-    out->frame_count = 0;
+    out->last_frames_postion = 0;	
     pthread_mutex_unlock(&out->lock);
     return 0;
 }
@@ -1032,8 +1032,8 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
         adev->hw_sync_mode = sync_enable;
         pthread_mutex_lock(&adev->lock);
         pthread_mutex_lock(&out->lock);
-        out->frame_count = 0;
         out->frame_write_sum = 0;
+	 out->last_frames_postion = 0;	
         pthread_mutex_unlock(&out->lock);
         pthread_mutex_unlock(&adev->lock);
         goto exit;
@@ -1177,6 +1177,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
     uint i, total_len;
     int codec_type = 0;
     int samesource_flag = 0;
+    uint32_t latency_frames = 0;	
     if (out->pause_status == true) {
         out_resume(out);
     }
@@ -1240,82 +1241,6 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         }
 
         header = (unsigned char *)buffer;
-#if 0
-        if (adev->first_apts_flag == false) {
-            uint64_t first_apts = 0;
-            uint32_t apts_cal;
-
-            if ((bytes >= 16) &&
-                hwsync_header_valid(header)) {
-                first_apts = hwsync_header_get_pts(header);
-                first_apts = first_apts * 90 / 1000000;
-                ALOGI("HW SYNC new first APTS %lld", first_apts);
-
-                adev->first_apts_flag = true;
-                adev->first_apts = first_apts;
-                out->frame_write_sum = 0;
-                adev->last_apts_from_header =    first_apts;
-
-                sprintf(buf, "AUDIO_START:0x%lx", first_apts & 0xffffffff);
-                ALOGI("tsync -> %s", buf);
-                if (sysfs_set_sysfs_str(TSYNC_EVENT, buf) == -1) {
-                    ALOGE("set AUDIO_START failed \n");
-                }
-            } else {
-                ALOGE("HW sync header not sync, 0x%x 0x%x 0x%x 0x%x",
-                      header[0], header[1], header[2], header[3]);
-            }
-        } else {
-            int64_t apts;
-            uint32_t latency = out_get_latency(out) * 90;
-
-            apts = (uint64_t)out->frame_write_sum * 90000 / DEFAULT_OUT_SAMPLING_RATE;
-            apts += adev->first_apts;
-
-            if ((bytes >= 16) &&
-                hwsync_header_valid(header)) {
-                // check PTS discontinue, which may happen when audio track switching
-                // discontinue means PTS calculated based on first_apts and frame_write_sum
-                // does not match the timestamp of next audio samples
-                uint64_t apts_from_header = hwsync_header_get_pts(header);
-                uint64_t apts_current =      apts_from_header * 90 / 1000000;
-                if (abs(apts_current - adev->last_apts_from_header) > 3 * 90000) {
-                    ALOGI("apts discontinue cur %llx,last %llx\n", apts_current, adev->last_apts_from_header);
-                }
-                ALOGI("apts from header %llx,apts %llx,write size %d\n", apts_from_header, apts, bytes);
-                ALOGI("last apts %llx,cur %llx \n", adev->last_apts_from_header, apts_current);
-                adev->last_apts_from_header = apts_current;
-                if (apts_from_header != apts) {
-                    ALOGI("HW sync PTS discontinue, 0x%llx->0x%llx(from header)",
-                          apts, apts_from_header);
-                }
-            }
-
-            apts -= latency;
-            if (apts < 0) {
-                apts = 0;
-            }
-
-            unsigned long pcr = 0;
-            if (get_sysfs_int16(TSYNC_PCRSCR, &pcr) == 0) {
-                uint32_t apts_cal = apts & 0xffffffff;
-
-                //ALOGI("apts %x, pcr %x, diff %x\n", apts_cal, pcr, abs(pcr-apts_cal));
-#if 1
-                if (abs(pcr - apts_cal) < SYSTIME_CORRECTION_THRESHOLD) {
-                    // do nothing
-                } else {
-                    sprintf(buf, "0x%lx", apts_cal);
-                    ALOGI("tsync -> reset pcrscr 0x%x -> 0x%x, diff %d ms", pcr, apts_cal, (int)(apts_cal - pcr) / 90);
-                    int ret_val = sysfs_set_sysfs_str(TSYNC_APTS, buf);
-                    if (ret_val == -1) {
-                        ALOGE("unable to open file %s,err: %s", TSYNC_APTS, strerror(errno));
-                    }
-                }
-#endif
-            }
-        }
-#endif
     }
     if (out->standby) {
         ret = start_output_stream(out);
@@ -1379,14 +1304,14 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         }
     }
 #endif
-
+#if 0
     codec_type = get_sysfs_int("/sys/class/audiodsp/digital_codec");
     samesource_flag = get_sysfs_int("/sys/class/audiodsp/audio_samesource");
     if (samesource_flag == 0 && codec_type == 0) {
         ALOGI("to enable same source,need reset alsa,type %d,same source flag %d \n", codec_type, samesource_flag);
         pcm_stop(out->pcm);
     }
-
+#endif
     if (out->is_tv_platform == 1) {
         int16_t *tmp_buffer = (int16_t *)out->audioeffect_tmp_buffer;
         memcpy((void *)tmp_buffer, (void *)in_buffer, out_frames * 4);
@@ -1559,7 +1484,6 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
 
                             ret = pcm_write(out->pcm, &out->body_align[0], 64);
                             out->frame_write_sum += 64 / frame_size;
-                            out->frame_count += 64 / frame_size;
 
                             out->hw_sync_body_cnt -= 64 - out->body_align_cnt;
                             out->body_align_cnt = 0;
@@ -1576,7 +1500,6 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
                     if ((m - align) > 0) {
                         ret = pcm_write(out->pcm, p, m - align);
                         out->frame_write_sum += (m - align) / frame_size;
-                        out->frame_count += (m - align) / frame_size;
 
                         p += m - align;
                         remain -= m - align;
@@ -1609,11 +1532,16 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
 
         } else {
             ret = pcm_write(out->pcm, in_buffer, out_frames * frame_size);
-            out->frame_count += out_frames;
+            out->frame_write_sum += out_frames;
         }
     }
 
 exit:
+     latency_frames = out_get_latency(out) * out->config.rate / 1000;
+     if (out->frame_write_sum>= latency_frames)
+	 	out->last_frames_postion = out->frame_write_sum - latency_frames;
+     else
+	 	out->last_frames_postion = out->frame_write_sum;	
     pthread_mutex_unlock(&out->lock);
     if (ret != 0) {
         usleep(bytes * 1000000 / audio_stream_out_frame_size(stream) /
@@ -1638,7 +1566,7 @@ static int out_get_render_position(const struct audio_stream_out *stream,
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
 
-    *dsp_frames = out->frame_count;
+    *dsp_frames = out->last_frames_postion;
 
     return 0;
 }
@@ -1664,12 +1592,7 @@ static int out_get_presentation_position(const struct audio_stream_out *stream, 
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
     if (frames != NULL) {
-        uint32_t latency = out_get_latency(out) * out->config.rate / 1000;
-        if (out->frame_count >= latency) {
-            *frames = out->frame_count - latency;
-        } else {
-            *frames = out->frame_count;
-        }
+        *frames = out->last_frames_postion;
     }
 
     if (timestamp != NULL) {
@@ -2438,7 +2361,6 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->dev = ladev;
     out->standby = true;
     output_standby = true;
-    out->frame_count = 0;
     out->frame_write_sum = 0;
     ladev->hw_sync_mode = false;
     ladev->first_apts_flag = false;

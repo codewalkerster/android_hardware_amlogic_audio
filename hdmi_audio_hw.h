@@ -61,10 +61,10 @@ struct aml_stream_out {
     int last_codec_type;
     int format;
     uint64_t frame_write_sum;
+    uint64_t frame_skip_sum;	
     audio_output_flags_t flags;
     uint64_t spdif_enc_init_frame_write_sum;
-    unsigned char write_status;
-    uint64_t last_frames_pos;
+    uint64_t last_frames_postion;
     uint64_t bytes_write_total;
     unsigned char pause_status;
 };
