@@ -430,9 +430,9 @@ do_output_standby(struct aml_stream_out *out)
             //reset_mixer_state(adev->ar);
         }
         out->standby = 1;
-        out->pause_status == false;
     }
-
+    ALOGI("clear out pause status\n");
+    out->pause_status = false;
     return 0;
 }
 
@@ -442,7 +442,7 @@ out_standby(struct audio_stream *stream)
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     int status;
 
-    LOGFUNC("%s(%p)", __FUNCTION__, stream);
+    LOGFUNC("%s(%p),out %p", __FUNCTION__, stream,out);
 
     pthread_mutex_lock(&out->dev->lock);
     pthread_mutex_lock(&out->lock);
@@ -467,7 +467,7 @@ out_flush(const struct audio_stream *stream)
     pthread_mutex_lock(&out->lock);
     out->spdif_enc_init_frame_write_sum =  0;
     out->frame_write_sum  = 0;
-    out->frame_skip_sum = 0;	
+    out->frame_skip_sum = 0;
     pthread_mutex_unlock(&out->lock);
     return 0;
 }
@@ -577,12 +577,17 @@ out_set_parameters(struct audio_stream *stream, const char *kvpairs)
     if (ret >= 0) {
         int hw_sync_id = atoi(value);
         unsigned char sync_enable = (hw_sync_id == 12345678) ? 1 : 0;
-        ALOGI("set hw_sync_id %d,%s hw sync mode\n", hw_sync_id, sync_enable ? "enable" : "disable");
+        ALOGI("(%p %p)set hw_sync_id %d,%s hw sync mode\n",
+              out,adev->active_output, hw_sync_id, sync_enable ? "enable" : "disable");
         pthread_mutex_lock(&adev->lock);
         pthread_mutex_lock(&out->lock);
         adev->hw_sync_mode = sync_enable;
         out->frame_write_sum = 0;
 	 out->frame_skip_sum = 0;	
+	 /* clear up previous playback output status */
+        if (!out->standby && (out == adev->active_output)) {
+            do_output_standby (out);
+        }
         pthread_mutex_unlock(&adev->lock);
         pthread_mutex_unlock(&out->lock);
         goto exit;
@@ -653,13 +658,13 @@ out_set_volume(struct audio_stream_out *stream, float left, float right)
 
 static int out_pause(struct audio_stream_out *stream)
 {
-    LOGFUNC("out_pause");
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
     int r = 0;
+    LOGFUNC("(%p)out_pause",out);
     pthread_mutex_lock(&adev->lock);
     pthread_mutex_lock(&out->lock);
-    if (out->standby) {
+    if (out->standby || out->pause_status == true) {
         goto exit;
     }
     if (pcm_is_ready(out->pcm)) {
@@ -673,6 +678,7 @@ static int out_pause(struct audio_stream_out *stream)
     if (out->dev->hw_sync_mode) {
         sysfs_set_sysfs_str(TSYNC_EVENT, "AUDIO_PAUSE");
     }
+    ALOGI("set out pause status\n");
     out->pause_status = true;
 exit:
     pthread_mutex_unlock(&adev->lock);
@@ -688,7 +694,7 @@ static int out_resume(struct audio_stream_out *stream)
     pthread_mutex_lock(&adev->lock);
     pthread_mutex_lock(&out->lock);
     int r = 0;
-    if (out->standby) {
+    if (out->standby || out->pause_status == false) {
         goto exit;
     }
     if (pcm_is_ready(out->pcm)) {
@@ -702,6 +708,7 @@ static int out_resume(struct audio_stream_out *stream)
     if (out->dev->hw_sync_mode) {
         sysfs_set_sysfs_str(TSYNC_EVENT, "AUDIO_RESUME");
     }
+    ALOGI("clear out pause status\n");
     out->pause_status = false;
 exit:
     pthread_mutex_unlock(&adev->lock);
@@ -733,11 +740,14 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
     */
     out->bytes_write_total += bytes;
     DEBUG("out %p,dev %p out_write total size %lld\n", out, adev, out->bytes_write_total);
-    if (out->pause_status == true) {
-        out_resume(out);
-    }
     pthread_mutex_lock(&adev->lock);
     pthread_mutex_lock(&out->lock);
+    if (out->pause_status == true) {
+        pthread_mutex_unlock(&adev->lock);
+        pthread_mutex_unlock(&out->lock);
+	ALOGI("call out_write when pause status,size %d,(%p)\n",bytes,out);
+        return 0;
+    }
     if ((out->standby) && adev->hw_sync_mode) {
         /*
         there are two types of raw data come to hdmi  audio hal
@@ -856,10 +866,12 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
 			    else {
                             sprintf(tempbuf, "0x%lx", apts);
                             ALOGI("tsync -> reset pcrscr 0x%x -> 0x%x, %s big,diff %d ms", pcr, apts,apts>pcr?"apts":"pcr", abs(apts - pcr) / 90);
+#if 0							
                             int ret_val = sysfs_set_sysfs_str(TSYNC_APTS, tempbuf);
                             if (ret_val == -1) {
                                 ALOGE("unable to open file %s,err: %s", TSYNC_APTS, strerror(errno));
                             }
+#endif							
                         }
                     }
                 }
