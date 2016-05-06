@@ -620,6 +620,8 @@ static int alsa_in_open(struct aml_stream_in *in) {
     in->resample_request = 0;
     in->resample_temp_buffer = NULL;
     in->max_bytes = in->config.period_size << 2;
+    in->pre_gain = 1.0;
+    in->pre_mute = 0;
 
     if (in->config.rate == 0) {
         in->config.rate = pcm_config_in.rate;
