@@ -70,12 +70,14 @@ int  aml_audio_hwsync_find_frame(struct aml_stream_out *out, const void *in_buff
             if (p_hwsync->hw_sync_header_cnt == 16) {
                 uint64_t pts;
                 if (!hwsync_header_valid(&p_hwsync->hw_sync_header[0])) {
-                    ALOGE("!!!!!!hwsync header out of sync! Resync.should not happen????");
+                    //ALOGE("!!!!!!hwsync header out of sync! Resync.should not happen????");
                     p_hwsync->hw_sync_state = HW_SYNC_STATE_HEADER;
                     memcpy(p_hwsync->hw_sync_header, p_hwsync->hw_sync_header + 1, 15);
                     p_hwsync->hw_sync_header_cnt--;
                     continue;
                 }
+		if ((in_bytes-remain) > 16)
+                    ALOGI("got the frame sync header cost %d\n",in_bytes-remain);
                 p_hwsync->hw_sync_state = HW_SYNC_STATE_BODY;
                 p_hwsync->hw_sync_body_cnt = hwsync_header_get_size(&p_hwsync->hw_sync_header[0]);
                 p_hwsync->hw_sync_frame_size = p_hwsync->hw_sync_body_cnt;
