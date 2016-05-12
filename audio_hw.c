@@ -861,9 +861,12 @@ out_flush(const struct audio_stream *stream)
     LOGFUNC("%s(%p)", __FUNCTION__, stream);
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
+    pthread_mutex_lock(&adev->lock);
     pthread_mutex_lock(&out->lock);
+    do_output_standby(out);
     out->frame_write_sum  = 0;
-    out->last_frames_postion = 0;	
+    out->last_frames_postion = 0;
+    pthread_mutex_unlock(&adev->lock);
     pthread_mutex_unlock(&out->lock);
     return 0;
 }
@@ -2362,12 +2365,10 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->frame_write_sum = 0;
     out->hw_sync_mode = false;
     out->first_apts_flag = false;
-
     if (0/*flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC*/) {
         out->hw_sync_mode = true;
         ALOGI("Output stream open with AUDIO_OUTPUT_FLAG_HW_AV_SYNC");
     }
-
     /* FIXME: when we support multiple output devices, we will want to
        * do the following:
        * adev->devices &= ~AUDIO_DEVICE_OUT_ALL;

@@ -67,6 +67,7 @@ struct aml_stream_out {
     uint64_t last_frames_postion;
     uint64_t bytes_write_total;
     unsigned char pause_status;
+    int skip_frame;
 };
 
 struct aml_stream_in {
