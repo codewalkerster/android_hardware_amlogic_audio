@@ -550,7 +550,6 @@ static int start_output_stream(struct aml_stream_out *out)
         out->config = pcm_config_bt;
     } else {
         port = PORT_MM;
-        out->config = pcm_config_out;
     }
     LOGFUNC("*%s, open card(%d) port(%d)", __FUNCTION__, card, port);
 
@@ -2364,7 +2363,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->hw_sync_mode = false;
     out->first_apts_flag = false;
 
-    if (flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC) {
+    if (0/*flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC*/) {
         out->hw_sync_mode = true;
         ALOGI("Output stream open with AUDIO_OUTPUT_FLAG_HW_AV_SYNC");
     }
