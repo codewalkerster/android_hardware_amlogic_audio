@@ -107,6 +107,8 @@ audio_devices_t DLGAudioPolicyManager::getDeviceForInputSource(audio_source_t in
           ALOGV("Virtual remote available");
           device = AUDIO_DEVICE_IN_REMOTE_SUBMIX;
       }
+      else
+          device = AudioPolicyManager::getDeviceForInputSource(inputSource);
     }
     else
         device = AudioPolicyManager::getDeviceForInputSource(inputSource);
