@@ -52,12 +52,20 @@ enum  {
     TRUEHD,
     MUTE,
 };
+
+enum {
+    MODEAMAUDIO,
+    MODEANDROID,
+    MODERAW,
+    MODEMAX
+};
 /*
  In this system, input stream sample rate can be set from 8K-48K, and output sample rate is fixed 48K.
  When input stream sample rate is different from output, inlined reample is in operation. If input stream sr is not set,
  the input stream is default 48K.
  */
 int GetOutputdevice(void);
+/* input_device: 0:I2S, 1:SPDIF; output_device: 0:amaudio, 1:alsa, 2:android */
 int aml_audio_open(unsigned int sr, int input_device, int output_device);
 int aml_audio_close(void);
 int check_input_stream_sr(unsigned int sr);
