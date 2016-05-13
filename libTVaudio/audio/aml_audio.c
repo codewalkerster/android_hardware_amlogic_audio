@@ -45,7 +45,7 @@
 #define AUDIO_DEVICE_OUT_SPEAKER   (0x2)
 #define AUDIO_DEVICE_OUT_REMOTE_SUBMIX     (0x8000)
 
-static struct pcm_config pcm_config_out = {
+static const struct pcm_config pcm_config_out = {
     .channels = 2,
     .rate = DEFAULT_OUT_SAMPLE_RATE,
     .period_size = PLAYBACK_PERIOD_SIZE,
@@ -54,7 +54,7 @@ static struct pcm_config pcm_config_out = {
     .stop_threshold = PLAYBACK_PERIOD_SIZE*PLAYBACK_PERIOD_COUNT,
 };
 
-static struct pcm_config pcm_config_in = {
+static const struct pcm_config pcm_config_in = {
     .channels = 2,
     .rate = DEFAULT_IN_SAMPLE_RATE,
     .period_size = CAPTURE_PERIOD_SIZE,
@@ -65,8 +65,8 @@ static struct pcm_config pcm_config_in = {
 
 struct buffer_status {
     unsigned char *start_add;
-    int size;
-    int level;
+    size_t size;
+    size_t level;
     unsigned int rd;
     unsigned int wr;
 };
@@ -125,7 +125,7 @@ struct aml_dev {
     int has_EQ_lib;
     int has_SRS_lib;
     int has_aml_IIR_lib;
-    int output_deviceID;
+    int output_mode;
     pthread_t android_check_ThreadID;
 };
 
@@ -204,7 +204,7 @@ static struct aml_dev gmAmlDevice = {
     .has_EQ_lib = 0,
     .has_SRS_lib = 0,
     .has_aml_IIR_lib = 0,
-    .output_deviceID = 0,
+    .output_mode = MODEAMAUDIO,
     .android_check_ThreadID = 0,
 };
 
@@ -307,7 +307,7 @@ inline int GetWriteSpace(char *WritePoint, char *ReadPoint, int buffer_size) {
     return bytes;
 }
 
-inline int GetReadSpace(char *WritePoint, char *ReadPoint, int buffer_size) {
+inline size_t GetReadSpace(char *WritePoint, char *ReadPoint, int buffer_size) {
     int bytes;
 
     if (WritePoint >= ReadPoint) {
@@ -518,10 +518,10 @@ int buffer_read(struct circle_buffer *tmp, char* buffer, size_t bytes) {
     return bytes;
 }
 
+static int get_output_deviceID(void);
+
 int GetOutputdevice(void) {
-    if (gpAmlDevice == NULL)
-        return -1;
-    return gpAmlDevice->output_deviceID;
+    return get_output_deviceID();
 }
 
 static int set_input_stream_sample_rate(unsigned int sr,
@@ -679,7 +679,7 @@ static int get_in_framesize(struct aml_stream_in *in) {
 }
 
 static void apply_stream_volume_and_pregain(float vol, float gain, char *buf, int size) {
-    int i;
+    uint i;
     short *sample = (short*)buf;
     for (i = 0; i < size/sizeof(short); i++)
         sample[i] = gain*vol*sample[i];
@@ -906,9 +906,16 @@ static int set_input_device(int flag) {
 }
 
 static int new_audiotrack(struct aml_stream_out *out) {
-    int ret = 0;
+    int ret = 0, i = 0;
     pthread_mutex_lock(&out->lock);
     //ALOGD("%s, entering...\n", __FUNCTION__);
+
+    if (gpAmlDevice == NULL) {
+        ALOGE("%s, aml audio is not open, must open it first!\n", __FUNCTION__);
+        pthread_mutex_unlock(&out->lock);
+        return -1;
+    }
+
     set_amaudio2_enable(1);
     ret = new_android_audiotrack();
     if (ret < 0) {
@@ -916,6 +923,22 @@ static int new_audiotrack(struct aml_stream_out *out) {
         pthread_mutex_unlock(&out->lock);
         return -1;
     }
+
+    /* amaudio needs alsa running first to get the right params, so wait to make sure track is on */
+     if (out->user_set_device == CC_OUT_USE_AMAUDIO) {
+         while (I2S_state < 5 && gpAmlDevice->aml_Audio_ThreadTurnOnFlag == 1) {
+             usleep(10 * 1000);
+             i++;
+             if (i >= 500) {
+                 ALOGE("Time out error: wait %d s for waiting I2S ready.\n", i/100);
+                 pthread_mutex_unlock(&out->lock);
+                 return -1;
+             }
+         }
+
+         ALOGD("Wait %d times for waiting I2S ready.\n", i);
+     }
+
     pthread_mutex_unlock(&out->lock);
     return 0;
 }
@@ -971,7 +994,7 @@ static int amaudio_out_open(struct aml_stream_out *out) {
 
     struct buffer_status *buf = &out->playback_buf;
     buf->size = ioctl(out->amAudio_OutHandle, AMAUDIO_IOC_GET_SIZE);
-    buf->start_add = (short*) mmap(NULL, buf->size, PROT_READ | PROT_WRITE,
+    buf->start_add = (unsigned char*) mmap(NULL, buf->size, PROT_READ | PROT_WRITE,
             MAP_FILE | MAP_SHARED, out->amAudio_OutHandle, 0);
     if (buf->start_add == 0) {
         close(out->amAudio_OutHandle);
@@ -1015,7 +1038,7 @@ static int amaudio_out_write(struct aml_stream_out *out, void* buffer,
      if (out->is_tv_platform == 1) {
         int16_t *tmp_buffer = (int16_t *)out->audioeffect_tmp_buffer;
         int16_t *in_buffer = (int16_t *)buffer;
-        int out_byte = input_frames * 32;
+        size_t out_byte = input_frames * 32;
         int i = 0;
 
         memcpy((void *)tmp_buffer, buffer, bytes);
@@ -1140,7 +1163,7 @@ static int set_output_deviceID(int deviceID) {
         return -1;
     }
 
-    gpAmlDevice->output_deviceID = deviceID;
+    gpAmlDevice->output_mode = deviceID;
     ALOGE("%s, set output device ID: %d!\n", __FUNCTION__, deviceID);
     return 0;
 }
@@ -1150,7 +1173,7 @@ static int get_output_deviceID(void) {
         ALOGE("%s, aml audio is not open, must open it first!\n", __FUNCTION__);
         return -1;
     }
-    return gpAmlDevice->output_deviceID;
+    return gpAmlDevice->output_mode;
 }
 
 static int aml_device_init(struct aml_dev *device) {
@@ -1191,7 +1214,7 @@ static int aml_device_init(struct aml_dev *device) {
     }
 
     if (device->out.user_set_device == CC_OUT_USE_ALSA) {
-        set_output_deviceID(0);
+        set_output_deviceID(MODEAMAUDIO);
         //open output device of tinyalsa
         ret = alsa_out_open(&device->out);
         if (ret < 0) {
@@ -1199,7 +1222,7 @@ static int aml_device_init(struct aml_dev *device) {
             goto error5;
         }
     } else if (device->out.user_set_device == CC_OUT_USE_AMAUDIO) {
-        set_output_deviceID(0);
+        set_output_deviceID(MODEAMAUDIO);
         //open output device of amaudio
         ret = new_audiotrack(&device->out);
         if (ret < 0) {
@@ -1213,7 +1236,7 @@ static int aml_device_init(struct aml_dev *device) {
             goto error5;
         }
     } else if (device->out.user_set_device == CC_OUT_USE_ANDROID) {
-        set_output_deviceID(1);
+        set_output_deviceID(MODEANDROID);
         ret = new_audiotrack(&device->out);
         if (ret < 0) {
             ALOGE("%s, open android out device error!\n", __FUNCTION__);
@@ -1328,25 +1351,25 @@ static void USB_check(struct aml_stream_out *out) {
     if ((gUSBCheckFlag & AUDIO_DEVICE_OUT_SPEAKER) == 0) {
         if (out->output_device == CC_OUT_USE_AMAUDIO && omx_started == 0) {
             amaudio_out_close(out);
-            set_output_deviceID(1);
+            set_output_deviceID(MODEANDROID);
             out->output_device = CC_OUT_USE_ANDROID;
         } else if (out->output_device == CC_OUT_USE_ALSA && omx_started == 0) {
             alsa_out_close(out);
             new_audiotrack(out);
-            set_output_deviceID(1);
+            set_output_deviceID(MODEANDROID);
             out->output_device = CC_OUT_USE_ANDROID;
         }
         ALOGI("%s, USB audio playback device is in.\n", __FUNCTION__);
     } else if ((gUSBCheckFlag & AUDIO_DEVICE_OUT_SPEAKER) != 0 && gUSBCheckLastFlag != 0) {
         if (out->user_set_device == CC_OUT_USE_AMAUDIO && omx_started == 0) {
             amaudio_out_open(out);
-            set_output_deviceID(0);
+            set_output_deviceID(MODEAMAUDIO);
             out->output_device = CC_OUT_USE_AMAUDIO;
         } else if (out->user_set_device == CC_OUT_USE_ALSA
                 && omx_started == 0) {
             release_audiotrack(out);
             alsa_out_open(out);
-            set_output_deviceID(0);
+            set_output_deviceID(MODEAMAUDIO);
             out->output_device = CC_OUT_USE_ALSA;
         }
         ALOGI("%s, USB audio playback device is out.\n", __FUNCTION__);
@@ -1431,7 +1454,7 @@ err_exit:
         alsa_out_close(out);
         new_audiotrack(out);
     }
-    set_output_deviceID(2);
+    set_output_deviceID(MODERAW);
     out->output_device = CC_OUT_USE_ANDROID;
     set_Hardware_resample(4);
     digital_raw_enable = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
@@ -1443,20 +1466,20 @@ static int set_rawdata_in_disable(struct aml_stream_out *out) {
     omx_codec_close();
     if ((gUSBCheckFlag & AUDIO_DEVICE_OUT_SPEAKER) != 0) {
         if (out->user_set_device == CC_OUT_USE_AMAUDIO) {
-            set_output_deviceID(0);
+            set_output_deviceID(MODEAMAUDIO);
             amaudio_out_open(out);
             out->output_device = CC_OUT_USE_AMAUDIO;
         } else if (out->user_set_device == CC_OUT_USE_ANDROID) {
-            set_output_deviceID(1);
+            set_output_deviceID(MODEANDROID);
             out->output_device = CC_OUT_USE_ANDROID;
         } else if (out->user_set_device == CC_OUT_USE_ALSA) {
             release_audiotrack(out);
             alsa_out_open(out);
-            set_output_deviceID(0);
+            set_output_deviceID(MODEAMAUDIO);
             out->output_device = CC_OUT_USE_ALSA;
         }
     } else {
-        set_output_deviceID(1);
+        set_output_deviceID(MODEANDROID);
         out->output_device = CC_OUT_USE_ANDROID;
     }
     set_Hardware_resample(5);
@@ -1590,7 +1613,7 @@ static void* aml_audio_threadloop(void *data __unused) {
     struct aml_stream_in *in = NULL;
     struct aml_stream_out *out = NULL;
     int output_size = 0;
-    int i = 0;
+    int i = 0, ret;
 
     if (gpAmlDevice == NULL) {
         ALOGE("%s, gpAmlDevice is NULL\n", __FUNCTION__);
@@ -1605,14 +1628,11 @@ static void* aml_audio_threadloop(void *data __unused) {
 
     gpAmlDevice->aml_Audio_ThreadExecFlag = 1;
 
-    while (I2S_state < 5 && gpAmlDevice->aml_Audio_ThreadTurnOnFlag == 0) {
-        usleep(10 * 1000);
-        i++;
-        if (i >= 500) {
-            ALOGE("Time out error: wait %d s for waiting I2S ready.\n", i/100);
-        }
+    ret = aml_device_init(gpAmlDevice);
+    if (ret < 0) {
+        ALOGE("%s, Devices fail opened!\n", __FUNCTION__);
+        return NULL;
     }
-    ALOGD("Wait %d times for waiting I2S ready.\n", i);
 
     while (gpAmlDevice != NULL && gpAmlDevice->aml_Audio_ThreadTurnOnFlag) {
         //exit threadloop
@@ -1660,7 +1680,7 @@ static void* aml_audio_threadloop(void *data __unused) {
                         output_size);
                 if (output_size < 0) {
                     amaudio_out_close(out);
-                    set_output_deviceID(0);
+                    set_output_deviceID(MODEAMAUDIO);
                     amaudio_out_open(out);
                     reset_amaudio(out, 4096);
                 }
@@ -1758,14 +1778,6 @@ int aml_audio_open(unsigned int sr, int input_device, int output_device) {
     }
 
     gpAmlDevice->in.device = get_aml_device(input_device);
-    ret = aml_device_init(gpAmlDevice);
-    if (ret < 0) {
-        ALOGE("%s, Devices fail opened!\n", __FUNCTION__);
-        clrDevice(gpAmlDevice);
-        gpAmlDevice = NULL;
-        pthread_mutex_unlock(&amaudio_dev_op_mutex);
-        return -1;
-    }
 
     pthread_attr_init(&attr);
     pthread_attr_setschedpolicy(&attr, SCHED_RR);

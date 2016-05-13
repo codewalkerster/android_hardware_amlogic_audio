@@ -1,3 +1,5 @@
+#define LOG_TAG "android_out"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -16,8 +18,6 @@
 #include "DDP_media_source.h"
 
 using namespace android;
-
-#define LOG_TAG "android_out"
 
 static AudioTrack *glpTracker = NULL;
 static AudioTrack *glpTracker_raw = NULL;
@@ -130,7 +130,7 @@ static void AudioTrackCallback(int event, void* user, void *info) {
         }
     }
 // raw data end
-    if (GetOutputdevice() == 1) { // output PCM output when PCM data in
+    if (GetOutputdevice() == MODEANDROID) { // output PCM output when PCM data in
 //raw data start
         RawAudioTrackRelease();
 // raw data end
@@ -138,7 +138,7 @@ static void AudioTrackCallback(int event, void* user, void *info) {
                 buffer->size);
         if (bytes < 0)
             buffer->size = 0;
-    } else if (GetOutputdevice() == 2) {
+    } else if (GetOutputdevice() == MODERAW) {
 //raw data start
         if (user_raw_enable == 0) {
             RawAudioTrackRelease();
