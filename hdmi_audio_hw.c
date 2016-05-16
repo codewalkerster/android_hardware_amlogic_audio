@@ -464,10 +464,14 @@ out_flush(const struct audio_stream *stream)
     LOGFUNC("%s(%p)", __FUNCTION__, stream);
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
+    pthread_mutex_lock(&adev->lock);
     pthread_mutex_lock(&out->lock);
+    do_output_standby(out);
     out->spdif_enc_init_frame_write_sum =  0;
     out->frame_write_sum  = 0;
     out->frame_skip_sum = 0;
+    out->skip_frame = 3;
+    pthread_mutex_unlock(&adev->lock);
     pthread_mutex_unlock(&out->lock);
     return 0;
 }
@@ -786,12 +790,24 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
         hwsync_cost_bytes = aml_audio_hwsync_find_frame(out, buffer, bytes, &cur_pts, &outsize);
         DEBUG("after aml_audio_hwsync_find_frame bytes remain %d,cost %d,outsize %d,pts %llx\n",
               bytes - hwsync_cost_bytes, hwsync_cost_bytes, outsize, cur_pts);
-        if (cur_pts != 0xffffffff) {
+        //TODO,skip 3 frames after flush, to tmp fix seek pts discontinue issue.need dig more
+        // to find out why seek ppint pts frame is remained after flush.WTF.
+	 if (out->skip_frame > 0) {
+             out->skip_frame--;
+             ALOGI("skip pts@%llx,cur frame size %d,cost size %d\n",cur_pts,outsize,hwsync_cost_bytes);
+             pthread_mutex_unlock(&adev->lock);
+             pthread_mutex_unlock(&out->lock);
+             return hwsync_cost_bytes;
+        }
+        if (cur_pts != 0xffffffff && outsize > 0) {
+// if we got the frame body,which means we get a complete frame.
+//we take this frame pts as the first apts.
+//this can fix the seek discontinue,we got a fake frame,which maybe cached before the seek
             if (p_hwsync->first_apts_flag == false) {
                 p_hwsync->first_apts_flag = true;
                 p_hwsync->first_apts = cur_pts;
                 sprintf(tempbuf, "AUDIO_START:0x%lx", cur_pts & 0xffffffff);
-                ALOGI("tsync -> %s", tempbuf);
+                ALOGI("tsync -> %s,frame size %d", tempbuf,outsize);
                 if (sysfs_set_sysfs_str(TSYNC_EVENT, tempbuf) == -1) {
                     ALOGE("set AUDIO_START failed \n");
                 }
