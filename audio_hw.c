@@ -650,7 +650,6 @@ static int check_input_parameters(uint32_t sample_rate, audio_format_t format, i
 static size_t get_input_buffer_size(unsigned int period_size,uint32_t sample_rate, audio_format_t format, int channel_count)
 {
     size_t size;
-    size_t device_rate;
 
     LOGFUNC("%s(sample_rate=%d, format=%d, channel_count=%d)", __FUNCTION__, sample_rate, format, channel_count);
 
@@ -661,6 +660,10 @@ static size_t get_input_buffer_size(unsigned int period_size,uint32_t sample_rat
     /* take resampling into account and return the closest majoring
     multiple of 16 frames, as audioflinger expects audio buffers to
     be a multiple of 16 frames */
+    if (period_size == 0) {
+        period_size = (pcm_config_in.period_size * sample_rate) / pcm_config_in.rate;
+    }
+
     size = period_size;
     size = ((size + 15) / 16) * 16;
 
