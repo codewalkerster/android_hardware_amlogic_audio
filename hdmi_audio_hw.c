@@ -447,6 +447,7 @@ out_standby(struct audio_stream *stream)
     pthread_mutex_lock(&out->dev->lock);
     pthread_mutex_lock(&out->lock);
     status = do_output_standby(out);
+    set_codec_type(TYPE_PCM);
     pthread_mutex_unlock(&out->lock);
     pthread_mutex_unlock(&out->dev->lock);
     return status;
