@@ -115,6 +115,19 @@ void set_codec_type(int type)
         close(fd);
     }
 }
+unsigned char codec_type_is_raw_data(int type)
+{
+    switch (type) {
+        case TYPE_AC3:
+        case TYPE_EAC3:
+        case TYPE_TRUE_HD:
+        case TYPE_DTS:
+        case TYPE_DTS_HD:
+            return 1;
+        default:
+            return 0;
+   }
+}
 
 int get_codec_type(int format)
 {
@@ -130,9 +143,9 @@ int get_codec_type(int format)
 	 case AUDIO_FORMAT_TRUEHD:
 	 return TYPE_TRUE_HD;
         case AUDIO_FORMAT_PCM:
-        return 0;
+        return TYPE_PCM;
         default:
-        return 0;
+        return TYPE_PCM;
     }
 }
 int getprop_bool (const char *path)

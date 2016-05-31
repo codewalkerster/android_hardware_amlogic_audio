@@ -174,6 +174,14 @@ static int start_output_stream(struct aml_stream_out *out)
     int port = PORT_MM;
     int ret = 0;
     int codec_type = get_codec_type(out->format);
+    if (out->format == AUDIO_FORMAT_PCM && out->config.rate > 48000 && (out->flags & AUDIO_OUTPUT_FLAG_DIRECT)) {
+        ALOGI("start output stream for high sample rate pcm for direct mode\n");
+        codec_type = TYPE_PCM_HIGH_SR;
+    }
+    if (codec_type == AUDIO_FORMAT_PCM && out->config.channels >= 6 && (out->flags & AUDIO_OUTPUT_FLAG_DIRECT)) {
+        ALOGI("start output stream for multi-channel pcm for direct mode\n");
+        codec_type = TYPE_MULTI_PCM;
+    }
     adev->active_output = out;
     if (adev->mode != AUDIO_MODE_IN_CALL) {
         /* FIXME: only works if only one output can be active at a time */
@@ -194,6 +202,8 @@ static int start_output_stream(struct aml_stream_out *out)
     ALOGI("hdmi sound card id %d,device id %d \n", card, port);
     if (out->config.channels == 6) {
         ALOGI("round 6ch to 8 ch output \n");
+/* our hw only support 8 channel configure,so when 5.1,hw mask the last two channels*/
+        sysfs_set_sysfs_str("/sys/class/amhdmitx/amhdmitx0/aud_output_chs", "6:7");
         out->config.channels = 8;
     }
     /*
@@ -243,7 +253,7 @@ static int start_output_stream(struct aml_stream_out *out)
         return -ENOMEM;
     }
 #if 1
-    if (codec_type  != TYPE_PCM  && !(out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO)) {
+    if (codec_type_is_raw_data(codec_type) && !(out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO)) {
         spdifenc_init(out->pcm);
         out->spdif_enc_init_frame_write_sum = out->frame_write_sum;
     }
@@ -448,6 +458,8 @@ out_standby(struct audio_stream *stream)
     pthread_mutex_lock(&out->lock);
     status = do_output_standby(out);
     set_codec_type(TYPE_PCM);
+/* clear the hdmitx channel config to default */
+    sysfs_set_sysfs_str("/sys/class/amhdmitx/amhdmitx0/aud_output_chs", "0:0");
     pthread_mutex_unlock(&out->lock);
     pthread_mutex_unlock(&out->dev->lock);
     return status;
@@ -918,7 +930,7 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
             LOGFUNC("could not open file:/data/hdmi_audio_out.pcm");
         }
     }
-    if (out->codec_type != TYPE_PCM && !(out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO)) {
+    if (codec_type_is_raw_data(out->codec_type) && !(out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO)) {
         //here to do IEC61937 pack
         DEBUG("IEC61937 write size %d,hw_sync_mode %d,flag %x\n", out_frames * frame_size, adev->hw_sync_mode, out->flags);
         if (out->codec_type  > 0) {
@@ -942,10 +954,27 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
         if (out->multich == 8) {
             int *p32 = NULL;
             short *p16 = (short *) buf;
+            short *p16_temp;
             int i, NumSamps;
             NumSamps = out_frames * frame_size / sizeof(short);
             p32 = malloc(NumSamps * sizeof(int));
             if (p32 != NULL) {
+                //here to swap the channnl data here
+                //actual now:L,missing,R,RS,RRS,,LS,LRS,missing
+                //expect L,C,R,RS,RRS,LRS,LS,LFE (LFE comes from to center)
+                //actual  audio data layout  L,R,C,none/LFE,LRS,RRS,LS,RS
+                p16_temp = (short *) p32;
+                for (i = 0;i < NumSamps;i=i+8) {
+                    p16_temp[0+i]/*L*/ = p16[0+i];
+                    p16_temp[1+i]/*R*/ = p16[1+i];
+                    p16_temp[2+i] /*LFE*/= p16[3+i];
+                    p16_temp[3+i] /*C*/= p16[2+i];
+                    p16_temp[4+i] /*LS*/= p16[6+i];
+                    p16_temp[5+i] /*RS*/= p16[7+i];
+                    p16_temp[6+i] /*LRS*/= p16[4+i];
+                    p16_temp[7+i]/*RRS*/ = p16[5+i];
+                }
+                memcpy(p16,p16_temp,NumSamps*sizeof(short));
                 for (i = 0; i < NumSamps; i++) { //suppose 16bit/8ch PCM
                     p32[i] = p16[i] << 16;
                 }
@@ -955,14 +984,26 @@ out_write(struct audio_stream_out *stream, const void *buffer, size_t bytes)
         } else if (out->multich == 6) {
             int *p32 = NULL;
             short *p16 = (short *) buf;
+            short *p16_temp;
             int i, j, NumSamps, real_samples;
             real_samples = out_frames * frame_size / sizeof(short);
             NumSamps = real_samples * 8 / 6;
-            ALOGI("6ch to 8 ch real %d, to %d,bytes %d,frame size %d\n", real_samples, NumSamps, bytes, frame_size);
-            p32 = malloc(NumSamps * sizeof(int));
-            if (p32 != NULL) {
-                memset(p32, 0, NumSamps * sizeof(int));
-                for (i = 0, j = 0; j < NumSamps; i = i + 6, j = j + 8) { //suppose 16bit/8ch PCM
+            //ALOGI("6ch to 8 ch real %d, to %d,bytes %d,frame size %d\n",real_samples,NumSamps,bytes,frame_size);
+            p32 = malloc (NumSamps * sizeof (int));
+            if (p32 != NULL)
+            {
+                p16_temp = (short *) p32;
+                for (i = 0;i < real_samples;i=i+6) {
+                    p16_temp[0+i]/*L*/ = p16[0+i];
+                    p16_temp[1+i]/*R*/ = p16[1+i];
+                    p16_temp[2+i] /*LFE*/= p16[3+i];
+                    p16_temp[3+i] /*C*/= p16[2+i];
+                    p16_temp[4+i] /*LS*/= p16[4+i];
+                    p16_temp[5+i] /*RS*/= p16[5+i];
+             }
+             memcpy(p16,p16_temp,real_samples*sizeof(short));
+             memset(p32, 0, NumSamps * sizeof(int));
+             for (i = 0, j = 0; j < NumSamps; i = i + 6, j = j + 8) { //suppose 16bit/8ch PCM
                     p32[j] = p16[i] << 16;
                     p32[j + 1] = p16[i + 1] << 16;
                     p32[j + 2] = p16[i + 2] << 16;
@@ -1378,11 +1419,14 @@ adev_open_output_stream(struct audio_hw_device *dev,
         out->multich = channel_count;
         out->config.channels = channel_count;
     }
-    if (digital_codec !=  TYPE_PCM) {
+    if (codec_type_is_raw_data(digital_codec)) {
         ALOGI("for raw audio output,force alsa stereo output\n");
         out->config.channels = 2;
         out->multich = 2;
     }
+   /* if 2ch high sample rate PCM audio goes to direct output, set the required sample rate which needed by AF */
+    if ((flags&AUDIO_OUTPUT_FLAG_DIRECT) && config->sample_rate > 0)
+        out->config.rate = config->sample_rate;
     out->format = config->format;
     out->dev = ladev;
     out->standby = 1;

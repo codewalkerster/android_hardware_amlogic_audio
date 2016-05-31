@@ -1322,7 +1322,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         }
     }
 #endif
-#if 0
+#if 1
     codec_type = get_sysfs_int("/sys/class/audiodsp/digital_codec");
     samesource_flag = get_sysfs_int("/sys/class/audiodsp/audio_samesource");
     if (samesource_flag == 0 && codec_type == 0) {
