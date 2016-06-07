@@ -30,6 +30,7 @@ LOCAL_SRC_FILES := \
     audio/audio_usb_check.cpp \
     audio/amaudio_main.cpp \
     audio/DDP_media_source.cpp \
+    audio/aml_shelf.c
 
 LOCAL_CFLAGS := -DANDROID_PLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)  -DUSE_SYS_WRITE_SERVICE=1
 

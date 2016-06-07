@@ -28,6 +28,7 @@
 #include <cutils/properties.h>
 #include "tinyalsa/asoundlib.h"
 
+#include "aml_shelf.h"
 #include "android_out.h"
 #include "aml_audio.h"
 
@@ -277,6 +278,7 @@ static int pcm_data_counter = 0;
 static int digital_raw_enable = 0;
 int output_record_enable = 0;
 int spdif_audio_type = LPCM;
+int type_AUDIO_IN = -1;
 pthread_mutex_t device_change_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void DoDumpData(void *data_buf, int size, int aud_src_type);
@@ -743,6 +745,18 @@ static int alsa_in_read(struct aml_stream_in *in, void* buffer, size_t bytes) {
                 apply_stream_volume_and_pregain(vol,gain,buffer,bytes);
             else
                 memset(buffer, 0, bytes);
+        }
+        if (type_AUDIO_IN == 2 && GetOutputdevice() != 2) {
+            short *ptr = buffer;
+            short data;
+            int i = 0;
+            int frame_size = bytes >> 2;
+            for (i = 0; i < frame_size; i++) {
+                data = (short)audio_IIR_process((int)(*ptr), 0);
+                *ptr++ = data;
+                data = (short)audio_IIR_process((int)(*ptr), 1);
+                *ptr++ = data;
+            }
         }
         DoDumpData(buffer, bytes, CC_DUMP_SRC_TYPE_INPUT);
 
@@ -1288,6 +1302,8 @@ static int aml_device_init(struct aml_dev *device) {
         device->has_aml_IIR_lib = 1;
     }
 
+    audio_IIR_init();
+
     ALOGD("%s, exiting...\n", __FUNCTION__);
     return 0;
 
@@ -1384,7 +1400,6 @@ static int get_channel_status(void) {
     int card_id;
     int type_I2S = -1;
     int type_SPDIF = -1;
-    int type_AUDIO_IN = -1;
 
     card_id = get_aml_card();
     pmixer = mixer_open(card_id);
