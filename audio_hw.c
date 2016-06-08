@@ -600,7 +600,7 @@ static int start_output_stream(struct aml_stream_out *out)
         out->resampler->reset(out->resampler);
     }
     if (out->is_tv_platform == 1) {
-        sysfs_set_sysfs_str("/sys/class/amhdmitx/amhdmitx0/aud_output_chs", "2:1");
+        sysfs_set_sysfs_str("/sys/class/amhdmitx/amhdmitx0/aud_output_chs", "2:2");
     }
     //set_codec_type(0);
     if (out->hw_sync_mode == 1) {
