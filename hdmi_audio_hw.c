@@ -240,7 +240,8 @@ static int start_output_stream(struct aml_stream_out *out)
         out->config.start_threshold = PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
     }
     out->config.avail_min = 0;
-    set_codec_type(codec_type);
+    if (codec_type != TYPE_DTS_HD)
+        set_codec_type(codec_type);
     ALOGI("channels=%d---format=%d---period_count%d---period_size%d---rate=%d---",
           out->config.channels, out->config.format, out->config.period_count,
           out->config.period_size, out->config.rate);
@@ -457,9 +458,10 @@ out_standby(struct audio_stream *stream)
     pthread_mutex_lock(&out->dev->lock);
     pthread_mutex_lock(&out->lock);
     status = do_output_standby(out);
-    set_codec_type(TYPE_PCM);
 /* clear the hdmitx channel config to default */
     sysfs_set_sysfs_str("/sys/class/amhdmitx/amhdmitx0/aud_output_chs", "0:0");
+    if (out->format != AUDIO_FORMAT_DTS_HD)
+        set_codec_type(TYPE_PCM);
     pthread_mutex_unlock(&out->lock);
     pthread_mutex_unlock(&out->dev->lock);
     return status;
