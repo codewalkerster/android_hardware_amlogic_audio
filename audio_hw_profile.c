@@ -153,7 +153,7 @@ char*  get_hdmi_sink_cap(const char *keys)
         int nread = read(fd, infobuf, 1024);
         /* check the format cap */
         if (strstr(keys, AUDIO_PARAMETER_STREAM_SUP_FORMATS)) {
-            size += sprintf(aud_cap, "=");
+            size += sprintf(aud_cap, "=%s|", "AUDIO_FORMAT_PCM_16_BIT");
             if (mystrstr(infobuf, "Dobly_Digital+")) {
                 size += sprintf(aud_cap + size, "%s|", "AUDIO_FORMAT_E_AC3");
             }

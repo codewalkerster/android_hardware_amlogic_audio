@@ -29,7 +29,10 @@ enum {
     TYPE_DTS = 3,
     TYPE_EAC3 = 4,
     TYPE_DTS_HD = 5 ,
+    TYPE_MULTI_PCM = 6,
     TYPE_TRUE_HD = 7,
+    TYPE_DTS_HD_MA = 8,//should not used after we unify DTS-HD&DTS-HD MA
+    TYPE_PCM_HIGH_SR = 9,
 };
 
 struct aml_audio_device {
