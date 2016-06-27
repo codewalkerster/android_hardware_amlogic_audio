@@ -240,7 +240,10 @@ static unsigned int gUSBCheckLastFlag = 0;
 static unsigned int gUSBCheckFlag = 0;
 
 extern int omx_codec_init(void);
+extern int omx_codec_dts_init(void);
 extern void omx_codec_close(void);
+extern void omx_codec_dts_close(void);
+
 extern int I2S_state;
 
 #define I2S_IN_AUDIO_TYPE              "I2SIN Audio Type"
@@ -1334,7 +1337,9 @@ static int aml_device_close(struct aml_dev *device) {
     } else if (out->output_device == CC_OUT_USE_ANDROID) {
         release_audiotrack(out);
     }
+
     omx_codec_close();
+    omx_codec_dts_close();
     omx_started = 0;
     tmp_buffer_release (&DDP_out_buffer);
     tmp_buffer_release (&DD_out_buffer);
@@ -1473,12 +1478,17 @@ err_exit:
     out->output_device = CC_OUT_USE_ANDROID;
     set_Hardware_resample(4);
     digital_raw_enable = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
-    omx_codec_init();
+    if (audioin_type == AC3 || audioin_type == EAC3)
+        omx_codec_init();
+    if (audioin_type == DTS || audioin_type == DTSHD)
+        omx_codec_dts_init();
     return 0;
 }
 
 static int set_rawdata_in_disable(struct aml_stream_out *out) {
+
     omx_codec_close();
+    omx_codec_dts_close();
     if ((gUSBCheckFlag & AUDIO_DEVICE_OUT_SPEAKER) != 0) {
         if (out->user_set_device == CC_OUT_USE_AMAUDIO) {
             set_output_deviceID(MODEAMAUDIO);
@@ -1545,7 +1555,7 @@ static int check_audio_type(struct aml_stream_out *out) {
     else if (omx_started == 1) {
         int digtal_out = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
         int need_reset_config = 0;
-        if (audioin_type == EAC3 && digtal_out != digital_raw_enable) {
+        if ((audioin_type == DTS ||audioin_type == EAC3) && digtal_out != digital_raw_enable) {
             ALOGI("DD+ passthrough flag changed from %d to %d\n",digital_raw_enable,digtal_out);
             need_reset_config = 1;
         }

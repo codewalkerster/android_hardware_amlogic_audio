@@ -21,7 +21,7 @@ LOCAL_SRC_FILES := \
     audio_usb_check.cpp \
     amaudio_main.cpp \
     DDP_media_source.cpp \
-
+    DTSHD_media_source.cpp \
 LOCAL_CFLAGS := -DANDROID_PLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 
 LOCAL_MODULE_TAGS := optional
