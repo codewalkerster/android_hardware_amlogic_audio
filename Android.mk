@@ -24,7 +24,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 # required type is 'primary'. Other possibilites are 'a2dp', 'usb', etc.
 	include $(CLEAR_VARS)
 
-	LOCAL_MODULE := audio.primary.amlogic
+	LOCAL_MODULE := audio.primary.$(TARGET_PRODUCT)
 	LOCAL_MODULE_RELATIVE_PATH := hw
 	LOCAL_SRC_FILES := \
 		audio_hw.c \
@@ -47,7 +47,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 	ifeq ($(strip $(BOARD_USE_USB_AUDIO)),true)
 		include $(CLEAR_VARS)
 		
-		LOCAL_MODULE := audio.usb.amlogic
+		LOCAL_MODULE := audio.usb.$(TARGET_PRODUCT)
 		LOCAL_MODULE_RELATIVE_PATH := hw
 		LOCAL_SRC_FILES := \
 			usb_audio_hw.c \
@@ -63,7 +63,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 #build for hdmi audio HAL
 		include $(CLEAR_VARS)
 		
-		LOCAL_MODULE := audio.hdmi.amlogic
+		LOCAL_MODULE := audio.hdmi.$(TARGET_PRODUCT)
 		LOCAL_MODULE_RELATIVE_PATH := hw
 		LOCAL_SRC_FILES := \
 			hdmi_audio_hw.c
