@@ -114,10 +114,10 @@ static audio_channel_mask_t get_dolby_channel_mask(const unsigned char *frameBuf
     }
 }
 
-static int hw_audio_format_detection()
+static int hw_audio_format_detection(struct aml_mixer_handle *mixer_handle)
 {
     int type = 0;
-    type = aml_mixer_ctrl_get_int(AML_MIXER_ID_SPDIFIN_AUDIO_TYPE);
+    type = aml_mixer_ctrl_get_int(mixer_handle,AML_MIXER_ID_SPDIFIN_AUDIO_TYPE);
     if (type >= LPCM && type <= DTS) {
         return type;
     } else {
@@ -213,6 +213,7 @@ int audio_type_parse(void *buffer, size_t bytes, int *package_size, audio_channe
 static int audio_type_parse_init(audio_type_parse_t *status)
 {
     audio_type_parse_t *audio_type_status = status;
+    struct aml_mixer_handle *mixer_handle = audio_type_status->mixer_handle;
     struct pcm_config *config_in = &(audio_type_status->config_in);
     struct pcm *in;
     int ret, bytes;
@@ -254,7 +255,7 @@ static int audio_type_parse_init(audio_type_parse_t *status)
     }
 
     audio_type_status->in = in;
-    enable_HW_resample(HW_RESAMPLE_ENABLE);
+    enable_HW_resample(mixer_handle, HW_RESAMPLE_ENABLE);
 
     ALOGD("init parser success: (%d), (%d), (%p)",
           audio_type_status->card, audio_type_status->device, audio_type_status->in);
@@ -279,6 +280,7 @@ static int audio_type_parse_release(audio_type_parse_t *status)
 static int update_audio_type(audio_type_parse_t *status, int update_bytes)
 {
     audio_type_parse_t *audio_type_status = status;
+    struct aml_mixer_handle *mixer_handle = audio_type_status->mixer_handle;
     struct pcm_config *config_in = &(audio_type_status->config_in);
 
     if (audio_type_status->audio_type == audio_type_status->cur_audio_type) {
@@ -291,7 +293,7 @@ static int update_audio_type(audio_type_parse_t *status, int update_bytes)
             audio_type_status->audio_type = audio_type_status->cur_audio_type;
             audio_type_status->read_bytes = 0;
             ALOGI("no IEC61937 header found, PCM data!\n");
-            enable_HW_resample(HW_RESAMPLE_ENABLE);
+            enable_HW_resample(mixer_handle, HW_RESAMPLE_ENABLE);
         }
         audio_type_status->read_bytes += update_bytes;
     } else {
@@ -300,7 +302,7 @@ static int update_audio_type(audio_type_parse_t *status, int update_bytes)
         audio_type_status->audio_type = audio_type_status->cur_audio_type;
         audio_type_status->read_bytes = 0;
         ALOGI("Raw data found: type(%d)\n", audio_type_status->audio_type);
-        enable_HW_resample(HW_RESAMPLE_DISABLE);
+        enable_HW_resample(mixer_handle, HW_RESAMPLE_DISABLE);
     }
     return 0;
 }
@@ -347,7 +349,7 @@ void* audio_type_parse_threadloop(void *data)
             //we use the hw audio format detection.
             //TODO
             if (!txlx_chip && audio_type_status->cur_audio_type == LPCM) {
-                audio_type_status->cur_audio_type = hw_audio_format_detection();
+                audio_type_status->cur_audio_type = hw_audio_format_detection(audio_type_status->mixer_handle);
             }
 
             memcpy(audio_type_status->parse_buffer, audio_type_status->parse_buffer + bytes, 3);
@@ -365,10 +367,10 @@ void* audio_type_parse_threadloop(void *data)
 }
 
 int creat_pthread_for_audio_type_parse(
-    pthread_t *audio_type_parse_ThreadID,
-    void **status,
-    int input_sr __unused, int input_ch __unused)
-{
+                     pthread_t *audio_type_parse_ThreadID,
+                     void **status,
+                     struct aml_mixer_handle *mixer)
+ {
     pthread_attr_t attr;
     struct sched_param param;
     audio_type_parse_t *audio_type_status = NULL;
@@ -389,6 +391,7 @@ int creat_pthread_for_audio_type_parse(
     audio_type_status->running_flag = 1;
     audio_type_status->audio_type = LPCM;
     audio_type_status->audio_ch_mask = AUDIO_CHANNEL_OUT_STEREO;
+    audio_type_status->mixer_handle = mixer;
 
     pthread_attr_init(&attr);
     pthread_attr_setschedpolicy(&attr, SCHED_RR);

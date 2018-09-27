@@ -20,6 +20,7 @@
 #include <string.h>
 #include <cutils/log.h>
 #include <tinyalsa/asoundlib.h>
+#include <cutils/properties.h>
 
 #include "audio_eq_drc_compensation.h"
 #include "aml_volume_utils.h"
@@ -27,6 +28,9 @@
 #undef  LOG_TAG
 #define LOG_TAG  "audio_eq_drc_compensation"
 
+#define MODEL_SUM_DEFAULT_PATH "/vendor/etc/tvconfig/model/model_sum.ini"
+#define EQ_DRC_SOC_DEFAULT_PATH "/vendor/etc/tvconfig/audio/AMLOGIC_SOC_DEFAULT.ini"
+#define EXT_AMP_DEFAULT_PATH "/vendor/etc/tvconfig/audio/EXT_AMP_DEFAULT.ini"
 struct eq_drc_sys_file_node {
     char eq[256];
     char drc[256];
@@ -36,10 +40,37 @@ struct eq_drc_sys_file_node {
 static struct eq_drc_sys_file_node *file_node = NULL;
 
 static struct eq_drc_device_config_s dev_cfg[] = {
+    {/*amlogic inner EQ & DRC*/
+        "AMLOGIC_SOC_INI_PATH",
+        EQ_DRC_SOC_DEFAULT_PATH,
+        "EQ enable",
+        "DRC enable",
+        "EQ table",
+        "DRC table",
+        "EQ Model ID",
+        "EQ master volume",
+        "EQ ch1 volume",
+        "EQ ch2 volume"
+    },
+    {/*ext amp EQ & DRC*/
+        "EXT_AMP_INI_PATH",
+        EXT_AMP_DEFAULT_PATH,
+        "AMP Set EQ Enable",
+        "AMP Set DRC Enable",
+        "AMP EQ table",
+        "AMP DRC table",
+        "AMP Set Model ID",
+        "AMP Master Volume",
+        "AMP Ch1 Volume",
+        "AMP Ch2 Volume"
+    },
+};
+/*
+static struct eq_drc_device_config_s dev_cfg[] = {
     {"AMLOGIC_SOC_INI_PATH", "/tvconfig/audio/AMLOGIC_SOC_DEFAULT.ini", "EQ enable", "DRC enable", "EQ Model ID", "EQ master volume", "EQ ch1 volume", "EQ ch2 volume"},
     {"TAS57XX_INI_PATH", "/tvconfig/audio/TAS57XX_DEFAULT.ini", "AMP Set EQ Enable", "AMP Set DRC Enable", "AMP Set Model ID", "AMP Master Volume", "AMP Ch1 Volume", "AMP Ch2 Volume"},
 };
-
+*/
 static int get_model_name(char *model_name, int size)
 {
     int fd;
@@ -102,19 +133,35 @@ ERROR:
     return ret;
 }
 
-static int eq_drc_write_sys_file(const char *path, const char *val) {
+uint32_t swapInt32(uint32_t value)
+{
+    return ((value & 0x000000FF) << 24) |
+           ((value & 0x0000FF00) << 8) |
+           ((value & 0x00FF0000) >> 8) |
+           ((value & 0xFF000000) >> 24) ;
+}
+
+int16_t swapInt16(int16_t value)
+{
+    return ((value & 0x00FF) << 8) |
+           ((value & 0xFF00) >> 8) ;
+}
+
+static int eq_drc_write_sys_file(const char *path, const char *val)
+{
     int fd;
     int len;
 
     fd = open(path, O_RDWR);
     if (fd < 0) {
-        ALOGE("%s: open %s error(%s)", __FUNCTION__, path, strerror (errno));
+        ALOGE("%s: open %s error(%s)", __FUNCTION__, path, strerror(errno));
         return -1;
     }
 
     len = write(fd, val, strlen(val));
-    if (len < 0)
-        ALOGE("%s: write error %s", __FUNCTION__, strerror (errno));
+    if (len < 0) {
+        ALOGE("%s: write error %s", __FUNCTION__, strerror(errno));
+    }
     close(fd);
 
     return len;

@@ -120,9 +120,9 @@ void dolby_ms12_config_params_reset_config_params(void);
 void dolby_ms12_config_params_self_cleanup(void);
 
 /*Begin*/
-    //*Begin||Add the APT to set the params*//
-    //Functional Switches
-    //virtual void setLowComplexityNode(bool flag) { mLowComplexityMode = flag; }//did not use this part!
+//*Begin||Add the APT to set the params*//
+//Functional Switches
+//virtual void setLowComplexityNode(bool flag) { mLowComplexityMode = flag; }//did not use this part!
 /**
  * @brief set DRC boost value
  *
@@ -265,6 +265,13 @@ void dolby_ms12_set_asscociated_audio_mixing(int val);
  * 1 = On (Default)
  */
 void dolby_ms12_set_system_app_audio_mixing(int val);
+
+/**
+ * @brief get the status of System / Application audio mixing
+ * 0 = Off
+ * 1 = On
+ */
+int dolby_ms12_get_system_app_audio_mixing(void);
 
 /**
  * @brief User control values for mixing main and associated audio
@@ -507,6 +514,69 @@ void dolby_ms12_set_dap_dialogue_enhancer(DAPDialogueEnhancer *dapDialogueEnhanc
  * @brief set dual output flag, when hdmi-arc not connected, and using the dolby ms12, that optical is always on.
  */
 void dolby_ms12_set_dual_output_flag(bool need_dual_output);
+
+
+/**
+ * @brief set active ott singal flag(continuous output mode)
+ */
+void set_dolby_ms12_continuous_mode(bool flag);
+
+/**
+ * @brief get active ott singal flag(continuous output mode)
+ */
+bool is_dolby_ms12_continuous_mode(void);
+
+/**
+ * @brief Input mixer gain values for OTT Sounds input
+ * - target gain at end of ramp in dB (range: -96..0)
+ * - duration of ramp in milliseconds (range: 0..60000)
+ * - shape of the ramp (0: linear, 1: in cube, 2: out cube)
+ */
+void dolby_ms12_set_input_mixer_gain_values_for_ott_sounds_input(MixGain *mixergain);
+
+/**
+ * @brief set active atmos lock flag, when hwsync(tunnel mode) is enable
+ */
+void dolby_ms12_set_atmos_lock_flag(bool flag);
+
+/**
+ * @brief set active pause flag, when hwsync(tunnel mode) is enable
+ */
+void dolby_ms12_set_pause_flag(bool flag);
+
+
+/**
+ * @brief set dolby main input file
+
+   @bool is_dummy, true no input, false real input
+ */
+void dolby_ms12_set_dolby_main1_as_dummy_file(bool is_dummy);
+
+/**
+ * @brief set dolby associate input file
+
+   @bool is_dummy, true no input, false real input
+ */
+void dolby_ms12_set_dolby_main2_as_dummy_file(bool is_dummy);
+
+/**
+ * @brief get dolby main1 input file status
+   @if dummy input, return true;
+   @if true input, return false;
+ */
+bool dolby_ms12_get_dolby_main1_file_is_dummy(void);
+
+/**
+ * @brief set ott sound input enable
+
+   @bool flag, true ott sound input, false no ott sound input
+ */
+void dolby_ms12_set_ott_sound_input_enable(bool flag);
+
+/**
+ * @brief get ott sound input enable
+ */
+bool dolby_ms12_get_ott_sound_input_enable(void);
 /*End*/
 
 #ifdef __cplusplus

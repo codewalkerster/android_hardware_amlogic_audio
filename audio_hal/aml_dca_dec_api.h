@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef _AML_DCV_DEC_API_H_
-#define _AML_DCV_DEC_API_H_
+#ifndef _AML_DCA_DEC_API_H_
+#define _AML_DCA_DEC_API_H_
 
 #include <hardware/audio.h>
 #include "aml_ringbuffer.h"
@@ -23,7 +23,9 @@
 #include "aml_audio_parser.h"
 #include "aml_audio_types_def.h"
 
-struct dolby_ddp_dec {
+
+
+struct dca_dts_dec {
     unsigned char *inbuf;
     unsigned char *outbuf;
     unsigned char *outbuf_raw;
@@ -31,26 +33,16 @@ struct dolby_ddp_dec {
     int remain_size;
     int outlen_pcm;
     int outlen_raw;
-    int nIsEc3;
+    int is_dtscd;
     int digital_raw;
-    bool is_iec61937;
-    int (*get_parameters)(void *, int *, int *, int *);
-    int (*decoder_process)(unsigned char*, int, unsigned char *, int *, char *, int *, int, struct pcm_info *);
-    pthread_mutex_t lock;
-    struct pcm_info pcm_out_info;
-    struct resample_para aml_resample;
-    unsigned char *resample_outbuf;
-    ring_buffer_t output_ring_buf;
+    //int (*get_parameters) (void *, int *, int *, int *);
+    int (*decoder_process)(unsigned char*, int, unsigned char *, int *, char *, int *);
 };
 
-
-
-int dcv_decode_init(struct aml_audio_parser *parser);
-int dcv_decode_release(struct aml_audio_parser *parser);
-
-
-int dcv_decoder_init_patch(struct dolby_ddp_dec *ddp_dec);
-int dcv_decoder_release_patch(struct dolby_ddp_dec *ddp_dec);
-int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffer, int bytes);
+int dca_decode_init(struct aml_audio_parser *parser);
+int dca_decode_release(struct aml_audio_parser *parser);
+int dca_decoder_init_patch(struct dca_dts_dec *dts_dec);
+int dca_decoder_release_patch(struct dca_dts_dec *dts_dec);
+int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer, int bytes);
 
 #endif

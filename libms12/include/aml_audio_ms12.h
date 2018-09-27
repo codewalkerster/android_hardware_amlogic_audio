@@ -10,16 +10,16 @@
 #ifndef __AML_AUDIO_MS12_H__
 #define __AML_AUDIO_MS12_H__
 
-#ifdef DOLBY_MS12_ENABLE
 
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <dolby_ms12.h>
-#include <dolby_ms12_config_params.h>
-#include <dolby_ms12_status.h>
+#include "dolby_ms12.h"
+#include "dolby_ms12_config_params.h"
+#include "dolby_ms12_status.h"
 #include <system/audio.h>
+#include <time.h>
 
 
 
@@ -53,6 +53,23 @@ struct dolby_ms12_desc {
     2) aux thread is writing. direct thread is preparing the ms12 module.
     */
     pthread_mutex_t lock;
+    /*
+    for higher effiency we dot use the the lock for main write
+    function,as ms clear up may called by binder  thread
+    we need protect the risk situation
+    */
+    pthread_mutex_t main_lock;
+    pthread_t dolby_ms12_threadID;
+    bool dolby_ms12_thread_exit;
+    bool is_continuous_paused;
+    int device;//alsa_device_t
+    struct timespec timestamp; //zzz
+    uint64_t last_frames_postion;
+    /*
+    latency frame is maintained by the whole device output.
+    whatever what bistream is outputed we need use this latency frames.
+    */
+    int latency_frame;
 };
 
 /*
@@ -82,17 +99,16 @@ int get_dolby_ms12_init(struct dolby_ms12_desc *ms12_desc);
  * config_sample_rate: sample rate.
  */
 int aml_ms12_config(struct dolby_ms12_desc *ms12_desc
-    , audio_format_t config_format
-    , audio_channel_mask_t config_channel_mask
-    , int config_sample_rate
-    , audio_format_t output_format);
+                    , audio_format_t config_format
+                    , audio_channel_mask_t config_channel_mask
+                    , int config_sample_rate
+                    , audio_format_t output_format);
 /*
  *@brief cleanup the dolby ms12
  */
 int aml_ms12_cleanup(struct dolby_ms12_desc *ms12_desc);
 
 int aml_ms12_update_runtime_params(struct dolby_ms12_desc *ms12_desc);
-#endif
 
 
 #endif //end of __AML_AUDIO_MS12_H__

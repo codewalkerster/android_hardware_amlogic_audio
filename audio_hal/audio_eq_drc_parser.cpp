@@ -51,6 +51,7 @@ static int handle_audio_model_data(IniParser* pIniParser, struct audio_eq_drc_in
 
 static int handle_audio_source_gain_data(IniParser* pIniParser, struct audio_eq_drc_info_s* p_attr);
 static int handle_audio_post_gain_data(IniParser* pIniParser, struct audio_eq_drc_info_s* p_attr);
+static int handle_audio_ng_data(IniParser* pIniParser, struct audio_eq_drc_info_s* p_attr);
 
 static int handle_audio_volume_data(IniParser* pIniParser, struct audio_eq_drc_info_s* p_attr);
 
@@ -115,6 +116,7 @@ int handle_audio_eq_drc_ini(char *file_name, struct audio_eq_drc_info_s *p_attr)
     handle_audio_source_gain_data(pIniParser, p_attr);
     handle_audio_post_gain_data(pIniParser, p_attr);
 
+    handle_audio_ng_data(pIniParser, p_attr);
     handle_audio_volume_data(pIniParser, p_attr);
 
     handle_audio_eq_data(pIniParser, p_attr);
@@ -308,6 +310,28 @@ static int handle_audio_volume_data(IniParser* pIniParser, struct audio_eq_drc_i
     return 0;
 }
 
+static int handle_audio_ng_data(IniParser* pIniParser, struct audio_eq_drc_info_s* p_attr)
+{
+    const char *ini_value = NULL;
+    if (!pIniParser->getSection(pIniParser, "noise_gate")) {
+        ITEM_LOGD("%s, Section -> [noise_gate] is not exist\n", __FUNCTION__);
+        return 0;
+    }
+    ini_value = pIniParser->GetString("noise_gate", "ng_enable", "0");
+    ITEM_LOGD("%s, noise gate enable is (%s)\n", __FUNCTION__, ini_value);
+    p_attr->aml_ng_enable = strtoul(ini_value, NULL, 0);
+    ini_value = pIniParser->GetString("noise_gate", "ng_level", "-75.0");
+    ITEM_LOGD("%s, noise gate level is (%s)\n", __FUNCTION__, ini_value);
+    p_attr->aml_ng_level = atof(ini_value);
+    ini_value = pIniParser->GetString("noise_gate", "ng_attrack_time", "3000");
+    ITEM_LOGD("%s, noise gate attrack time (%s)\n", __FUNCTION__, ini_value);
+    p_attr->aml_ng_attrack_time = strtoul(ini_value, NULL, 0);
+    ini_value = pIniParser->GetString("noise_gate", "ng_release_time", "50");
+    ITEM_LOGD("%s, noise gate release time (%s)\n", __FUNCTION__, ini_value);
+    p_attr->aml_ng_release_time = strtoul(ini_value, NULL, 0);
+    return 0;
+}
+
 static int handle_audio_eq_data(IniParser* pIniParser, struct audio_eq_drc_info_s* p_attr)
 {
     int tmp_ret = 0;
@@ -375,6 +399,7 @@ static int handle_audio_drc_data(IniParser* pIniParser, struct audio_eq_drc_info
     ITEM_LOGD("%s, drc_byte_mode is (%s)\n", __FUNCTION__, ini_value);
     p_attr->drc_byte_mode = strtoul(ini_value, NULL, 0);
 
+    tmp_ret |= handle_one_audio_eq_drc_data(pIniParser, &p_attr->drc_table, (char *)"drc_param", (char *)"drc_table");
     tmp_ret |= handle_one_audio_eq_drc_data(pIniParser, &p_attr->drc_ead, (char *)"drc_param", (char *)"drc_ead_table");
     tmp_ret |= handle_one_audio_eq_drc_data(pIniParser, &p_attr->drc_tko, (char *)"drc_param", (char *)"drc_tko_table");
 #if 0

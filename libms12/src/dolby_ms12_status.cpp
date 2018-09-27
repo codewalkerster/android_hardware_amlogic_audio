@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <dlfcn.h>
-#include <media/AudioSystem.h>
+//#include <media/AudioSystem.h>
 
 #include "DolbyMS12Status.h"
 #include "dolby_ms12_status.h"
@@ -59,33 +59,37 @@ extern "C" void dolby_ms12_status_self_cleanup(void)
 extern "C" void set_mixer_playback_status(int flags)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setMixerPlayBackStatus(flags);
+    }
 }
 
 extern "C" int get_mixer_playback_status(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getMixerPlaybackStatus();
-    else
+    } else {
         return MIXER_PLAYBACK_STOP;
+    }
 }
 
 extern "C" void set_direct_or_offload_playback_status(int flags)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setDirectOrOffloadPlaybackStatus(flags);
+    }
 }
 
 extern "C" int get_direct_or_offload_playback_status(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getDirectOrOffloadPlaybackStatus();
-    else
+    } else {
         return DIRECT_0R_OFFLOAD_PLAYBACK_STOP;
+    }
 }
 
 extern "C" void set_mixer_playback_audio_stream_out_params(
@@ -95,8 +99,9 @@ extern "C" void set_mixer_playback_audio_stream_out_params(
     , audio_devices_t devices)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setMixerPlaybackAudioStreamOutParams(format, channel_mask, sample_rate, devices);
+    }
 }
 
 extern "C" void get_mixer_playback_audio_stream_out_params(
@@ -106,8 +111,9 @@ extern "C" void get_mixer_playback_audio_stream_out_params(
     , audio_devices_t *devices)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getMixerPlaybackAudioStreamOutParams(format, channel_mask, sample_rate, devices);
+    }
 }
 
 extern "C" void set_direct_or_offload_playback_audio_stream_out_params(
@@ -117,8 +123,9 @@ extern "C" void set_direct_or_offload_playback_audio_stream_out_params(
     , audio_devices_t devices)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setDirectOrOffloadPlaybackAudioStreamOutParams(format, channel_mask, sample_rate, devices);
+    }
 }
 
 extern "C" void get_direct_or_offload_playback_audio_stream_out_params(
@@ -128,40 +135,45 @@ extern "C" void get_direct_or_offload_playback_audio_stream_out_params(
     , audio_devices_t *devices)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getDirectOrOffloadPlaybackAudioStreamOutParams(format, channel_mask, sample_rate, devices);
+    }
 }
 
 extern "C" void set_offload_playback_dolby_ms12_output_format(audio_format_t format)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setOffloadPlaybackDolbyMS12OutputFormat(format);
+    }
 }
 
 extern "C" audio_format_t get_offload_playback_dolby_ms12_output_format(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getOffloadPlaybackDolbyMS12OutputFormat();
-    else
+    } else {
         return AUDIO_FORMAT_DEFAULT;
+    }
 }
 
 extern "C" void set_offload_playback_audio_stream_out_format(audio_format_t format)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setOffloadPlaybackAudioStreamOutFormat(format);
+    }
 }
 
 extern "C" audio_format_t get_offload_playback_audio_stream_out_format(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getOffloadPlaybackAudioStreamOutFormat();
-    else
+    } else {
         return AUDIO_FORMAT_INVALID;
+    }
 }
 
 
@@ -171,8 +183,9 @@ extern "C" audio_format_t get_offload_playback_audio_stream_out_format(void)
 extern "C" void set_audio_main_format(audio_format_t format)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setAudioMainFormat(format);
+    }
 }
 
 /*
@@ -181,10 +194,11 @@ extern "C" void set_audio_main_format(audio_format_t format)
 extern "C" audio_format_t get_audio_main_format(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getAudioMainFormat();
-    else
+    } else {
         return AUDIO_FORMAT_INVALID;
+    }
 }
 
 
@@ -194,8 +208,9 @@ extern "C" audio_format_t get_audio_main_format(void)
 extern "C" void set_audio_associate_format(audio_format_t format)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setAudioAssociateFormat(format);
+    }
 }
 
 /*
@@ -204,10 +219,11 @@ extern "C" void set_audio_associate_format(audio_format_t format)
 extern "C" audio_format_t get_audio_associate_format(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getAudioAssociateFormat();
-    else
+    } else {
         return AUDIO_FORMAT_INVALID;
+    }
 }
 /*
  *@brief set Audio Hal system format
@@ -215,8 +231,9 @@ extern "C" audio_format_t get_audio_associate_format(void)
 extern "C" void set_audio_system_format(audio_format_t format)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setAudioSystemFormat(format);
+    }
 }
 
 /*
@@ -225,10 +242,11 @@ extern "C" void set_audio_system_format(audio_format_t format)
 extern "C" audio_format_t get_audio_system_format(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getAudioSystemFormat();
-    else
+    } else {
         return AUDIO_FORMAT_INVALID;
+    }
 }
 
 
@@ -238,8 +256,9 @@ extern "C" audio_format_t get_audio_system_format(void)
 extern "C" void set_dd_support_flag(bool flag)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setDDSupportFlag(flag);
+    }
 }
 
 /*
@@ -248,10 +267,11 @@ extern "C" void set_dd_support_flag(bool flag)
 extern "C" bool get_dd_support_flag(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getDDSupportFlag();
-    else
+    } else {
         return false;
+    }
 }
 
 /*
@@ -260,8 +280,9 @@ extern "C" bool get_dd_support_flag(void)
 extern "C" void set_ddp_support_flag(bool flag)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setDDPSupportFlag(flag);
+    }
 }
 
 /*
@@ -270,10 +291,11 @@ extern "C" void set_ddp_support_flag(bool flag)
 extern "C" bool get_ddp_support_flag(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getDDPSupportFlag();
-    else
+    } else {
         return false;
+    }
 }
 
 /*
@@ -282,8 +304,9 @@ extern "C" bool get_ddp_support_flag(void)
 extern "C" void set_dd_max_audio_channel_mask(audio_channel_mask_t channel_mask)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setDDMaxAudioChannelMask(channel_mask);
+    }
 }
 
 /*
@@ -292,10 +315,11 @@ extern "C" void set_dd_max_audio_channel_mask(audio_channel_mask_t channel_mask)
 extern "C" audio_channel_mask_t get_dd_max_audio_channel_mask(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getDDMaxAudioChannelMask();
-    else
+    } else {
         return AUDIO_CHANNEL_NONE;
+    }
 }
 
 
@@ -305,8 +329,9 @@ extern "C" audio_channel_mask_t get_dd_max_audio_channel_mask(void)
 extern "C" void set_ddp_max_audio_channel_mask(audio_channel_mask_t channel_mask)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setDDPMaxAudioChannelMask(channel_mask);
+    }
 }
 
 /*
@@ -315,10 +340,11 @@ extern "C" void set_ddp_max_audio_channel_mask(audio_channel_mask_t channel_mask
 extern "C" audio_channel_mask_t get_ddp_max_audio_channel_mask(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getDDPMaxAudioChannelMask();
-    else
+    } else {
         return AUDIO_CHANNEL_NONE;
+    }
 }
 
 
@@ -328,8 +354,9 @@ extern "C" audio_channel_mask_t get_ddp_max_audio_channel_mask(void)
 extern "C" void set_max_format_by_user_setting(audio_format_t format)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->setMaxFormatByUserSetting(format);
+    }
 }
 
 /*
@@ -338,8 +365,9 @@ extern "C" void set_max_format_by_user_setting(audio_format_t format)
 extern "C" audio_format_t get_max_format_by_user_setting(void)
 {
     android::DolbyMS12Status* dolby_ms12_status_instance = getInstance();
-    if (dolby_ms12_status_instance)
+    if (dolby_ms12_status_instance) {
         return dolby_ms12_status_instance->getMaxFormatByUserSetting();
-    else
+    } else {
         return AUDIO_FORMAT_PCM;
+    }
 }

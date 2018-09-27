@@ -89,8 +89,13 @@ struct audio_eq_drc_info_s {
     int drc_enable;
     char drc_name[32];
     int drc_byte_mode;
+    struct audio_eq_drc_reg_s drc_table;
     struct audio_eq_drc_reg_s drc_ead;
     struct audio_eq_drc_reg_s drc_tko;
+    int aml_ng_enable;
+    float aml_ng_level;
+    int aml_ng_attrack_time;
+    int aml_ng_release_time;
 };
 
 struct eq_drc_device_config_s {
@@ -98,6 +103,8 @@ struct eq_drc_device_config_s {
     char ini_file[100];
     char eq[50];
     char drc[50];
+    char eq_table[50];
+    char drc_table[50];
     char model[50];
     char master_vol[50];
     char ch1_vol[50];

@@ -18,6 +18,11 @@
 
 #ifndef  _AUDIO_HW_UTILS_H_
 #define _AUDIO_HW_UTILS_H_
+#include <system/audio.h>
+#include "audio_hw.h"
+#include "aml_audio_types_def.h"
+
+int64_t aml_gettime(void);
 int get_sysfs_uint(const char *path, uint *value);
 int sysfs_set_sysfs_str(const char *path, const char *val);
 int get_sysfs_int(const char *path);
@@ -30,4 +35,13 @@ int mystrstr(char *mystr, char *substr);
 void *convert_audio_sample_for_output(int input_frames, int input_format, int input_ch, void *input_buf, int *out_size/*,float lvol*/);
 int  aml_audio_start_trigger(void *stream);
 int is_txlx_chip();
+int aml_audio_get_debug_flag();
+int aml_audio_dump_audio_bitstreams(const char *path, const void *buf, size_t bytes);
+int aml_audio_get_arc_latency_offset(int format);
+int aml_audio_get_ddp_frame_size();
+uint32_t out_get_latency_frames(const struct audio_stream_out *stream);
+int aml_audio_get_spdif_tuning_latency(void);
+int aml_audio_get_arc_tuning_latency(audio_format_t arc_afmt);
+int aml_audio_get_src_tune_latency(enum patch_src_assortion patch_src);
+int sysfs_get_sysfs_str(const char *path, const char *val, int len);
 #endif

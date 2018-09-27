@@ -23,10 +23,12 @@
 
 #ifdef __cplusplus
 
-namespace android {
+namespace android
+{
 typedef int (*output_callback)(void *buffer, void *priv, size_t size);
 
-class DolbyMS12 {
+class DolbyMS12
+{
 
 public:
     // static DolbyMS12* getInstance();
@@ -39,29 +41,29 @@ public:
     virtual void *  DolbyMS12Init(int configNum, char **configParams);
     virtual void    DolbyMS12Release(void *dolbyMS12_pointer);
     virtual int     DolbyMS12InputMain(
-                            void *dolbyMS12_pointer
-                            , const void *audio_stream_out_buffer //ms12 input buffer
-                            , size_t audio_stream_out_buffer_size //ms12 input buffer size
-                            , int audio_stream_out_format
-                            , int audio_stream_out_channel_num
-                            , int audio_stream_out_sample_rate
-                            );
+        void *dolbyMS12_pointer
+        , const void *audio_stream_out_buffer //ms12 input buffer
+        , size_t audio_stream_out_buffer_size //ms12 input buffer size
+        , int audio_stream_out_format
+        , int audio_stream_out_channel_num
+        , int audio_stream_out_sample_rate
+    );
     virtual int     DolbyMS12InputAssociate(
-                            void *dolbyMS12_pointer
-                            , const void *audio_stream_out_buffer //ms12 input buffer
-                            , size_t audio_stream_out_buffer_size //ms12 input buffer size
-                            , int audio_stream_out_format
-                            , int audio_stream_out_channel_num
-                            , int audio_stream_out_sample_rate
-                            );
+        void *dolbyMS12_pointer
+        , const void *audio_stream_out_buffer //ms12 input buffer
+        , size_t audio_stream_out_buffer_size //ms12 input buffer size
+        , int audio_stream_out_format
+        , int audio_stream_out_channel_num
+        , int audio_stream_out_sample_rate
+    );
     virtual int     DolbyMS12InputSystem(
-                            void *dolbyMS12_pointer
-                            , const void *audio_stream_out_buffer //ms12 input buffer
-                            , size_t audio_stream_out_buffer_size //ms12 input buffer size
-                            , int audio_stream_out_format
-                            , int audio_stream_out_channel_num
-                            , int audio_stream_out_sample_rate
-                            );
+        void *dolbyMS12_pointer
+        , const void *audio_stream_out_buffer //ms12 input buffer
+        , size_t audio_stream_out_buffer_size //ms12 input buffer size
+        , int audio_stream_out_format
+        , int audio_stream_out_channel_num
+        , int audio_stream_out_sample_rate
+    );
 
 #ifdef REPLACE_OUTPUT_BUFFER_WITH_CALLBACK
 
@@ -72,18 +74,42 @@ public:
 #else
 
     virtual int     DolbyMS12Output(
-                            void *dolbyMS12_pointer
-                            , const void *ms12_out_buffer //ms12 output buffer
-                            , size_t request_out_buffer_size //ms12 output buffer size
-                            );
+        void *dolbyMS12_pointer
+        , const void *ms12_out_buffer //ms12 output buffer
+        , size_t request_out_buffer_size //ms12 output buffer size
+    );
 
 #endif
 
     virtual int     DolbyMS12UpdateRuntimeParams(
-                            void *DolbyMS12Pointer
-                            , int configNum
-                            , char **configParams);
-// protected:
+        void *DolbyMS12Pointer
+        , int configNum
+        , char **configParams);
+
+    virtual int     DolbyMS12SchedulerRun(void *DolbyMS12Pointer);
+
+    virtual void    DolbyMS12SetQuitFlag(int is_quit);
+
+    virtual void    DolbyMS12FlushInputBuffer(void);
+
+    virtual void    DolbyMS12FlushMainInputBuffer(void);
+
+    virtual void    DolbyMS12SetMainDummy(int type, int dummy);
+
+    virtual unsigned long long DolbyMS12GetNBytesConsumedOfUDC(void);
+
+    virtual void    DolbyMS12GetPCMOutputSize(unsigned long long *all_output_size, unsigned long long *ms12_generate_zero_size);
+
+    virtual void    DolbyMS12GetBitstreamOutputSize(unsigned long long *all_output_size, unsigned long long *ms12_generate_zero_size);
+
+    virtual int     DolbyMS12GetMainBufferAvail(void);
+
+    virtual int     DolbyMS12GetAssociateBufferAvail(void);
+
+    virtual int     DolbyMS12GetSystemBufferAvail(void);
+
+
+    // protected:
 
 
 private:

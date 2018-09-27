@@ -44,6 +44,18 @@
 #include "audio_hw.h"
 #include <audio_utils/primitives.h>
 
+#ifdef LOG_NDEBUG_FUNCTION
+#define LOGFUNC(...) ((void)0)
+#else
+#define LOGFUNC(...) (ALOGD(__VA_ARGS__))
+#endif
+
+int64_t aml_gettime(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return ((int64_t)(tv.tv_sec) * 1000000 + (int64_t)(tv.tv_usec));
+}
 int get_sysfs_uint(const char *path, uint *value)
 {
     int fd;
@@ -339,9 +351,167 @@ int aml_audio_start_trigger(void *stream)
     pcm_stop(aml_out->pcm);
     sprintf(tempbuf, "AUDIO_START:0x%x", adev->first_apts);
     ALOGI("audio start set tsync -> %s", tempbuf);
+    sysfs_set_sysfs_str(TSYNC_ENABLE, "1"); // enable avsync
+    sysfs_set_sysfs_str(TSYNC_MODE, "1"); // enable avsync
     if (sysfs_set_sysfs_str(TSYNC_EVENT, tempbuf) == -1) {
         ALOGE("set AUDIO_START failed \n");
         return -1;
     }
     return 0;
+}
+
+int aml_audio_get_debug_flag()
+{
+    char buf[PROPERTY_VALUE_MAX];
+    int ret = -1;
+    int debug_flag = 0;
+    ret = property_get("media.audio.hal.debug", buf, NULL);
+    if (ret > 0) {
+        debug_flag = atoi(buf);
+    }
+    return debug_flag;
+}
+
+int aml_audio_dump_audio_bitstreams(const char *path, const void *buf, size_t bytes)
+{
+    if (!path) {
+        return 0;
+    }
+
+    FILE *fp = fopen(path, "a+");
+    if (fp) {
+        int flen = fwrite((char *)buf, 1, bytes, fp);
+        fclose(fp);
+    }
+
+    return 0;
+}
+int aml_audio_get_arc_latency_offset(int aformat)
+{
+    char buf[PROPERTY_VALUE_MAX];
+    int ret = -1;
+    int latency_ms = 0;
+    char *prop_name = NULL;
+    if (aformat == AUDIO_FORMAT_AC3) {
+        prop_name = "media.audio.hal.arc_latency.dd";
+        latency_ms = -30;
+    } else if (aformat == AUDIO_FORMAT_E_AC3) {
+        prop_name = "media.audio.hal.arc_latency.ddp";
+        latency_ms = -40;
+    } else {
+        prop_name = "media.audio.hal.arc_latency.pcm";
+        latency_ms = -30;
+    }
+    ret = property_get(prop_name, buf, NULL);
+    if (ret > 0) {
+        latency_ms = atoi(buf);
+    }
+    return latency_ms;
+}
+
+int aml_audio_get_ddp_frame_size()
+{
+    int frame_size = DDP_FRAME_SIZE;
+    char buf[PROPERTY_VALUE_MAX];
+    int ret = -1;
+    char *prop_name = "media.audio.hal.frame_size";
+    ret = property_get(prop_name, buf, NULL);
+    if (ret > 0) {
+        frame_size = atoi(buf);
+    }
+    return frame_size;
+}
+
+uint32_t out_get_latency_frames(const struct audio_stream_out *stream)
+{
+    const struct aml_stream_out *out = (const struct aml_stream_out *)stream;
+    snd_pcm_sframes_t frames = 0;
+    uint32_t whole_latency_frames;
+    int ret = 0;
+
+    whole_latency_frames = out->config.period_size * out->config.period_count;
+    if (!out->pcm || !pcm_is_ready(out->pcm)) {
+        return whole_latency_frames;
+    }
+    ret = pcm_ioctl(out->pcm, SNDRV_PCM_IOCTL_DELAY, &frames);
+    if (ret < 0) {
+        return whole_latency_frames;
+    }
+    return frames;
+}
+
+int aml_audio_get_spdif_tuning_latency(void)
+{
+    char *prop_name = "persist.audio.hal.spdif_ltcy_ms";
+    char buf[PROPERTY_VALUE_MAX];
+    int latency_ms = 0;
+    int ret = -1;
+
+    ret = property_get(prop_name, buf, NULL);
+    if (ret > 0) {
+        latency_ms = atoi(buf);
+    }
+
+    return latency_ms;
+}
+
+int aml_audio_get_arc_tuning_latency(audio_format_t arc_fmt)
+{
+    char *prop_name = NULL;
+    char buf[PROPERTY_VALUE_MAX];
+    int latency_ms = 0;
+    int ret = -1;
+
+    switch (arc_fmt) {
+    case AUDIO_FORMAT_PCM_16_BIT:
+        prop_name = "persist.audio.arc_ltcy.pcm";
+        break;
+    case AUDIO_FORMAT_AC3:
+        prop_name = "persist.audio.arc_ltcy.dd";
+        break;
+    case AUDIO_FORMAT_E_AC3:
+        prop_name = "persist.audio.arc_ltcy.ddp";
+        break;
+    default:
+        ALOGE("%s(), unsupported audio arc_fmt: %#x", __func__, arc_fmt);
+        return 0;
+    }
+
+    ret = property_get(prop_name, buf, NULL);
+    if (ret > 0) {
+        latency_ms = atoi(buf);
+    }
+
+    return latency_ms;
+}
+
+int aml_audio_get_src_tune_latency(enum patch_src_assortion patch_src) {
+    char *prop_name = NULL;
+    char buf[PROPERTY_VALUE_MAX];
+    int latency_ms = 0;
+    int ret = -1;
+
+    switch (patch_src)
+    {
+    case SRC_HDMIIN:
+        prop_name = "persist.audio.tune_ms.hdmiin";
+        break;
+    case SRC_ATV:
+        prop_name = "persist.audio.tune_ms.atv";
+        break;
+    case SRC_LINEIN:
+        prop_name = "persist.audio.tune_ms.linein";
+        break;
+    default:
+        ALOGE("%s(), unsupported audio patch source: %d", __func__, patch_src);
+        return 0;
+    }
+
+    ret = property_get(prop_name, buf, NULL);
+    if (ret > 0)
+    {
+        latency_ms = atoi(buf);
+    }
+
+    return latency_ms;
 }

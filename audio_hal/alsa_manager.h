@@ -17,6 +17,7 @@
 #ifndef _ALSA_MANAGER_H_
 #define _ALSA_MANAGER_H_
 
+#include "audio_hw.h"
 /**
  * pcm open with configs in streams: card, device, pcm_config
  * If device has been opened, close it and reopen with new params
@@ -39,5 +40,8 @@ size_t aml_alsa_output_write(struct audio_stream_out *stream,
  */
 int aml_alsa_output_get_letancy(struct audio_stream_out *stream);
 
-
+/*
+ *@brief close continuous audio device
+ */
+void aml_close_continuous_audio_device(struct aml_audio_device *adev);
 #endif // _ALSA_MANAGER_H_

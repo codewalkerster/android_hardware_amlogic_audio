@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Amlogic Corporation.
+ * Copyright (C) 2017 Amlogic Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
+#ifndef _DOLBY_LIB_API_H_
+#define _DOLBY_LIB_API_H_
 
 
-#ifndef _AUDIO_HW_PROFILE_H_
-#define _AUDIO_HW_PROFILE_H_
+/** Dolby Lib Type used in Current System */
+typedef enum eDolbyLibType {
+    eDolbyNull  = 0,
+    eDolbyDcvLib  = 1,
+    eDolbyMS12Lib = 2,
+} eDolbyLibType_t;
 
-int get_external_card(int type);
-int get_aml_card();
-int get_spdif_port();
-char*  get_hdmi_sink_cap(const char *keys,audio_format_t format);
-char*  get_hdmi_arc_cap(unsigned *ad, int maxsize, const char *keys);
-char *strdup_hdmi_arc_cap_default(const char *keys, audio_format_t format);
-#endif
+
+enum eDolbyLibType detect_dolby_lib_type(void);
+
+
+#endif //_DOLBY_LIB_API_H_

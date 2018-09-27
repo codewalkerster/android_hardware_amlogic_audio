@@ -17,7 +17,6 @@
 #ifndef _AUDIO_HW_MS12_H_
 #define _AUDIO_HW_MS12_H_
 
-#ifdef DOLBY_MS12_ENABLE
 #include <tinyalsa/asoundlib.h>
 #include <system/audio.h>
 #include <stdbool.h>
@@ -70,7 +69,20 @@ int dolby_ms12_system_process(
 /*
  *@brief get dolby ms12 cleanup
  */
-int get_dolby_ms12_cleanup(struct aml_audio_device *adev);
+int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12);
+
+/*
+ *@brief set dolby ms12 primary gain
+ */
+int set_dolby_ms12_primary_input_db_gain(struct dolby_ms12_desc *ms12,
+        int db_gain);
+
+/*
+ *@brief set system app mixing status
+ * if normal pcm stream status is STANDBY, set mixing off(-xs 0)
+ * if normal pcm stream status is active, set mixing on(-xs 1)
+ */
+int set_system_app_mixing_status(struct aml_stream_out *aml_out, int stream_status);
 
 /*
  *@brief an callback for dolby ms12 pcm output
@@ -81,6 +93,10 @@ int pcm_output(void *buffer, void *priv_data, size_t size);
  *@brief an callback for dolby ms12 bitstream output
  */
 int bitstream_output(void *buffer, void *priv_data, size_t size);
-#endif //end of DOLBY_MS12_ENABLE
+
+/*
+ *@brief dolby ms12 register the callback
+ */
+int dolby_ms12_register_callback(struct aml_stream_out *aml_out);
 
 #endif //end of _AUDIO_HW_MS12_H_

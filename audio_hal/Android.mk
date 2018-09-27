@@ -37,6 +37,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
         aml_hw_mixer.c \
         alsa_manager.c \
         audio_hw_ms12.c \
+        audio_hw_dtv.c \
         aml_audio_stream.c \
         alsa_config_parameters.c \
         spdif_encoder_api.c \
@@ -44,9 +45,12 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
         audio_eq_drc_parser.cpp \
         aml_ac3_parser.c \
         aml_dcv_dec_api.c \
+        aml_dca_dec_api.c \
         alsa_device_parser.c \
         audio_post_process.c \
-        audio_format_parse.c
+        aml_avsync_tuning.c \
+        audio_format_parse.c \
+	dolby_lib_api.c
 
     LOCAL_C_INCLUDES += \
         external/tinyalsa/include \
@@ -55,15 +59,17 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
         system/media/audio_route/include \
         system/core/include \
         hardware/libhardware/include \
-        hardware/libhardware_legacy/include \
+        $(LOCAL_PATH)/../libms12/include \
+        hardmare/amlogic/audio/libms12/include \
         $(LOCAL_PATH)/../utils/include \
         $(LOCAL_PATH)/../utils/ini/include \
-        $(LOCAL_PATH)/../rcaudio
-
+        $(LOCAL_PATH)/../rcaudio \
+        $(LOCAL_PATH)/../../LibAudio/amadec/include
+    LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/lib_aml_ng.a
     LOCAL_SHARED_LIBRARIES := \
         liblog libcutils libtinyalsa \
         libaudioutils libdl libaudioroute libutils \
-        libdroidaudiospdif libamaudioutils libamlaudiorc
+        libdroidaudiospdif libamaudioutils libamlaudiorc libamadec
 
 ifeq ($(BOARD_ENABLE_NANO), true)
     LOCAL_SHARED_LIBRARIES += libnano
@@ -82,12 +88,10 @@ endif
     #LOCAL_CFLAGS += -Wall -Wunknown-pragmas
 
 #add dolby ms12support
-ifeq ($(strip $(DOLBY_MS12_ENABLE)), true)
     LOCAL_SHARED_LIBRARIES += libms12api
     LOCAL_CFLAGS += -DDOLBY_MS12_ENABLE
     LOCAL_CFLAGS += -DREPLACE_OUTPUT_BUFFER_WITH_CALLBACK
     LOCAL_C_INCLUDES += $(LOCAL_PATH)/../libms12/include
-endif
 
 #For atom project
 ifeq ($(strip $(TARGET_BOOTLOADER_BOARD_NAME)), atom)

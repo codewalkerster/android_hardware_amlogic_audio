@@ -33,6 +33,9 @@
 #include <hardware/audio.h>
 
 #include "audio_hw_utils.h"
+#include "alsa_device_parser.h"
+#define SOUND_CARDS_PATH "/proc/asound/cards"
+#define SOUND_PCM_PATH  "/proc/asound/pcm"
 
 /*
   type : 0 -> playback, 1 -> capture
@@ -69,7 +72,7 @@ get_aml_card()
     int fd = -1;
     unsigned fileSize = 512;
     char *read_buf = NULL, *pd = NULL;
-    static const char *const SOUND_CARDS_PATH = "/proc/asound/cards";
+    //    static const char *const SOUND_CARDS_PATH = "/proc/asound/cards";
     fd = open(SOUND_CARDS_PATH, O_RDONLY);
     if (fd < 0) {
         ALOGE("ERROR: failed to open config file %s error: %d\n",
@@ -90,6 +93,7 @@ get_aml_card()
         ALOGE("ERROR: failed to read config file %s error: %d\n",
               SOUND_CARDS_PATH, errno);
         close(fd);
+        free(read_buf);
         return -EINVAL;
     }
     pd = strstr(read_buf, "AML");
@@ -107,7 +111,7 @@ get_spdif_port()
     int fd = -1;
     unsigned fileSize = 512;
     char *read_buf = NULL, *pd = NULL;
-    static const char *const SOUND_PCM_PATH = "/proc/asound/pcm";
+    //    static const char *const SOUND_PCM_PATH = "/proc/asound/pcm";
     fd = open(SOUND_PCM_PATH, O_RDONLY);
     if (fd < 0) {
         ALOGE("ERROR: failed to open config file %s error: %d\n",
@@ -127,6 +131,7 @@ get_spdif_port()
         ALOGE("ERROR: failed to read config file %s error: %d\n",
               SOUND_PCM_PATH, errno);
         close(fd);
+        free(read_buf);
         return -EINVAL;
     }
     pd = strstr(read_buf, "SPDIF");
@@ -198,10 +203,10 @@ char*  get_hdmi_sink_cap(const char *keys,audio_format_t format)
             ALOGD("query hdmi channels...\n");
             /* take the 2ch suppported as default */
             size += sprintf(aud_cap, "sup_channels=%s", "AUDIO_CHANNEL_OUT_STEREO");
-            if (mystrstr(infobuf, "PCM, 8 ch") ||
+            if ((!alsa_device_is_auge() && mystrstr(infobuf, "PCM, 8 ch")) ||
                 (mystrstr(infobuf, "Dobly_Digital+") && format == AUDIO_FORMAT_E_AC3)) {
                 size += sprintf(aud_cap + size, "|%s", "AUDIO_CHANNEL_OUT_5POINT1|AUDIO_CHANNEL_OUT_7POINT1");
-            } else if (mystrstr(infobuf, "PCM, 6 ch") ||
+            } else if ((!alsa_device_is_auge() && mystrstr(infobuf, "PCM, 6 ch")) ||
                        (mystrstr(infobuf, "AC-3") && format == AUDIO_FORMAT_AC3) ||
                        /* backward compatibility for dd, if TV only supports dd+ */
                        (mystrstr(infobuf, "Dobly_Digital+") && format == AUDIO_FORMAT_AC3)) {
@@ -220,8 +225,9 @@ char*  get_hdmi_sink_cap(const char *keys,audio_format_t format)
             if (mystrstr(infobuf, "176.4")) {
                 size += sprintf(aud_cap + size, "|%s", "176400");
             }
-            if (mystrstr(infobuf, "192") || (mystrstr(infobuf, "Dobly_Digital+") &&
-                                             format == AUDIO_FORMAT_IEC61937)) {
+            if ((mystrstr(infobuf, "192") && format != AUDIO_FORMAT_IEC61937) ||
+                ((mystrstr(infobuf, "Dobly_Digital+") || mystrstr(infobuf, "DTS-HD") ||
+                  mystrstr(infobuf, "MAT")) && format == AUDIO_FORMAT_IEC61937)) {
                 size += sprintf(aud_cap + size, "|%s", "192000");
             }
         }
@@ -345,7 +351,7 @@ fail:
 
 char *strdup_hdmi_arc_cap_default(const char *keys, audio_format_t format)
 {
-    char fmt[] = "sup_formats=AUDIO_FORMAT_PCM_16_BIT|AUDIO_FORMAT_AC3|AUDIO_FORMAT_E_AC3";
+    char fmt[] = "sup_formats=AUDIO_FORMAT_PCM_16_BIT|AUDIO_FORMAT_AC3|AUDIO_FORMAT_E_AC3|AUDIO_FORMAT_IEC61937";
     char ch_mask[128] = "sup_channels=AUDIO_CHANNEL_OUT_STEREO";
     char sr[64] = "sup_sampling_rates=48000|44100";
     char *cap = NULL;
@@ -359,9 +365,12 @@ char *strdup_hdmi_arc_cap_default(const char *keys, audio_format_t format)
         switch (format) {
         case AUDIO_FORMAT_E_AC3:
             strcat(ch_mask, "|AUDIO_CHANNEL_OUT_7POINT1");
+        case AUDIO_FORMAT_IEC61937:
         case AUDIO_FORMAT_AC3:
-        case AUDIO_FORMAT_PCM_16_BIT:
             strcat(ch_mask, "|AUDIO_CHANNEL_OUT_5POINT1");
+            cap = strdup(ch_mask);
+            break;
+        case AUDIO_FORMAT_PCM_16_BIT:
             cap = strdup(ch_mask);
             break;
         default:
@@ -372,6 +381,10 @@ char *strdup_hdmi_arc_cap_default(const char *keys, audio_format_t format)
         /* take the 48 khz suppported as default */
         switch (format) {
         case AUDIO_FORMAT_E_AC3:
+            cap = strdup(sr);
+            break;
+        case AUDIO_FORMAT_IEC61937:
+            strcat(sr, "|32000|192000");
             cap = strdup(sr);
             break;
         case AUDIO_FORMAT_PCM_16_BIT:
@@ -387,8 +400,9 @@ char *strdup_hdmi_arc_cap_default(const char *keys, audio_format_t format)
         ALOGE("NOT support yet");
     }
 
-    if (!cap)
+    if (!cap) {
         cap = strdup("");
+    }
 
     return cap;
 }

@@ -24,12 +24,13 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <dlfcn.h>
-#include <media/AudioSystem.h>
+//#include <media/AudioSystem.h>
 
 #include "DolbyMS12Status.h"
 
 
-namespace android {
+namespace android
+{
 
 #define MIXER_PLAYBACK_START 1
 #define MIXER_PLAYBACK_STOP 0

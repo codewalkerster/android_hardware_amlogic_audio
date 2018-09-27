@@ -732,8 +732,8 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
     ddp_dec->outlen_pcm = 0;
     pthread_mutex_lock(&ddp_dec->lock);
 
-#if 0
     //check the sync word of dolby frames
+    if (ddp_dec->is_iec61937 == false) {
     while (ddp_dec->remain_size > 16) {
         if ((read_pointer[0] == 0x0b && read_pointer[1] == 0x77) || \
             (read_pointer[0] == 0x77 && read_pointer[1] == 0x0b)) {
@@ -748,32 +748,12 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
         ddp_dec->remain_size--;
         read_pointer++;
     }
-
-    if (total_size - ddp_dec->remain_size >= 8 && in_sync) {
+    } else {
+        //if the dolby audio is contained in 61937 format. for perfermance issue,
         //re-check the PaPbPcPd
-        unsigned char *buffer = read_pointer - 8;
-        if ((buffer[i + 0] == 0x72 && buffer[i + 1] == 0xf8 && buffer[i + 2] == 0x1f && buffer[i + 3] == 0x4e)||
-           (buffer[i + 0] == 0x4e && buffer[i + 1] == 0x1f && buffer[i + 2] == 0xf8 && buffer[i + 3] == 0x72)) {
-            unsigned int pcpd = *(uint32_t*)(buffer  + 4);
-            int pc = (pcpd & 0x1f);
-            if (pc == 0x15) {
-                int  payload_size = (pcpd >> 16);
-                if (payload_size > mFrame_size) {
-                    ALOGV("payload size %d, frame size %d\n",payload_size,mFrame_size);
-                    if (ddp_dec->remain_size < payload_size) {
-                        read_pointer -= 8;
-                        ddp_dec->remain_size += 8;
-                        memcpy(ddp_dec->inbuf, read_pointer, ddp_dec->remain_size);
-                        goto EXIT;
-                    }
-                    else
-                        mFrame_size = payload_size;
-                }
-            }
-        }
+        //TODO, we need improve the perfermance issue from the whole pipeline,such
+        //as read/write burst size optimization(DD/6144,DD+ 24576..) as some
 
-    }
-#else
     while (ddp_dec->remain_size > 16) {
         if ((read_pointer[i + 0] == 0x72 && read_pointer[i + 1] == 0xf8 && read_pointer[i + 2] == 0x1f && read_pointer[i + 3] == 0x4e)||
            (read_pointer[i + 0] == 0x4e && read_pointer[i + 1] == 0x1f && read_pointer[i + 2] == 0xf8 && read_pointer[i + 3] == 0x72)) {
@@ -796,7 +776,7 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
         read_pointer++;
     }
     read_offset = 8;
-#endif
+    }
 
     ALOGV("remain %d, frame size %d,in sync %d\n", ddp_dec->remain_size, mFrame_size, in_sync);
 
@@ -899,9 +879,10 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
             ALOGV("mFrame_size:%d, outlen_pcm:%d, ret = %d\n", mFrame_size, ddp_dec->outlen_pcm, used_size);
         }
     }
-
+    pthread_mutex_unlock(&ddp_dec->lock);
+    return 0;
 EXIT:
     pthread_mutex_unlock(&ddp_dec->lock);
-    return ret;
+    return -1;
 }
 

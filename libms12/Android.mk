@@ -11,7 +11,6 @@
  # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  # See the License for the specific language governing permissions and
  # limitations under the License.
-ifeq ($(strip $(DOLBY_MS12_ENABLE)), true)
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
@@ -26,12 +25,13 @@ LOCAL_SRC_FILES:=                     \
 
 
 LOCAL_C_INCLUDES := \
+    system/media/audio/include \
+    hardware/libhardware/include \
     $(LOCAL_PATH)/include/ \
     $(call include-path-for, audio-utils)
 
 
 LOCAL_SHARED_LIBRARIES := \
-    libmedia \
     libcutils \
     libutils \
     libdl \
@@ -47,10 +47,7 @@ LOCAL_CFLAGS := -Werror -Wall
 LOCAL_MODULE_TAGS := optional
 # uncomment to disable NEON on architectures that actually do support NEON, for benchmarking
 #LOCAL_CFLAGS += -DUSE_NEON=false
-ifeq ($(strip $(DOLBY_MS12_ENABLE)), true)
 LOCAL_CFLAGS += -DDOLBY_MS12_ENABLE
 LOCAL_CFLAGS += -DREPLACE_OUTPUT_BUFFER_WITH_CALLBACK
-endif
 
 include $(BUILD_SHARED_LIBRARY)
-endif

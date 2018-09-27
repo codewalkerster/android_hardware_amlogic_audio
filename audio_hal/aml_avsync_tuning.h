@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Amlogic Corporation.
+ * Copyright (C) 2017 Amlogic Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,20 @@
  * limitations under the License.
  */
 
+#ifndef _AML_AVSYNC_TUNING_H_
+#define _AML_AVSYNC_TUNING_H_
 
+/* FIXME: add more SAMPLERATE and CHANNEL COUNT support */
+#define SAMPLE_RATE_MS (48)
+#define CHANNEL_CNT (2)
+/* 16 bits */
+#define FRAME_SIZE (2)
 
-#ifndef _AUDIO_HW_PROFILE_H_
-#define _AUDIO_HW_PROFILE_H_
+struct aml_audio_patch;
+struct aml_audio_device;
 
-int get_external_card(int type);
-int get_aml_card();
-int get_spdif_port();
-char*  get_hdmi_sink_cap(const char *keys,audio_format_t format);
-char*  get_hdmi_arc_cap(unsigned *ad, int maxsize, const char *keys);
-char *strdup_hdmi_arc_cap_default(const char *keys, audio_format_t format);
-#endif
+int aml_dev_try_avsync(struct aml_audio_patch *patch);
+int tuning_spker_latency(struct aml_audio_device *adev,
+                         int16_t *sink_buffer, int16_t *src_buffer, size_t bytes);
+
+#endif /*_AML_AVSYNC_TUNING_H_ */

@@ -29,6 +29,7 @@
 
 #include "ac3_parser_utils.h"
 #include "aml_ac3_parser.h"
+#include "audio_format_parse.h"
 
 #define IEC61937_HEADER_SIZE 8
 
