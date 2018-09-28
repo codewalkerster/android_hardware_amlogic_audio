@@ -82,45 +82,43 @@ int sysfs_set_sysfs_str(const char *path, const char *val)
     return -1;
 }
 
-int get_sysfs_int (const char *path)
+int get_sysfs_int(const char *path)
 {
-  int val = 0;
-  int fd = open (path, O_RDONLY);
-  if (fd >= 0)
-	{
-	  char bcmd[16];
-	  read (fd, bcmd, sizeof (bcmd));
-	  val = strtol (bcmd, NULL, 10);
-	  close (fd);
-	}
-  else
-	{
-	  ALOGD ("[%s]open %s node failed! return 0\n", path, __FUNCTION__);
-	}
-  return val;
+    int val = 0;
+    int fd = open(path, O_RDONLY);
+    if (fd >= 0) {
+        char bcmd[16];
+        read(fd, bcmd, sizeof(bcmd));
+        val = strtol(bcmd, NULL, 10);
+        close(fd);
+    } else {
+        ALOGD("[%s]open %s node failed! return 0\n", path, __FUNCTION__);
+    }
+    return val;
 }
-int mystrstr(char *mystr,char *substr) {
-    int i=0;
-    int j=0;
+int mystrstr(char *mystr, char *substr)
+{
+    int i = 0;
+    int j = 0;
     int score = 0;
     int substrlen = strlen(substr);
     int ok = 0;
-    for (i =0;i < 1024 - substrlen;i++) {
-		for (j = 0;j < substrlen;j++) {
-			score += (substr[j] == mystr[i+j])?1:0;
-		}
-		if (score == substrlen) {
-		   ok = 1;
-                   break;
-		}
-		score = 0;
+    for (i = 0; i < 1024 - substrlen; i++) {
+        for (j = 0; j < substrlen; j++) {
+            score += (substr[j] == mystr[i + j]) ? 1 : 0;
         }
-	return ok;
+        if (score == substrlen) {
+            ok = 1;
+            break;
+        }
+        score = 0;
+    }
+    return ok;
 }
 void set_codec_type(int type)
 {
     char buf[16];
-    int fd = open ("/sys/class/audiodsp/digital_codec", O_WRONLY);
+    int fd = open("/sys/class/audiodsp/digital_codec", O_WRONLY);
 
     if (fd >= 0) {
         memset(buf, 0, sizeof(buf));
@@ -133,16 +131,16 @@ void set_codec_type(int type)
 unsigned char codec_type_is_raw_data(int type)
 {
     switch (type) {
-        case TYPE_AC3:
-        case TYPE_EAC3:
-        case TYPE_TRUE_HD:
-        case TYPE_DTS:
-        case TYPE_DTS_HD:
-        case TYPE_DTS_HD_MA:
-            return 1;
-        default:
-            return 0;
-   }
+    case TYPE_AC3:
+    case TYPE_EAC3:
+    case TYPE_TRUE_HD:
+    case TYPE_DTS:
+    case TYPE_DTS_HD:
+    case TYPE_DTS_HD_MA:
+        return 1;
+    default:
+        return 0;
+    }
 }
 
 int get_codec_type(int format)
@@ -164,18 +162,34 @@ int get_codec_type(int format)
         return TYPE_PCM;
     }
 }
-int getprop_bool (const char *path)
+int getprop_bool(const char *path)
 {
-  char buf[PROPERTY_VALUE_MAX];
-  int ret = -1;
+    char buf[PROPERTY_VALUE_MAX];
+    int ret = -1;
 
-  ret = property_get (path, buf, NULL);
-  if (ret > 0) {
-      if (strcasecmp (buf, "true") == 0 || strcmp (buf, "1") == 0)
-          return 1;
-  }
-  return 0;
+    ret = property_get(path, buf, NULL);
+    if (ret > 0) {
+        if (strcasecmp(buf, "true") == 0 || strcmp(buf, "1") == 0) {
+            return 1;
+        }
+    }
+    return 0;
 }
+
+int is_txlx_chip()
+{
+    char buf[PROPERTY_VALUE_MAX];
+    int ret = -1;
+
+    ret = property_get("ro.board.platform", buf, NULL);
+    if (ret > 0) {
+        if (strcasecmp(buf, "txlx") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 
 /*
 convert audio formats to supported audio format
@@ -193,8 +207,9 @@ void *convert_audio_sample_for_output(int input_frames, int input_format, int in
     int i;
     //ALOGV("intput frame %d,input ch %d,buf ptr %p,vol %f\n", input_frames, input_ch, input_buf, lvol);
     ALOG_ASSERT(input_buf);
-    if (input_ch > 2)
+    if (input_ch > 2) {
         max_ch = 8;
+    }
     //our HW need round the frames to 8 channels
     out_buf = malloc(sizeof(int) * max_ch * input_frames);
     if (out_buf == NULL) {

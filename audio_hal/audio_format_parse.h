@@ -6,6 +6,7 @@
 
 /*IEC61937 package presamble Pc value 0-4bit */
 enum IEC61937_PC_Value {
+    IEC61937_NULL               = 0x00,          ///< NULL data
     IEC61937_AC3                = 0x01,          ///< AC-3 data
     IEC61937_DTS1               = 0x0B,          ///< DTS type I   (512 samples)
     IEC61937_DTS2               = 0x0C,          ///< DTS type II  (1024 samples)
@@ -16,7 +17,7 @@ enum IEC61937_PC_Value {
     IEC61937_PAUSE              = 0x03,          ///< Pause
 };
 
-enum audio_type{
+enum audio_type {
     LPCM = 0,
     AC3,
     EAC3,
@@ -41,7 +42,7 @@ enum audio_type{
 /*min DTSHD Period 2048; max DTSHD Period 65536*/
 #define DTSHD_PERIOD_SIZE (2048)
 
-enum input_source{
+enum input_source {
     LINEIN = 0,
     ATV,
     HDMIIN,
@@ -67,15 +68,15 @@ typedef struct audio_type_parse {
     int package_size;
 
     int running_flag;
-}audio_type_parse_t;
+} audio_type_parse_t;
 
 int creat_pthread_for_audio_type_parse(
-                     pthread_t *audio_type_parse_ThreadID,
-                     void **status,
-                     int input_sr, int input_ch);
+    pthread_t *audio_type_parse_ThreadID,
+    void **status,
+    int input_sr, int input_ch);
 void exit_pthread_for_audio_type_parse(
-                     pthread_t audio_type_parse_ThreadID,
-                     void **status);
+    pthread_t audio_type_parse_ThreadID,
+    void **status);
 
 /*
  *@brief convert the audio type to android audio format
@@ -99,5 +100,9 @@ audio_channel_mask_t audio_parse_get_audio_channel_mask(audio_type_parse_t *stat
  *@brief gget current audio fromat from audio parser thread
  */
 int audio_parse_get_audio_type_direct(audio_type_parse_t *status);
+/*
+ *@brief gget current audio type from buffer data
+ */
+int audio_type_parse(void *buffer, size_t bytes, int *package_size, audio_channel_mask_t *cur_ch_mask);
 
 #endif
