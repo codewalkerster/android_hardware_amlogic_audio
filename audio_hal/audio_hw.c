@@ -6927,8 +6927,8 @@ re_write:
             }
 
             void *tmp_buffer = (void *) write_buf;
-        if (write_buf == NULL)
-            goto exit;
+            if (write_buf == NULL)
+                goto exit;
             if (aml_out->hw_sync_mode) {
                 ALOGV("mixing hw_sync mode");
 #if defined(IS_ATOM_PROJECT)
@@ -7488,7 +7488,6 @@ void *audio_patch_input_threadloop(void *data)
             }
         }
     }
-    free(patch->in_buf);
 #if defined(IS_ATOM_PROJECT)
     if (in->device & AUDIO_DEVICE_IN_LINE)
         in->device &= ~AUDIO_DEVICE_IN_LINE;
@@ -7611,7 +7610,6 @@ void *audio_patch_output_threadloop(void *data)
             ALOGV("%s(), no data in buffer, audio discontinue output!", __func__);
         }
     }
-    free(patch->out_buf);
     adev_close_output_stream_new(patch->dev, &out->stream);
     free(patch->out_buf);
     ALOGD("%s: exit", __func__);
