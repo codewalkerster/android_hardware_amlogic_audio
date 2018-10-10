@@ -6270,9 +6270,9 @@ static void config_output(struct audio_stream_out *stream)
             }
             ALOGI("ddp_dec->digital_raw:%d adev->dcvlib_bypass_enable:%d", ddp_dec->digital_raw, adev->dcvlib_bypass_enable);
             if (adev->dcvlib_bypass_enable != 1) {
-        if (ddp_dec->status != 1 && (aml_out->hal_internal_format == AUDIO_FORMAT_AC3
-                                  || aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3)) {
-            int status = dcv_decoder_init_patch(ddp_dec);
+                if (ddp_dec->status != 1 && (aml_out->hal_internal_format == AUDIO_FORMAT_AC3
+                                          || aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3)) {
+                    int status = dcv_decoder_init_patch(ddp_dec);
                     if (aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3) {
                         ddp_dec->nIsEc3 = 1;
                     } else if (aml_out->hal_internal_format == AUDIO_FORMAT_AC3) {
@@ -6286,7 +6286,7 @@ static void config_output(struct audio_stream_out *stream)
                     }
                     ALOGI("dcv_decoder_init_patch return :%d,is 61937 %d", status, ddp_dec->is_iec61937);
                 } else if (ddp_dec->status == 1 && (aml_out->hal_internal_format == AUDIO_FORMAT_AC3
-                                                    || aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3)) {
+                                          || aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3)) {
                     dcv_decoder_release_patch(ddp_dec);
                     if (ddp_dec->digital_raw > 0) {
                         struct pcm *pcm = adev->pcm_handle[DIGITAL_DEVICE];
@@ -6299,8 +6299,8 @@ static void config_output(struct audio_stream_out *stream)
                         }
                     }
                     ALOGI("dcv_decoder_release_patch release");
-        }
-            }
+                }
+           }
 
             pthread_mutex_lock(&adev->lock);
             if (!adev->hw_mixer.start_buf) {

@@ -867,12 +867,10 @@ static void *audio_dtv_patch_process_threadloop(void *data)
                 patch->dtv_first_apts_flag = 0;
                 if (patch->dtv_aformat == ACODEC_FMT_AC3) {
                     patch->aformat = AUDIO_FORMAT_AC3;
-                    dcv_decoder_init_patch(ddp_dec);
                     ddp_dec->is_iec61937  = false;
                     patch->decoder_offset = 0;
                 } else if (patch->dtv_aformat == ACODEC_FMT_EAC3) {
                     patch->aformat = AUDIO_FORMAT_E_AC3;
-                    dcv_decoder_init_patch(ddp_dec);
                     ddp_dec->is_iec61937  = false;
                     patch->decoder_offset = 0;
                 } else if (patch->dtv_aformat == ACODEC_FMT_DTS) {
