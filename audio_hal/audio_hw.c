@@ -3858,7 +3858,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
      * This is because out_set_parameters() with a route is not
      * guaranteed to be called after an output stream is opened.
      */
-    if (getprop_bool("ro.platform.is.tv")) {
+    if (getprop_bool("ro.vendor.platform.is.tv")) {
         out->is_tv_platform = 1;
         out->config.channels = 8;
         out->config.format = PCM_FORMAT_S32_LE;
@@ -8840,7 +8840,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->hw_device.set_parameters = adev_set_parameters;
     adev->hw_device.get_parameters = adev_get_parameters;
     adev->hw_device.get_input_buffer_size = adev_get_input_buffer_size;
-    if (getprop_bool("ro.platform.is.tv")) {
+    if (getprop_bool("ro.vendor.platform.is.tv")) {
         adev->hw_device.open_output_stream = adev_open_output_stream_new;
         adev->hw_device.close_output_stream = adev_close_output_stream_new;
     } else {
