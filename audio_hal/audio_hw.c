@@ -6033,8 +6033,8 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
             aml_out->tmp_buffer_8ch_size = 8 * bytes;
         }
         for (i = 0; i < out_frames; i++) {
-            aml_out->tmp_buffer_8ch[8 * i] = (int32_t)effect_tmp_buf[2 * i] << 16;
-            aml_out->tmp_buffer_8ch[8 * i + 1] = (int32_t)effect_tmp_buf[2 * i + 1] << 16;
+            aml_out->tmp_buffer_8ch[8 * i] = (int32_t)tmp_buffer[2 * i] << 16;
+            aml_out->tmp_buffer_8ch[8 * i + 1] = (int32_t)tmp_buffer[2 * i + 1] << 16;
             aml_out->tmp_buffer_8ch[8 * i + 2] = (int32_t)effect_tmp_buf[2 * i] << 16;
             aml_out->tmp_buffer_8ch[8 * i + 3] = (int32_t)effect_tmp_buf[2 * i + 1] << 16;
             aml_out->tmp_buffer_8ch[8 * i + 4] = (int32_t)tmp_buffer[2 * i] << 16;
@@ -8905,7 +8905,8 @@ static int adev_set_audio_port_config (struct audio_hw_device *dev, const struct
                 aml_dev->src_gain[inport] = 1.0;
                 aml_dev->sink_gain[outport] = DbToAmpl(config->gain.values[0] / 100);
 #else
-                aml_dev->src_gain[inport] = get_volume_by_index(config->gain.values[0]);
+                //aml_dev->src_gain[inport] = get_volume_by_index(config->gain.values[0]);
+                aml_dev->src_gain[inport] = 1.0;
                 aml_dev->sink_gain[outport] = get_volume_by_index(config->gain.values[0]);
 #endif
                 if (eDolbyMS12Lib == aml_dev->dolby_lib_type) {
