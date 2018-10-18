@@ -5399,7 +5399,7 @@ audio_format_t get_output_format (struct audio_stream_out *stream)
     return output_format;
 }
 ssize_t aml_audio_spdif_output (struct audio_stream_out *stream,
-                                const void *buffer, size_t byte)
+                                void *buffer, size_t byte)
 {
     struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
     struct aml_audio_device *aml_dev = aml_out->dev;
@@ -5412,6 +5412,12 @@ ssize_t aml_audio_spdif_output (struct audio_stream_out *stream,
         ALOGE ("%s() not support, dual flag = %d",
                __func__, aml_out->dual_output_flag);
         return -EINVAL;
+    }
+
+    // SWPL-412, when input source is DTV, and UI set "parental_control_av_mute" command to audio hal
+    // we need to mute SPDIF audio output here
+    if (aml_dev->patch_src == SRC_DTV && aml_dev->parental_control_av_mute) {
+        memset(buffer,0x0,byte);
     }
 
     if (!pcm) {

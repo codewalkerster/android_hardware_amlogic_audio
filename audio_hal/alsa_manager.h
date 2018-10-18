@@ -33,7 +33,7 @@ void aml_alsa_output_close(struct audio_stream_out *stream);
  * pcm_write to the pcm handle saved in stream instance.
  */
 size_t aml_alsa_output_write(struct audio_stream_out *stream,
-                        const void *buffer,
+                        void *buffer,
                         size_t bytes);
 /**
  * get the stream latency.

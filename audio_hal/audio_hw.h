@@ -627,7 +627,7 @@ audio_format_t get_output_format(struct audio_stream_out *stream);
 void *audio_patch_output_threadloop(void *data);
 
 ssize_t aml_audio_spdif_output(struct audio_stream_out *stream,
-                const void *buffer, size_t bytes);
+                void *buffer, size_t bytes);
 
 /*
  *@brief audio_hal_data_processing
