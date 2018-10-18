@@ -6861,7 +6861,10 @@ re_write:
                 /*wirte raw data*/
                 if (ddp_dec->outlen_raw > 0 && ddp_dec->digital_raw == 1 && adev->hdmi_format == 5) {/*dual output: pcm & raw*/
                     aml_audio_spdif_output(stream, (void *)ddp_dec->outbuf_raw, ddp_dec->outlen_raw);
-                } else if (ddp_dec->outlen_raw > 0 && ddp_dec->digital_raw > 0) {/*single raw output*/
+                }
+                //now only TV ARC output is using single output. we are implementing the OTT HDMI output in this case.
+                // TODO  add OUTPUT_HDMI in this case
+                else if (ddp_dec->outlen_raw > 0 && ddp_dec->digital_raw > 0 && adev->active_outport == OUTPORT_HDMI_ARC) {/*single raw output*/
                     output_format = get_output_format(stream);
                     if (audio_hal_data_processing(stream, (void *)ddp_dec->outbuf_raw, ddp_dec->outlen_raw, &output_buffer, &output_buffer_bytes, output_format) == 0) {
                         hw_write(stream, output_buffer, output_buffer_bytes, output_format);
