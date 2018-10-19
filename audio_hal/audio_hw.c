@@ -3865,7 +3865,9 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
      * This is because out_set_parameters() with a route is not
      * guaranteed to be called after an output stream is opened.
      */
-    if (getprop_bool("ro.vendor.platform.is.tv")) {
+    //if (getprop_bool("ro.vendor.platform.is.tv"))
+#ifdef TV_AUDIO_OUTPUT 
+    {
         out->is_tv_platform = 1;
         out->config.channels = 8;
         out->config.format = PCM_FORMAT_S32_LE;
@@ -3887,6 +3889,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         }
         memset(out->audioeffect_tmp_buffer, 0, out->config.period_size * 6);
     }
+#endif
     out->hwsync =  calloc(1, sizeof(audio_hwsync_t));
     if (!out->hwsync) {
         ALOGE("%s,malloc hwsync failed", __func__);
@@ -8847,13 +8850,19 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->hw_device.set_parameters = adev_set_parameters;
     adev->hw_device.get_parameters = adev_get_parameters;
     adev->hw_device.get_input_buffer_size = adev_get_input_buffer_size;
-    if (getprop_bool("ro.vendor.platform.is.tv")) {
+#ifdef TV_AUDIO_OUTPUT
+    //if (getprop_bool("ro.vendor.platform.is.tv")) 
+    {
         adev->hw_device.open_output_stream = adev_open_output_stream_new;
         adev->hw_device.close_output_stream = adev_close_output_stream_new;
-    } else {
+    }
+#else 
+    //else 
+    {
         adev->hw_device.open_output_stream = adev_open_output_stream;
         adev->hw_device.close_output_stream = adev_close_output_stream;
     }
+#endif
     adev->hw_device.open_input_stream = adev_open_input_stream;
     adev->hw_device.close_input_stream = adev_close_input_stream;
     adev->hw_device.create_audio_patch = adev_create_audio_patch;

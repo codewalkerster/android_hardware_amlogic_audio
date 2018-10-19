@@ -85,6 +85,10 @@ ifeq ($(BOARD_ENABLE_NANO), true)
 		LOCAL_CFLAGS += -DENABLE_NANO_PATCH=1
 endif
 
+ifeq ($(strip $(TARGET_WITH_TV_AUDIO_MODE)),true)
+$(info "---------tv audio mode, compiler configured 8 channels output by default--------")
+LOCAL_CFLAGS += -DTV_AUDIO_OUTPUT
+endif
     #LOCAL_CFLAGS += -Wall -Wunknown-pragmas
 
 #add dolby ms12support
