@@ -649,7 +649,7 @@ static int start_output_stream_direct (struct aml_stream_out *out)
     }
 
     card = alsa_device_get_card_index();
-    ALOGI ("%s: hdmi sound card id %d,device id %d \n", __func__, card, port);
+    ALOGI ("%s: hdmi sound card id %d\n", __func__, card);
     if (out->multich == 6) {
         /* switch to hdmi port */
         if (alsa_device_is_auge()) {
@@ -709,7 +709,14 @@ static int start_output_stream_direct (struct aml_stream_out *out)
     if (out->pcm == NULL) {
         /* switch to tdm & spdif share buffer */
         if (alsa_device_is_auge()) {
-            port = PORT_I2S;
+            /*
+            for a113 later chip,raw passthr goes to spsdifa or spdifb
+            */
+            if (format_is_passthrough(out->hal_format)) {
+                port = PORT_SPDIFB2HDMI;
+            }
+            else
+                port = PORT_I2S;
         }
         /* check to update port */
         port = alsa_device_get_pcm_index(port);
