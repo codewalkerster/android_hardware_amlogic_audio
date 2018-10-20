@@ -276,8 +276,8 @@ unsigned long dtv_hal_get_pts(struct aml_audio_patch *patch)
             (patch->outlen_after_last_validpts / (data_width * channels));
         pts += (frame_nums * 90 / samplerate);
 
-        // ALOGI("decode_offset:%d out_pcm:%d   pts:%lx,audec->last_valid_pts %lx\n",
-        //       patch->decoder_offset, patch->outlen_after_last_validpts, pts,
+        //ALOGI("decode_offset:%d out_pcm:%d   pts:%lx,audec->last_valid_pts %lx\n",
+        //     patch->decoder_offset, patch->outlen_after_last_validpts, pts,
         //     patch->last_valid_pts);
         return pts;
     }
@@ -432,8 +432,8 @@ static int dtv_patch_pcm_wirte(unsigned char *pcm_data, int size,
 {
     struct aml_audio_patch *patch = (struct aml_audio_patch *)args;
     ring_buffer_t *ringbuffer = &(patch->aml_ringbuffer);
-    int left,need_resample;
-    int write_size,return_size;
+    int left, need_resample;
+    int write_size, return_size;
     unsigned char *write_buf;
     int16_t tmpbuf[OUTPUT_BUFFER_SIZE];
     write_buf = pcm_data;
@@ -443,34 +443,35 @@ static int dtv_patch_pcm_wirte(unsigned char *pcm_data, int size,
 
     patch->sample_rate = symbolrate;
     patch->chanmask  = channel;
-    if (patch->sample_rate != 48000)
+    if (patch->sample_rate != 48000) {
         need_resample = 1;
-    else
+    } else {
         need_resample = 0;
+    }
     left = get_buffer_write_space(ringbuffer);
 
     if (left <= 0) {
         return 0;
     }
-   if (need_resample == 0 &&  patch->chanmask == 1) {
-         if (left >= 2 * size) {
-             write_size = size;
-          } else {
-             write_size = left / 2;
-          }
+    if (need_resample == 0 &&  patch->chanmask == 1) {
+        if (left >= 2 * size) {
+            write_size = size;
+        } else {
+            write_size = left / 2;
+        }
     } else if (need_resample == 1 && patch->chanmask == 2) {
-          if (left >=  size * 48000 / patch->sample_rate) {
-              write_size = size;
-          } else {
-               return 0;
-          }
+        if (left >=  size * 48000 / patch->sample_rate) {
+            write_size = size;
+        } else {
+            return 0;
+        }
 
     } else if (need_resample == 1 && patch->chanmask == 1) {
-          if (left >=  2 * size * 48000 /patch->sample_rate) {
-              write_size = size;
-          } else {
-              return 0;
-          }
+        if (left >=  2 * size * 48000 / patch->sample_rate) {
+            write_size = size;
+        } else {
+            return 0;
+        }
     } else {
         if (left >= size) {
             write_size = size;
@@ -482,50 +483,50 @@ static int dtv_patch_pcm_wirte(unsigned char *pcm_data, int size,
     return_size = write_size;
 
     if ((patch->aformat != AUDIO_FORMAT_E_AC3 &&
-          patch->aformat != AUDIO_FORMAT_AC3 &&
-          patch->aformat != AUDIO_FORMAT_DTS) ) {
-          if (patch->chanmask == 1) {
-             int16_t *buf = (int16_t *)write_buf;
-             int i = 0 ,samples_num;
-             samples_num = write_size /(patch->chanmask * sizeof(int16_t));
-             for (;i < samples_num; i++) {
+         patch->aformat != AUDIO_FORMAT_AC3 &&
+         patch->aformat != AUDIO_FORMAT_DTS)) {
+        if (patch->chanmask == 1) {
+            int16_t *buf = (int16_t *)write_buf;
+            int i = 0 , samples_num;
+            samples_num = write_size / (patch->chanmask * sizeof(int16_t));
+            for (; i < samples_num; i++) {
                 tmpbuf[2 * (samples_num - i) - 1] = buf[samples_num - i - 1];
                 tmpbuf[2 * (samples_num - i) - 2] = buf[samples_num - i - 1];
-             }
-             write_size = write_size * 2;
-             write_buf = (unsigned char *)tmpbuf;
-          }
-          if (need_resample == 1) {
-              if (patch->dtv_resample.input_sr != (unsigned int)patch->sample_rate) {
-                           patch->dtv_resample.input_sr = patch->sample_rate;
-                           patch->dtv_resample.output_sr = 48000;
-                           patch->dtv_resample.channels = 2;
-                           resampler_init (&patch->dtv_resample);
-               }
-               if (!patch->resample_outbuf) {
-                  patch->resample_outbuf = (unsigned char*) malloc (OUTPUT_BUFFER_SIZE * 3);
-                  if (!patch->resample_outbuf) {
-                      ALOGE ("malloc buffer failed\n");
-                      return -1;
-                  }
-                  memset(patch->resample_outbuf, 0, OUTPUT_BUFFER_SIZE * 3);
-               }
-               int out_frame = write_size >> 2;
-               out_frame = resample_process (&patch->dtv_resample, out_frame,
-                     (int16_t *) write_buf, (int16_t *) patch->resample_outbuf);
-               write_size = out_frame << 2;
-               write_buf = patch->resample_outbuf;
-          }
+            }
+            write_size = write_size * 2;
+            write_buf = (unsigned char *)tmpbuf;
+        }
+        if (need_resample == 1) {
+            if (patch->dtv_resample.input_sr != (unsigned int)patch->sample_rate) {
+                patch->dtv_resample.input_sr = patch->sample_rate;
+                patch->dtv_resample.output_sr = 48000;
+                patch->dtv_resample.channels = 2;
+                resampler_init(&patch->dtv_resample);
+            }
+            if (!patch->resample_outbuf) {
+                patch->resample_outbuf = (unsigned char*) malloc(OUTPUT_BUFFER_SIZE * 3);
+                if (!patch->resample_outbuf) {
+                    ALOGE("malloc buffer failed\n");
+                    return -1;
+                }
+                memset(patch->resample_outbuf, 0, OUTPUT_BUFFER_SIZE * 3);
+            }
+            int out_frame = write_size >> 2;
+            out_frame = resample_process(&patch->dtv_resample, out_frame,
+                                         (int16_t *) write_buf, (int16_t *) patch->resample_outbuf);
+            write_size = out_frame << 2;
+            write_buf = patch->resample_outbuf;
+        }
     }
     ring_buffer_write(ringbuffer, (unsigned char *)write_buf, write_size,
                       UNCOVER_WRITE);
     if (aml_getprop_bool("media.audiohal.outdump")) {
-            FILE *fp1 = fopen("/data/audio_dtv.pcm", "a+");
-            if (fp1) {
-                int flen = fwrite((char *)write_buf, 1, write_size, fp1);
-                ALOGI("%s buffer %p size %zu\n", __FUNCTION__, write_buf, write_size);
-                fclose(fp1);
-            }
+        FILE *fp1 = fopen("/data/audio_dtv.pcm", "a+");
+        if (fp1) {
+            int flen = fwrite((char *)write_buf, 1, write_size, fp1);
+            ALOGI("%s buffer %p size %zu\n", __FUNCTION__, write_buf, write_size);
+            fclose(fp1);
+        }
     }
     // ALOGI("[%s]ring_buffer_write now wirte %d to ringbuffer\
     //  now\n",
@@ -631,7 +632,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
         do_output_standby_l((struct audio_stream *)aml_out);
         pthread_mutex_unlock(&aml_out->lock);
         if (eDolbyMS12Lib == aml_dev->dolby_lib_type) {
-          //get_dolby_ms12_cleanup(&aml_dev->ms12);
+            //get_dolby_ms12_cleanup(&aml_dev->ms12);
         }
         if (aml_dev->need_remove_conti_mode == true) {
             ALOGI("%s,conntinous mode still there,release ms12 here", __func__);
@@ -689,15 +690,15 @@ void *audio_dtv_patch_output_threadloop(void *data)
                 if (ret == 0) {
                     pthread_mutex_unlock(&(patch->dtv_output_mutex));
                     usleep(10000);
-                    ALOGE("%s(), live ring_buffer read 0 data!", __func__);
+                    ALOGE("%s(), ring_buffer read 0 data!", __func__);
                     continue;
                 }
                 {
                     unsigned long pts = 0;
-                    aml_out = direct_active(aml_dev);
-                    if (aml_out != NULL ) {
+                    aml_out = (struct aml_stream_out*)stream_out;
+                    if (aml_out != NULL) {
                         unsigned int lancty = out_get_latency(&(aml_out->stream));
-                        pts = decoder_apts_lookup(patch->decoder_offset);
+                        pts = dtv_hal_get_pts(patch);
                         process_ac3_sync(patch, pts, lancty);
                     }
 
@@ -719,6 +720,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
                 patch->dtv_pcm_readed += ret;
                 pthread_mutex_unlock(&(patch->dtv_output_mutex));
             } else {
+                ALOGE("%s(), ring_buffer has not enough data!", __func__);
                 pthread_mutex_unlock(&(patch->dtv_output_mutex));
                 usleep(50000);
             }
@@ -745,10 +747,10 @@ void *audio_dtv_patch_output_threadloop(void *data)
                 }
                 {
                     unsigned long pts = 0;
-                    aml_out = direct_active(aml_dev);
+                    aml_out = (struct aml_stream_out*)stream_out;
                     if (aml_out != NULL) {
                         unsigned int lancty = out_get_latency(&(aml_out->stream));
-                        pts = decoder_apts_lookup(patch->decoder_offset);
+                        pts = dtv_hal_get_pts(patch);
                         process_ac3_sync(patch, pts, lancty);
                     }
                 }
