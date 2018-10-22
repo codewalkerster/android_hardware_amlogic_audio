@@ -228,7 +228,7 @@ static int aml_alsa_add_zero(struct aml_stream_out *stream, int size)
 }
 
 size_t aml_alsa_output_write(struct audio_stream_out *stream,
-                             const void *buffer,
+                             void *buffer,
                              size_t bytes)
 {
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
@@ -382,6 +382,12 @@ write:
         ALOGE("could not open file:/data/pcm_write.pcm");
     }
 #endif
+
+    // SWPL-412, when input source is DTV, and UI set "parental_control_av_mute" command to audio hal
+    // we need to mute audio output for PCM output here
+    if (adev->patch_src == SRC_DTV && adev->parental_control_av_mute) {
+        memset(buffer,0x0,bytes);
+    }
 
     ret = pcm_write(aml_out->pcm, buffer, bytes);
     if (ret < 0) {
