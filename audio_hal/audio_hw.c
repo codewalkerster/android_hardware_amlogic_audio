@@ -845,11 +845,22 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
     case AUDIO_FORMAT_DTS:
         if (stream->get_format(stream) == AUDIO_FORMAT_IEC61937) {
             size = AC3_PERIOD_SIZE;
+            //ALOGI("%s AUDIO_FORMAT_IEC61937 %zu)", __FUNCTION__, size);
+            if ((eDolbyDcvLib == adev->dolby_lib_type) &&
+                (out->flags & AUDIO_OUTPUT_FLAG_DIRECT)) {
+                // local file playback, data from audio flinger direct mode
+                // the data is packed by DCV decoder by OMX, 1536 samples per packet
+                // to match with it, set the size to 1536
+                // (ms12 decoder doesn't encounter this issue, so only handle with DCV decoder case)
+                size = AC3_PERIOD_SIZE / 4;
+                ALOGI("%s AUDIO_FORMAT_IEC61937(DIRECT) (eDolbyDcvLib) size = %zu)", __FUNCTION__, size);
+            }
         } else if (out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO) {
             size = AC3_PERIOD_SIZE;
         } else {
             size = DEFAULT_PLAYBACK_PERIOD_SIZE;
         }
+
         if (out->hal_internal_format == AUDIO_FORMAT_DTS) {
             ALOGI("stream->get_format(stream):%0x", stream->get_format(stream));
             if (stream->get_format(stream) == AUDIO_FORMAT_IEC61937) {
@@ -879,7 +890,7 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
 
         if (eDolbyDcvLib == adev->dolby_lib_type) {
             if (stream->get_format(stream) == AUDIO_FORMAT_IEC61937) {
-                size =  PLAYBACK_PERIOD_COUNT * DEFAULT_PLAYBACK_PERIOD_SIZE;
+                size = PLAYBACK_PERIOD_COUNT * DEFAULT_PLAYBACK_PERIOD_SIZE;
                 ALOGI("%s eac3 eDolbyDcvLib = size%zu)", __FUNCTION__, size);
             }
         }
@@ -6855,9 +6866,12 @@ re_write:
                 } else {
                     config_output(stream);
                 }
-                    if (ret < 0) {
-                        return bytes;
-                    }
+
+                if (ret < 0) {
+                    aml_out->frame_write_sum = aml_out->input_bytes_size  / audio_stream_out_frame_size(stream);
+                    aml_out->last_frames_postion = aml_out->frame_write_sum;
+                    return bytes;
+                }
                 /*wirte raw data*/
                 if (ddp_dec->outlen_raw > 0 && ddp_dec->digital_raw == 1 && adev->hdmi_format == 5) {/*dual output: pcm & raw*/
                     aml_audio_spdif_output(stream, (void *)ddp_dec->outbuf_raw, ddp_dec->outlen_raw);
@@ -6868,72 +6882,67 @@ re_write:
                     }
                     return return_bytes;
                 }
-#if defined(IS_ATOM_PROJECT)
-                int read_bytes = bytes * ddp_dec->pcm_out_info.channel_num / 2;
-#endif
 
-                    /*write pcm data: for 32K, input data is less than output data.*/
-                    //for (int i = 0; i < 2; i++) {
-#if defined(IS_ATOM_PROJECT)
-                    bytes  = read_bytes;
-#endif
-                    while (get_buffer_read_space(&ddp_dec->output_ring_buf) > (int)bytes) {
-                        ring_buffer_read(&ddp_dec->output_ring_buf, ddp_dec->outbuf, bytes);
+                int read_bytes =  PLAYBACK_PERIOD_COUNT * DEFAULT_PLAYBACK_PERIOD_SIZE ;
+                bytes  = read_bytes;
+
+                while (get_buffer_read_space(&ddp_dec->output_ring_buf) > (int)bytes) {
+                    ring_buffer_read(&ddp_dec->output_ring_buf, ddp_dec->outbuf, bytes);
 
 #if defined(IS_ATOM_PROJECT)
-                        audio_format_t output_format = AUDIO_FORMAT_PCM_32_BIT;
-                        if (!adev->output_tmp_buf || adev->output_tmp_buf_size < 2 * bytes) {
-                            adev->output_tmp_buf = realloc(adev->output_tmp_buf, 2 * bytes);
-                            adev->output_tmp_buf_size = 2 * bytes;
+                    audio_format_t output_format = AUDIO_FORMAT_PCM_32_BIT;
+                    if (!adev->output_tmp_buf || adev->output_tmp_buf_size < 2 * bytes) {
+                        adev->output_tmp_buf = realloc(adev->output_tmp_buf, 2 * bytes);
+                        adev->output_tmp_buf_size = 2 * bytes;
+                    }
+                    uint16_t *p = (uint16_t *)ddp_dec->outbuf;
+                    int32_t *p1 = (int32_t *)adev->output_tmp_buf;
+                    void *tmp_buffer = (void *)adev->output_tmp_buf;
+                    for (unsigned i = 0; i < bytes / 2; i++) {
+                        p1[i] = ((int32_t)p[i]) << 16;
+                    }
+
+                    bytes *= 2;
+                    double lfe;
+                    if (ddp_dec->pcm_out_info.channel_num == 6) {
+                        int samplenum = bytes / (ddp_dec->pcm_out_info.channel_num * 4);
+                        //ALOGI("ddp_dec->pcm_out_info.channel_num:%d samplenum:%d bytes:%d",ddp_dec->pcm_out_info.channel_num,samplenum,bytes);
+                        //Lt = L + (C *  -3 dB)  - (Ls * -1.2 dB)  -  (Rs * -6.2 dB)
+                        //Rt = R + (C * -3 dB) + (Ls * -6.2 dB) + (Rs *  -1.2 dB)
+                        for (int i = 0; i < samplenum; i++ ) {
+                            lfe = (double)p1[6 * i + 3]*(1.678804f / 4);
+                            p1[6 * i] = p1[6 * i] + p1[6 * i + 2] * 0.707945 - p1[6 * i + 4] * 0.870963 - p1[6 * i + 5] * 0.489778;
+                            p1[6 * i + 1] = p1[6 * i + 1] + p1[6 * i + 2] * 0.707945 + p1[6 * i + 4] * 0.489778 + p1[6 * i + 5] * 0.870963;
+                            p1[2 * i ] = (p1[6 * i] >> 2) + (int32_t)lfe;
+                            p1[2 * i  + 1] = (p1[6 * i + 1] >> 2) + (int32_t)lfe;
                         }
-                        uint16_t *p = (uint16_t *)ddp_dec->outbuf;
-                        int32_t *p1 = (int32_t *)adev->output_tmp_buf;
-                        void *tmp_buffer = (void *)adev->output_tmp_buf;
-                        for (unsigned i = 0; i < bytes / 2; i++) {
-                            p1[i] = ((int32_t)p[i]) << 16;
-                        }
-
-                        bytes *= 2;
-                        double lfe;
-                        if (ddp_dec->pcm_out_info.channel_num == 6) {
-                            int samplenum = bytes / (ddp_dec->pcm_out_info.channel_num * 4);
-                            //ALOGI("ddp_dec->pcm_out_info.channel_num:%d samplenum:%d bytes:%d",ddp_dec->pcm_out_info.channel_num,samplenum,bytes);
-                            //Lt = L + (C *  -3 dB)  - (Ls * -1.2 dB)  -  (Rs * -6.2 dB)
-                            //Rt = R + (C * -3 dB) + (Ls * -6.2 dB) + (Rs *  -1.2 dB)
-                            for (int i = 0; i < samplenum; i++ ) {
-                                lfe = (double)p1[6 * i + 3]*(1.678804f / 4);
-                                p1[6 * i] = p1[6 * i] + p1[6 * i + 2] * 0.707945 - p1[6 * i + 4] * 0.870963 - p1[6 * i + 5] * 0.489778;
-                                p1[6 * i + 1] = p1[6 * i + 1] + p1[6 * i + 2] * 0.707945 + p1[6 * i + 4] * 0.489778 + p1[6 * i + 5] * 0.870963;
-                                p1[2 * i ] = (p1[6 * i] >> 2) + (int32_t)lfe;
-                                p1[2 * i  + 1] = (p1[6 * i + 1] >> 2) + (int32_t)lfe;
-                            }
-                            bytes /= 3;
-                         }
+                        bytes /= 3;
+                     }
 #if 0
-        if (getprop_bool("media.audio_hal.ddp.outdump")) {
-            FILE *fp1 = fopen("/data/tmp/dd_mix.raw", "a+");
-            if (fp1) {
-                int flen = fwrite((char *)tmp_buffer, 1, bytes, fp1);
-                fclose(fp1);
-            } else {
-                ALOGD("could not open files!");
-            }
+    if (getprop_bool("media.audio_hal.ddp.outdump")) {
+        FILE *fp1 = fopen("/data/tmp/dd_mix.raw", "a+");
+        if (fp1) {
+            int flen = fwrite((char *)tmp_buffer, 1, bytes, fp1);
+            fclose(fp1);
+        } else {
+            ALOGD("could not open files!");
         }
+    }
 #endif
 
 #else
-                        void *tmp_buffer = (void *) ddp_dec->outbuf;
-                        audio_format_t output_format = AUDIO_FORMAT_PCM_16_BIT;
+                    void *tmp_buffer = (void *) ddp_dec->outbuf;
+                    audio_format_t output_format = AUDIO_FORMAT_PCM_16_BIT;
 #endif
-                        aml_hw_mixer_mixing(&adev->hw_mixer, tmp_buffer, bytes, output_format);
-                        if (audio_hal_data_processing(stream, tmp_buffer, bytes, &output_buffer, &output_buffer_bytes, output_format) == 0) {
-                            hw_write(stream, output_buffer, output_buffer_bytes, output_format);
-                            aml_out->frame_write_sum = aml_out->input_bytes_size  / audio_stream_out_frame_size(stream);
-                            aml_out->last_frames_postion = aml_out->frame_write_sum;
-                        }
+                    aml_hw_mixer_mixing(&adev->hw_mixer, tmp_buffer, bytes, output_format);
+                    if (audio_hal_data_processing(stream, tmp_buffer, bytes, &output_buffer, &output_buffer_bytes, output_format) == 0) {
+                        hw_write(stream, output_buffer, output_buffer_bytes, output_format);
                     }
-                    //}
-                    return return_bytes;
+                }
+
+                aml_out->frame_write_sum = aml_out->input_bytes_size  / audio_stream_out_frame_size(stream);
+                aml_out->last_frames_postion = aml_out->frame_write_sum;
+                return return_bytes;
             }
 
             void *tmp_buffer = (void *) write_buf;
