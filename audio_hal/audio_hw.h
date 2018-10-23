@@ -42,6 +42,8 @@
 #include "aml_alsa_mixer.h"
 //#include "aml_audio_ms12.h"
 #include "../libms12/include/aml_audio_ms12.h"
+#include "aml_audio_mixer.h"
+#include "audio_port.h"
 
 /* number of frames per period */
 /*
@@ -49,11 +51,14 @@
  * test case test4_1MeasurePeakRms(android.media.cts.VisualizerTest)
  */
 #if defined(IS_ATOM_PROJECT)
-#define DEFAULT_PLAYBACK_PERIOD_SIZE 1024
+#define DEFAULT_PLAYBACK_PERIOD_SIZE 512//1024
 #else
 #define DEFAULT_PLAYBACK_PERIOD_SIZE 512
 #endif
 #define DEFAULT_CAPTURE_PERIOD_SIZE  1024
+#define DEFAULT_PLAYBACK_PERIOD_CNT 6
+
+//#define DEFAULT_PERIOD_SIZE 512
 
 /* number of ICE61937 format frames per period */
 #define DEFAULT_IEC_SIZE 6144
@@ -92,7 +97,6 @@ static unsigned int DEFAULT_OUT_SAMPLING_RATE = 48000;
 
 #define DDP_FRAME_SIZE      768
 #define EAC3_MULTIPLIER 4
-
 enum {
     TYPE_PCM = 0,
     TYPE_AC3 = 2,
@@ -103,6 +107,22 @@ enum {
     TYPE_TRUE_HD = 7,
     TYPE_DTS_HD_MA = 8,//should not used after we unify DTS-HD&DTS-HD MA
     TYPE_PCM_HIGH_SR = 9,
+};
+
+#define FRAMESIZE_16BIT_STEREO 4
+#define FRAMESIZE_32BIT_STEREO 8
+#define FRAMESIZE_32BIT_3ch 12
+#define FRAMESIZE_32BIT_5ch 20
+#define FRAMESIZE_32BIT_8ch 32
+
+/* copy from VTS */
+enum Result {
+    OK,
+    NOT_INITIALIZED,
+    INVALID_ARGUMENTS,
+    INVALID_STATE,
+    NOT_SUPPORTED,
+    RESULT_TOO_BIG
 };
 
 #define AML_HAL_MIXER_BUF_SIZE  64*1024
@@ -236,6 +256,9 @@ typedef union {
     unsigned long long timeStamp;
     unsigned char tsB[8];
 } aec_timestamp;
+
+struct aml_audio_mixer;
+const char *usecase_to_str(stream_usecase_t usecase);
 
 #define MAX_STREAM_NUM   5
 #define HDMI_ARC_MAX_FORMAT  20
@@ -416,13 +439,29 @@ struct aml_audio_device {
     pthread_mutex_t aec_spk_buf_lock;
     pthread_mutex_t dsp_processing_lock;
 #endif
+    struct subMixing *sm;
+    struct aml_audio_mixer *audio_mixer;
+    bool is_TV;
+    //int cnt_stream_using_mixer;
+    int tsync_fd;
+};
 
+struct meta_data {
+    uint32_t frame_size;
+    uint64_t pts;
+    uint64_t payload_offset;
+};
+
+struct meta_data_list {
+    struct listnode list;
+    struct meta_data mdata;
 };
 
 struct aml_stream_out {
     struct audio_stream_out stream;
     /* see note below on mutex acquisition order */
     pthread_mutex_t lock;
+    struct audio_config audioCfg;
     /* config which set to ALSA device */
     struct pcm_config config;
     /* channel mask exposed to AudioFlinger. */
@@ -464,7 +503,6 @@ struct aml_stream_out {
     int raw_61937_frame_size;
     /* recorded for wraparound print info */
     unsigned last_dsp_frame;
-    //audio_hwsync_t hwsync;
     audio_hwsync_t *hwsync;
     struct timespec timestamp;
     stream_usecase_t usecase;
@@ -494,6 +532,17 @@ struct aml_stream_out {
     bool is_get_mute_bytes;
     size_t frame_deficiency;
     bool normal_pcm_mixing_config;
+    uint32_t latency_frames;
+    enum MIXER_INPUT_PORT port_index;
+    int exiting;
+    pthread_mutex_t cond_lock;
+    pthread_cond_t cond;
+    struct hw_avsync_header_extractor *hwsync_extractor;
+    struct listnode mdata_list;
+    pthread_mutex_t mdata_lock;
+    bool first_pts_set;
+    struct audio_config out_cfg;
+    int debug_stream;
 };
 
 typedef ssize_t (*write_func)(struct audio_stream_out *stream, const void *buffer, size_t bytes);
@@ -653,4 +702,14 @@ ssize_t hw_write(struct audio_stream_out *stream
                  , audio_format_t output_format);
 
 int do_output_standby_l(struct audio_stream *stream);
+
+ssize_t out_write_new(struct audio_stream_out *stream,
+                      const void *buffer,
+                      size_t bytes);
+int out_standby_new(struct audio_stream *stream);
+ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buffer,
+                               size_t bytes);
+int dsp_process_output(struct aml_audio_device *adev, void *in_buffer,
+        size_t bytes);
+
 #endif

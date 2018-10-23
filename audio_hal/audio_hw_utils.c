@@ -17,7 +17,7 @@
 
 
 #define LOG_TAG "audio_hw_utils"
-#define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 
 #include <errno.h>
 #include <pthread.h>
@@ -42,6 +42,7 @@
 
 #include "audio_hwsync.h"
 #include "audio_hw.h"
+#include "aml_audio_mixer.h"
 #include <audio_utils/primitives.h>
 
 #ifdef LOG_NDEBUG_FUNCTION
@@ -201,7 +202,6 @@ int is_txlx_chip()
     }
     return false;
 }
-
 
 /*
 convert audio formats to supported audio format
@@ -422,6 +422,32 @@ int aml_audio_get_ddp_frame_size()
     return frame_size;
 }
 
+bool is_stream_using_mixer(struct aml_stream_out *out)
+{
+    return is_inport_valid(out->port_index);
+}
+
+uint32_t out_get_outport_latency(const struct audio_stream_out *stream)
+{
+    struct aml_stream_out *out = (struct aml_stream_out *)stream;
+    int frames = 0, latency_ms = 0;
+
+    if (is_stream_using_mixer(out)) {
+        struct aml_audio_device *adev = out->dev;
+        struct aml_audio_mixer *audio_mixer = adev->audio_mixer;
+        int outport_latency_frames = 0;// = mixer_get_outport_latency_frames(audio_mixer);
+
+        if (outport_latency_frames <= 0)
+            outport_latency_frames = out->config.period_size * out->config.period_count / 2;
+
+        frames = outport_latency_frames;
+        ALOGV("%s(), total frames %d", __func__, frames);
+        latency_ms = (frames * 1000) / out->config.rate;
+        ALOGV("%s(), latencyMs %d, rate %d", __func__, latency_ms,out->config.rate);
+    }
+    return latency_ms;
+}
+
 uint32_t out_get_latency_frames(const struct audio_stream_out *stream)
 {
     const struct aml_stream_out *out = (const struct aml_stream_out *)stream;
@@ -507,6 +533,87 @@ int aml_audio_get_src_tune_latency(enum patch_src_assortion patch_src) {
         return 0;
     }
 
+    ret = property_get(prop_name, buf, NULL);
+    if (ret > 0)
+    {
+        latency_ms = atoi(buf);
+    }
+
+    return latency_ms;
+}
+
+void audio_fade_func(void *buf,int fade_size,int is_fadein) {
+    float fade_vol = is_fadein ? 0.0 : 1.0;
+    int i = 0;
+    float fade_step = is_fadein ? 1.0/(fade_size/4):-1.0/(fade_size/4);
+    int16_t *sample = (int16_t *)buf;
+    for (i = 0; i < fade_size/2; i += 2) {
+        sample[i] = sample[i]*fade_vol;
+        sample[i+1] = sample[i+1]*fade_vol;
+        fade_vol += fade_step;
+    }
+    ALOGI("do fade %s done,size %d",is_fadein?"in":"out",fade_size);
+
+}
+
+void ts_wait_time_us(struct timespec *ts, uint32_t time_us)
+{
+    clock_gettime(CLOCK_REALTIME, ts);
+    ts->tv_sec += (time_us / 1000000);
+    ts->tv_nsec += (time_us * 1000);
+    if (ts->tv_nsec >= 1000000000) {
+        ts->tv_sec++;
+        ts->tv_nsec -= 1000000000;
+    }
+}
+
+int cpy_16bit_data_with_gain(int16_t *dst, int16_t *src, int size_in_bytes, float vol)
+{
+    int size_in_short = size_in_bytes / 2;
+    int i = 0;
+
+    if (size_in_bytes % 2) {
+        ALOGE("%s(), size inval %d", __func__, size_in_bytes);
+        return -EINVAL;
+    }
+
+    if (vol > 1.0 || vol < 0) {
+        ALOGE("%s(), inval vol %f, should in [0,1]", __func__, vol);
+        return -EINVAL;
+    }
+
+    for (i = 0; i < size_in_short; i++) {
+        dst[i] = src[i] * vol;
+    }
+
+    return 0;
+}
+
+static inline uint64_t timespec_ns(struct timespec tspec)
+{
+    return (tspec.tv_sec * 1000000000 + tspec.tv_nsec);
+}
+
+uint64_t get_systime_ns(void)
+{
+    struct timespec tval;
+
+    clock_gettime(CLOCK_MONOTONIC, &tval);
+
+    return timespec_ns(tval);
+}
+
+int aml_audio_get_hdmi_latency_offset(int aformat)
+{
+    char buf[PROPERTY_VALUE_MAX];
+    char *prop_name = NULL;
+    int ret = -1;
+    int latency_ms = 0;
+
+    (void)aformat;
+    // PCM latency
+    prop_name = "media.audio.hal.hdmi_latency.pcm";
+    latency_ms = -52;
     ret = property_get(prop_name, buf, NULL);
     if (ret > 0)
     {

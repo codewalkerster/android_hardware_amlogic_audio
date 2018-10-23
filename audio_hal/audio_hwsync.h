@@ -42,6 +42,12 @@
 
 #define HWSYNC_APTS_NUM     512
 
+enum hwsync_status {
+    CONTINUATION,  // good sync condition
+    ADJUSTMENT,    // can be adjusted by discarding or padding data
+    RESYNC,        // pts need resync
+};
+
 typedef struct apts_tab {
     int  valid;
     size_t offset;
@@ -103,10 +109,18 @@ static inline uint64_t get_pts_gap(uint64_t a, uint64_t b)
         return (b - a);
     }
 }
-
+int aml_hwsync_open_tsync(void);
+void aml_hwsync_close_tsync(int fd);
+int aml_hwsync_get_tsync_pts_by_handle(int fd, uint32_t *pts);
+void aml_hwsync_set_tsync_pause(void);
+void aml_hwsync_set_tsync_resume(void);
+int aml_hwsync_set_tsync_start_pts(uint32_t pts);
+int aml_hwsync_get_tsync_pts(uint32_t *pts);
+int aml_hwsync_reset_tsync_pcrscr(uint32_t pts);
 void aml_audio_hwsync_init(audio_hwsync_t *p_hwsync, struct aml_stream_out  *out);
 int aml_audio_hwsync_find_frame(audio_hwsync_t *p_hwsync,
-                                const void *in_buffer, size_t in_bytes, uint64_t *cur_pts, int *outsize);
+        const void *in_buffer, size_t in_bytes,
+        uint64_t *cur_pts, int *outsize);
 int aml_audio_hwsync_set_first_pts(audio_hwsync_t *p_hwsync, uint64_t pts);
 int aml_audio_hwsync_checkin_apts(audio_hwsync_t *p_hwsync, size_t offset, unsigned apts);
 int aml_audio_hwsync_lookup_apts(audio_hwsync_t *p_hwsync, size_t offset, unsigned *p_apts);
