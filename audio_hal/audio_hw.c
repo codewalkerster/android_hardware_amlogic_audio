@@ -3790,7 +3790,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
             out->config.format = PCM_FORMAT_S32_LE;
             break;
         case AUDIO_FORMAT_IEC61937:
-            if (out->config.channels == 2 && (out->config.rate == 192000 || out->config.rate == 176400)) {
+            if (out->config.channels == 2 && (out->config.rate == 192000 || out->config.rate == 176400 || out->config.rate == 128000)) {
                 out->config.rate /= 4;
                 out->hal_internal_format = AUDIO_FORMAT_E_AC3;
             } else if (out->config.channels == 2 && out->config.rate >= 32000 && out->config.rate <= 48000) {

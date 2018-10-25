@@ -216,19 +216,25 @@ char*  get_hdmi_sink_cap(const char *keys,audio_format_t format)
             ALOGD("query hdmi sample_rate...\n");
             /* take the 32/44.1/48 khz suppported as default */
             size += sprintf(aud_cap, "sup_sampling_rates=%s", "32000|44100|48000");
-            if (mystrstr(infobuf, "88.2")) {
-                size += sprintf(aud_cap + size, "|%s", "88200");
-            }
-            if (mystrstr(infobuf, "96")) {
-                size += sprintf(aud_cap + size, "|%s", "96000");
-            }
-            if (mystrstr(infobuf, "176.4")) {
-                size += sprintf(aud_cap + size, "|%s", "176400");
-            }
-            if ((mystrstr(infobuf, "192") && format != AUDIO_FORMAT_IEC61937) ||
-                ((mystrstr(infobuf, "Dobly_Digital+") || mystrstr(infobuf, "DTS-HD") ||
-                  mystrstr(infobuf, "MAT")) && format == AUDIO_FORMAT_IEC61937)) {
-                size += sprintf(aud_cap + size, "|%s", "192000");
+
+            if (format != AUDIO_FORMAT_IEC61937) {
+                if (mystrstr(infobuf, "88.2")) {
+                    size += sprintf(aud_cap + size, "|%s", "88200");
+                }
+                if (mystrstr(infobuf, "96")) {
+                    size += sprintf(aud_cap + size, "|%s", "96000");
+                }
+                if (mystrstr(infobuf, "176.4")) {
+                    size += sprintf(aud_cap + size, "|%s", "176400");
+                }
+                if (mystrstr(infobuf, "192")) {
+                    size += sprintf(aud_cap + size, "|%s", "192000");
+                }
+            } else {
+              if((mystrstr(infobuf, "Dobly_Digital+") || mystrstr(infobuf, "DTS-HD") ||
+                  mystrstr(infobuf, "MAT")) && format == AUDIO_FORMAT_IEC61937) {
+                  size += sprintf(aud_cap + size, "|%s", "128000|176400|192000");
+              }
             }
         }
     } else {
