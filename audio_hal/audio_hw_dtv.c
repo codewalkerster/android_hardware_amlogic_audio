@@ -662,8 +662,13 @@ void *audio_dtv_patch_output_threadloop(void *data)
     }
     aml_dev->mix_init_flag = false;
     pthread_mutex_unlock(&aml_dev->lock);
+#ifdef TV_AUDIO_OUTPUT
+    patch->output_src = AUDIO_DEVICE_OUT_SPEAKER;
+#else
+    patch->output_src = AUDIO_DEVICE_OUT_AUX_DIGITAL;
+#endif
     ret = adev_open_output_stream_new(patch->dev, 0,
-                                      AUDIO_DEVICE_OUT_SPEAKER, // devices_t
+                                      patch->output_src, // devices_t
                                       AUDIO_OUTPUT_FLAG_DIRECT, // flags
                                       &stream_config, &stream_out, NULL);
     if (ret < 0) {
