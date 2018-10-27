@@ -1505,6 +1505,7 @@ static int out_pause (struct audio_stream_out *stream)
             goto exit1;
         }
     }
+
     if (pcm_is_ready (out->pcm) ) {
         r = pcm_ioctl (out->pcm, SNDRV_PCM_IOCTL_PAUSE, 1);
         if (r < 0) {
@@ -1518,6 +1519,7 @@ static int out_pause (struct audio_stream_out *stream)
                 ALOGE ("out->pcm and adev->pcm are assumed same handle");
         }
     }
+
 exit1:
     out->pause_status = true;
 exit:
@@ -1536,6 +1538,9 @@ static int out_resume (struct audio_stream_out *stream)
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
     int r = 0;
+    int channel_count = popcount (out->hal_channel_mask);
+    bool hwsync_lpcm = (out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC && out->config.rate  <= 48000 &&
+                        audio_is_linear_pcm(out->hal_internal_format) && channel_count <= 2);
     pthread_mutex_lock (&adev->lock);
     pthread_mutex_lock (&out->lock);
     if (/* !out->standby && */!out->pause_status) {
@@ -1549,7 +1554,12 @@ static int out_resume (struct audio_stream_out *stream)
         goto exit;
     }
     if (out->pcm && pcm_is_ready (out->pcm) ) {
-        r = pcm_ioctl (out->pcm, SNDRV_PCM_IOCTL_PAUSE, 0);
+        if (out->flags & AUDIO_OUTPUT_FLAG_DIRECT &&
+            !hwsync_lpcm && alsa_device_is_auge()) {
+            r = pcm_ioctl (out->pcm, SNDRV_PCM_IOCTL_PREPARE);
+        } else {
+            r = pcm_ioctl (out->pcm, SNDRV_PCM_IOCTL_PAUSE, 0);
+        }
         if (r < 0) {
             ALOGE ("cannot resume channel\n");
         } else {
@@ -1753,14 +1763,16 @@ static ssize_t out_write_legacy (struct audio_stream_out *stream, const void* bu
      * on the output stream mutex - e.g. executing select_mode() while holding the hw device
      * mutex
      */
-    pthread_mutex_lock (&adev->lock);
-    pthread_mutex_lock (&out->lock);
+    pthread_mutex_lock(&out->lock);
     //if hi pcm mode ,we need releae i2s device so direct stream can get it.
-    if (adev->hi_pcm_mode ) {
-        if (!out->standby)
-            do_output_standby (out);
+    if (adev->hi_pcm_mode) {
+        if (!out->standby) {
+            pthread_mutex_lock(&adev->lock);
+            do_output_standby(out);
+            pthread_mutex_unlock(&adev->lock);
+        }
         ret = -1 ;
-        pthread_mutex_unlock (&adev->lock);
+        out->frame_write_sum += in_frames;
         goto exit;
     }
     //here to check whether hwsync out stream and other stream are enabled at the same time.
@@ -1793,23 +1805,22 @@ static ssize_t out_write_legacy (struct audio_stream_out *stream, const void* bu
         }
 #endif
         if (out->standby) {
-            ret = start_output_stream (out);
+            pthread_mutex_lock(&adev->lock);
+            ret = start_output_stream(out);
+            pthread_mutex_unlock(&adev->lock);
             if (ret != 0) {
-                pthread_mutex_unlock (&adev->lock);
-                ALOGE ("start_output_stream failed");
+                ALOGE("start_output_stream failed");
                 goto exit;
             }
             out->standby = false;
         }
         ret = -1;
-        aml_hal_mixer_write (&adev->hal_mixer, buffer, bytes);
-        pthread_mutex_unlock (&adev->lock);
+        aml_hal_mixer_write(&adev->hal_mixer, buffer, bytes);
         goto exit;
     }
     if (out->pause_status == true) {
-        pthread_mutex_unlock (&adev->lock);
-        pthread_mutex_unlock (&out->lock);
-        ALOGI ("call out_write when pause status (%p)\n", stream);
+        pthread_mutex_unlock(&out->lock);
+        ALOGI("call out_write when pause status (%p)\n", stream);
         return 0;
     }
     if ( (out->standby) && (out->hw_sync_mode == 1) ) {
@@ -1855,8 +1866,7 @@ static ssize_t out_write_legacy (struct audio_stream_out *stream, const void* bu
             }
 
             if (hw_sync->hw_sync_state == HW_SYNC_STATE_RESYNC) {
-                ALOGI ("Keep searching for HWSYNC header.%p", out);
-                pthread_mutex_unlock (&adev->lock);
+                ALOGI("Keep searching for HWSYNC header.%p", out);
                 goto exit;
             }
         }
@@ -1864,10 +1874,11 @@ static ssize_t out_write_legacy (struct audio_stream_out *stream, const void* bu
         header = (unsigned char *) buffer;
     }
     if (out->standby) {
-        ret = start_output_stream (out);
+        pthread_mutex_lock(&adev->lock);
+        ret = start_output_stream(out);
+        pthread_mutex_unlock(&adev->lock);
         if (ret != 0) {
-            pthread_mutex_unlock (&adev->lock);
-            ALOGE ("start_output_stream failed");
+            ALOGE("start_output_stream failed");
             goto exit;
         }
         out->standby = false;
@@ -1877,7 +1888,6 @@ static ssize_t out_write_legacy (struct audio_stream_out *stream, const void* bu
             force_input_standby = true;
         }
     }
-    pthread_mutex_unlock (&adev->lock);
 #if 1
     /* Reduce number of channels, if necessary */
     // TODO: find the right way to handle PCM BT case.
@@ -2023,17 +2033,15 @@ static ssize_t out_write_legacy (struct audio_stream_out *stream, const void* bu
                                 ALOGI ("audio gap %"PRIx64" ms ,need insert pcm size %d\n", two_frame_gap/*abs(pts -apts) */ / 90, insert_size);
                                 char *insert_buf = (char*) malloc (8192);
                                 if (insert_buf == NULL) {
-                                    ALOGE ("malloc size failed \n");
-                                    pthread_mutex_unlock (&adev->lock);
+                                    ALOGE("malloc size failed \n");
                                     goto exit;
                                 }
-                                memset (insert_buf, 0, 8192);
+                                memset(insert_buf, 0, 8192);
                                 if (need_mix) {
                                     mix_buf = malloc (once_write_size);
                                     if (mix_buf == NULL) {
-                                        ALOGE ("mix_buf malloc failed\n");
-                                        free (insert_buf);
-                                        pthread_mutex_unlock (&adev->lock);
+                                        ALOGE("mix_buf malloc failed\n");
+                                        free(insert_buf);
                                         goto exit;
                                     }
                                 }
@@ -2061,9 +2069,8 @@ static ssize_t out_write_legacy (struct audio_stream_out *stream, const void* bu
                                         ALOGE ("pcm write failed\n");
                                         free (insert_buf);
                                         if (mix_buf) {
-                                            free (mix_buf);
+                                            free(mix_buf);
                                         }
-                                        pthread_mutex_unlock (&adev->lock);
                                         goto exit;
                                     }
                                     insert_size -= once_write_size;
@@ -2337,8 +2344,7 @@ static ssize_t out_write (struct audio_stream_out *stream, const void* buffer,
      * on the output stream mutex - e.g. executing select_mode() while holding the hw device
      * mutex
      */
-    pthread_mutex_lock (&adev->lock);
-    pthread_mutex_lock (&out->lock);
+    pthread_mutex_lock(&out->lock);
 
 #if 1
     if (enable_dump && out->hw_sync_mode == 0) {
@@ -2351,10 +2357,11 @@ static ssize_t out_write (struct audio_stream_out *stream, const void* buffer,
 #endif
 
     if (out->standby) {
-        ret = start_output_stream (out);
+        pthread_mutex_lock(&adev->lock);
+        ret = start_output_stream(out);
+        pthread_mutex_unlock(&adev->lock);
         if (ret != 0) {
-            pthread_mutex_unlock (&adev->lock);
-            ALOGE ("start_output_stream failed");
+            ALOGE("start_output_stream failed");
             goto exit;
         }
         out->standby = false;
@@ -2364,7 +2371,6 @@ static ssize_t out_write (struct audio_stream_out *stream, const void* buffer,
             force_input_standby = true;
         }
     }
-    pthread_mutex_unlock (&adev->lock);
 #if 1
     /* Reduce number of channels, if necessary */
     //if (popcount(out_get_channels(&stream->common)) >
