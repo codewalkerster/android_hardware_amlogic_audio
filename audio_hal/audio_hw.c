@@ -2844,10 +2844,10 @@ static int out_get_render_position (const struct audio_stream_out *stream,
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = out->dev;
     uint64_t  dsp_frame_int64 = out->last_frames_postion;
-    *dsp_frames = 0U;
+    *dsp_frames = (uint32_t)(dsp_frame_int64 & 0xffffffff);
     if (out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO) {
-        dsp_frame_int64 = out->last_frames_postion ;
-        *dsp_frames = (uint32_t)(dsp_frame_int64 & 0xffffffff);
+        //dsp_frame_int64 = out->last_frames_postion ;
+        //*dsp_frames = (uint32_t)(dsp_frame_int64 & 0xffffffff);
         if (out->last_dsp_frame > dsp_frame_int64) {
             ALOGI("maybe uint32_t wraparound,print something,last %u,now %u", out->last_dsp_frame, *dsp_frames);
             ALOGI("wraparound,out_get_render_position return %u,playback time %"PRIu64" ms,sr %d\n", *dsp_frames,
