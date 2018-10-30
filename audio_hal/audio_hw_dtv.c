@@ -348,10 +348,10 @@ void process_ac3_sync(struct aml_audio_patch *patch, unsigned long pts,
     }
 }
 
-void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
-                      unsigned int rbuf_level)
+void  process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
+                       unsigned int rbuf_level)
 {
-    int channel_count = popcount(patch->chanmask);
+    int channel_count = 2;
     int bytewidth = 2;
     int sysmbol = 48;
     char tempbuf[128];
@@ -363,37 +363,44 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
 
     pts = dtv_patch_get_pts();
 
-    if (pts == (unsigned long) - 1) {
-        return ;
-    }
-
     if (patch->dtv_first_apts_flag == 0) {
         sprintf(tempbuf, "AUDIO_START:0x%x", (unsigned int)pts);
         ALOGI("dtv set tsync -> %s", tempbuf);
         if (sysfs_set_sysfs_str(TSYNC_EVENT, tempbuf) == -1) {
             ALOGE("set AUDIO_START failed \n");
         }
+        patch->dtv_pcm_readed = 0;
         patch->dtv_first_apts_flag = 1;
+        patch->last_valid_pts = pts;
     } else {
-#if 1
         unsigned int pts_diff;
-        calc_len = (unsigned int)rbuf_level;
-        cache_pts = (calc_len * 90) / (sysmbol * channel_count * bytewidth);
-        cur_out_pts = pts - cache_pts;
-        cur_out_pts = cur_out_pts - pcm_lancty * 90;
+#if 1
+        if (pts != (unsigned long) - 1) {
+            calc_len = (unsigned int)rbuf_level;
+            cache_pts = (calc_len * 90) / (sysmbol * channel_count * bytewidth);
+            cur_out_pts = pts - cache_pts;
+            cur_out_pts = cur_out_pts - pcm_lancty * 90;
+            patch->last_valid_pts = cur_out_pts;
+            patch->dtv_pcm_readed = 0;
+        } else {
+            pts = patch->last_valid_pts;
+            calc_len =  patch->dtv_pcm_readed;
+            cache_pts = (calc_len * 90) / (sysmbol * channel_count * bytewidth);
+            cur_out_pts = pts + cache_pts;
+        }
 
         get_sysfs_uint(TSYNC_PCRSCR, &pcrpts);
-        // ALOGI("The iniput pts is %lx and the cache pts is %lx  abuf_level "
+        // ALOGI("dtv The iniput pts is %lx abuf_level "
         //       "%d pcrpts %x  "
         //       "cur_outpts %lx\n",
-        //       pts, cache_pts, rbuf_level, pcrpts, cur_out_pts);
+        //       pts, rbuf_level, pcrpts, cur_out_pts);
 
         if (pcrpts > cur_out_pts) {
             pts_diff = pcrpts - cur_out_pts;
             // ALOGI(" the pts %lx  diff is %d pcm_lantcy is %d\n", pts, pts_diff,
             //       pcm_lancty);
         } else {
-            pts_diff = pcrpts - cur_out_pts;
+            pts_diff = cur_out_pts - pcrpts;
             // ALOGI(" the pts is %lx the pcrpts is %x pcm_lantcy is %d the "
             //       "cache_pts is %lx ",
             //       pts, pcrpts, pcm_lancty, cache_pts);
@@ -405,12 +412,13 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
         } else if (pts_diff > SYSTIME_CORRECTION_THRESHOLD &&
                    pts_diff < AUDIO_PTS_DISCONTINUE_THRESHOLD) {
             sprintf(tempbuf, "0x%lx", (unsigned long)cur_out_pts);
-            // ALOGI("reset the apts to %lx \n", cur_out_pts);
-
+            ALOGI("reset the apts to %lx pcrpts %x pts_diff %d \n",
+                  cur_out_pts, pcrpts, pts_diff);
             sysfs_set_sysfs_str(TSYNC_APTS, tempbuf);
         } else {
-            sprintf(tempbuf, "AUDIO_TSTAMP_DISCONTINUITY:0x%lx", (unsigned long)pts);
-
+            sprintf(tempbuf, "AUDIO_TSTAMP_DISCONTINUITY:0x%lx", (unsigned long)cur_out_pts);
+            ALOGI("AUDIO_TSTAMP_DISCONTINUITY the apts %lx pcrpts %x pts_diff %d \n",
+                  cur_out_pts, pcrpts, pts_diff);
             if (sysfs_set_sysfs_str(TSYNC_EVENT, tempbuf) == -1) {
                 ALOGI("unable to open file %s,err: %s", TSYNC_EVENT, strerror(errno));
             }
@@ -425,6 +433,7 @@ static uint32_t out_get_latency(const struct audio_stream_out *stream)
     snd_pcm_sframes_t frames = out_get_latency_frames(stream);
     return (frames * 1000) / out->config.rate;
 }
+
 
 
 static int dtv_patch_pcm_wirte(unsigned char *pcm_data, int size,
@@ -518,8 +527,17 @@ static int dtv_patch_pcm_wirte(unsigned char *pcm_data, int size,
             write_buf = patch->resample_outbuf;
         }
     }
+
     ring_buffer_write(ringbuffer, (unsigned char *)write_buf, write_size,
                       UNCOVER_WRITE);
+
+    // if ((patch->aformat != AUDIO_FORMAT_E_AC3)
+    //     && (patch->aformat != AUDIO_FORMAT_AC3) &&
+    //     (patch->aformat != AUDIO_FORMAT_DTS)) {
+    //     int abuf_level = get_buffer_read_space(ringbuffer);
+    //     process_pts_sync(0, patch, 0);
+    // }
+
     if (aml_getprop_bool("media.audiohal.outdump")) {
         FILE *fp1 = fopen("/data/audio_dtv.pcm", "a+");
         if (fp1) {
@@ -685,6 +703,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
                 } else {
                     avail = 512;
                 }
+                //ALOGE("%s(), ring_buffer_read now read %d data", __func__, avail);
                 ret = ring_buffer_read(
                           ringbuffer, (unsigned char *)patch->out_buf, avail);
                 if (ret == 0) {
@@ -720,7 +739,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
                 patch->dtv_pcm_readed += ret;
                 pthread_mutex_unlock(&(patch->dtv_output_mutex));
             } else {
-                ALOGE("%s(), ring_buffer has not enough data!", __func__);
+                ALOGE("%s(), ring_buffer has not enough data! %d in_avail()", __func__, avail);
                 pthread_mutex_unlock(&(patch->dtv_output_mutex));
                 usleep(50000);
             }
@@ -786,7 +805,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
 
                 ret = out_write_new(stream_out, patch->out_buf, ret);
                 {
-                    aml_out = direct_active(aml_dev);
+                    aml_out = (struct aml_stream_out*)stream_out;
                     if (aml_out != NULL) {
                         int pcm_lantcy = out_get_latency(&(aml_out->stream));
                         int abuf_level = get_buffer_read_space(ringbuffer);
