@@ -442,7 +442,7 @@ uint32_t out_get_latency_frames(const struct audio_stream_out *stream)
 
 int aml_audio_get_spdif_tuning_latency(void)
 {
-    char *prop_name = "persist.audio.hal.spdif_ltcy_ms";
+    char *prop_name = "persist.vendor.audio.hal.spdif_ltcy_ms";
     char buf[PROPERTY_VALUE_MAX];
     int latency_ms = 0;
     int ret = -1;

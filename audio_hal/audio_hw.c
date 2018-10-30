@@ -131,7 +131,7 @@
 #define IEC61937_PACKET_SIZE_OF_AC3     0x1800
 #define IEC61937_PACKET_SIZE_OF_EAC3    0x6000
 
-#define DISABLE_CONTINUOUS_OUTPUT "persist.aud.continuous.disable"
+#define DISABLE_CONTINUOUS_OUTPUT "persist.vendor.audio.continuous.disable"
 const char *str_usecases[STREAM_USECASE_MAX] = {
     "STREAM_PCM_NORMAL",
     "STREAM_PCM_DIRECT",
