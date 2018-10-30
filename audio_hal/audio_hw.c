@@ -1496,6 +1496,12 @@ static int out_pause (struct audio_stream_out *stream)
     pthread_mutex_lock (&adev->lock);
     pthread_mutex_lock (&out->lock);
     if (out->standby || out->pause_status == true) {
+        // If output stream is standby or paused,
+        // we should return Result::INVALID_STATE (3),
+        // thus we can pass VTS test.
+        ALOGE ("%s: stream in wrong status. standby(%d) or paused(%d)",
+                __func__, out->standby, out->pause_status);
+        r = 3;
         goto exit;
     }
     if (out->hw_sync_mode) {
@@ -3715,6 +3721,70 @@ static uint32_t in_get_input_frames_lost (struct audio_stream_in *stream __unuse
     return 0;
 }
 
+static int in_get_active_microphones (const struct audio_stream_in *stream,
+                                     struct audio_microphone_characteristic_t *mic_array __unused,
+                                     size_t *mic_count __unused) {
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    struct aml_audio_device *adev = in->dev;
+    ALOGI("%s", __func__);
+    return -ENOSYS;
+}
+
+static int adev_get_microphones (const struct audio_hw_device *dev,
+                                struct audio_microphone_characteristic_t *mic_array,
+                                size_t *mic_count) {
+    struct aml_audio_device *adev = (struct aml_audio_device *)dev;
+    ALOGI("%s mic_count : %d", __func__, *mic_count);
+    pthread_mutex_lock(&adev->lock);
+    if (mic_count == NULL) {
+        return -EINVAL;
+    }
+    if (mic_array == NULL) {
+        return -EINVAL;
+    }
+
+    if (*mic_count == 0) {
+        *mic_count = 1;
+        return 0;
+    }
+
+    struct audio_microphone_characteristic_t microphone;
+    char* device_id = "builtin_mic_1";
+    char* address = AUDIO_BOTTOM_MICROPHONE_ADDRESS;
+    strcpy(microphone.device_id, device_id);
+    strcpy(microphone.address, address);
+    microphone.device = AUDIO_DEVICE_IN_BUILTIN_MIC;
+    microphone.location = AUDIO_MICROPHONE_LOCATION_MAINBODY;
+    microphone.group = 0;
+    microphone.index_in_the_group = 0;
+    microphone.directionality = AUDIO_MICROPHONE_DIRECTIONALITY_OMNI;
+    microphone.num_frequency_responses = 5;
+    microphone.frequency_responses[0][0] = 97.16f;
+    microphone.frequency_responses[0][1] = 244.06f;
+    microphone.frequency_responses[0][2] = 409.73f;
+    microphone.frequency_responses[0][3] = 771.79f;
+    microphone.frequency_responses[0][4] = 2738.42f;
+    microphone.frequency_responses[1][0] = -0.80f;
+    microphone.frequency_responses[1][1] = -1.40f;
+    microphone.frequency_responses[1][2] = -1.90f;
+    microphone.frequency_responses[1][3] = -0.50f;
+    microphone.frequency_responses[1][4] = -2.50f;
+    microphone.sensitivity = -37.0f;
+    microphone.max_spl = 132.5f;
+    microphone.min_spl = 28.5f;
+    microphone.orientation.x = 0.0f;
+    microphone.orientation.y = -1.0f;
+    microphone.orientation.z = 0.0f;
+    microphone.geometric_location.x = 0.0485f;
+    microphone.geometric_location.y = 0.0f;
+    microphone.geometric_location.z = 0.0038f;
+
+    mic_array[0] = microphone;
+    *mic_count = 1;
+    pthread_mutex_unlock(&adev->lock);
+    return 0;
+}
+
 // open corresponding stream by flags, formats and others params
 static int adev_open_output_stream(struct audio_hw_device *dev,
                                 audio_io_handle_t handle __unused,
@@ -4722,6 +4792,60 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
     }
 #endif
 
+    ret = str_parms_get_str(parms, "hfp_set_sampling_rate", value, sizeof(value));
+    if (ret >= 0) {
+        ALOGE ("Amlogic_HAL - %s: hfp_set_sampling_rate. Abort function and return 0.", __FUNCTION__);
+        return 0;
+    }
+
+    ret = str_parms_get_str(parms, "hfp_volume", value, sizeof(value));
+    if (ret >= 0) {
+        ALOGE ("Amlogic_HAL - %s: hfp_volume. Abort function and return 0.", __FUNCTION__);
+        return 0;
+    }
+
+    ret = str_parms_get_str(parms, "bt_headset_name", value, sizeof(value));
+    if (ret >= 0) {
+        ALOGE ("Amlogic_HAL - %s: bt_headset_name. Abort function and return 0.", __FUNCTION__);
+        return 0;
+    }
+
+    ret = str_parms_get_str(parms, "rotation", value, sizeof(value));
+    if (ret >= 0) {
+        ALOGE ("Amlogic_HAL - %s: rotation. Abort function and return 0.", __FUNCTION__);
+        return 0;
+    }
+
+    ret = str_parms_get_str(parms, "bt_headset_nrec", value, sizeof(value));
+    if (ret >= 0) {
+        ALOGE ("Amlogic_HAL - %s: bt_headset_nrec. Abort function and return 0.", __FUNCTION__);
+        return 0;
+    }
+
+    ret = str_parms_get_str(parms, "bt_wbs", value, sizeof(value));
+    if (ret >= 0) {
+        ALOGE ("Amlogic_HAL - %s: bt_wbs. Abort function and return 0.", __FUNCTION__);
+        return 0;
+    }
+
+    ret = str_parms_get_str(parms, "hfp_enable", value, sizeof(value));
+    if (ret >= 0) {
+        ALOGE ("Amlogic_HAL - %s: hfp_enable. Abort function and return 0.", __FUNCTION__);
+        return 0;
+    }
+
+    ret = str_parms_get_str(parms, "HACSetting", value, sizeof(value));
+    if (ret >= 0) {
+        ALOGE ("Amlogic_HAL - %s: HACSetting. Abort function and return 0.", __FUNCTION__);
+        return 0;
+    }
+
+    ret = str_parms_get_str(parms, "tty_mode", value, sizeof(value));
+    if (ret >= 0) {
+        ALOGE ("Amlogic_HAL - %s: tty_mode. Abort function and return 0.", __FUNCTION__);
+        return 0;
+    }
+
 exit:
     str_parms_destroy (parms);
 
@@ -4966,6 +5090,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     in->stream.set_gain = in_set_gain;
     in->stream.read = in_read;
     in->stream.get_input_frames_lost = in_get_input_frames_lost;
+    in->stream.get_active_microphones = in_get_active_microphones;
 
     in->device = devices & ~AUDIO_DEVICE_BIT_IN;
     in->dev = adev;
@@ -8892,6 +9017,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->hw_device.create_audio_patch = adev_create_audio_patch;
     adev->hw_device.release_audio_patch = adev_release_audio_patch;
     adev->hw_device.set_audio_port_config = adev_set_audio_port_config;
+    adev->hw_device.get_microphones = adev_get_microphones;
     adev->hw_device.get_audio_port = adev_get_audio_port;
     adev->hw_device.dump = adev_dump;
 
