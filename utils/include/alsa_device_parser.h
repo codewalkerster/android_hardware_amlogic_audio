@@ -33,11 +33,15 @@
 #define PROT_PDM           4
 #define PORT_SPDIFB2HDMI   5
 #define PORT_I2S2HDMI      6
+#define PORT_TV            7
+
+#define PLAYBACK           0
+#define CAPTURE            1
 
 bool alsa_device_is_auge(void);
 
 int alsa_device_get_card_index();
 
-int alsa_device_get_pcm_index(int alsaPORT);
+int alsa_device_update_pcm_index(int alsaPORT, int stream);
 
 #endif

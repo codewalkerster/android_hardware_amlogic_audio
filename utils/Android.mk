@@ -18,7 +18,6 @@ LOCAL_SRC_FILES  +=               \
     aml_audio_resampler.c         \
     aml_ringbuffer.c              \
     aml_alsa_mixer.c              \
-    aml_hw_profile.c              \
     aml_android_utils.c           \
     aml_data_utils.c              \
     aml_configs/aml_conf_loader.c \
@@ -29,7 +28,8 @@ LOCAL_SRC_FILES  +=               \
     aml_volume_utils.c            \
     ini/ini.cpp                   \
     ini/IniParser.cpp             \
-    ac3_parser_utils.c
+    ac3_parser_utils.c            \
+    alsa_device_parser.c
 
 LOCAL_MODULE := libamaudioutils
 

@@ -130,7 +130,7 @@ int aml_alsa_output_open(struct audio_stream_out *stream)
 
         // mark: will there wil issue here? conflit with MS12 device?? zz
         if (card == alsa_device_get_card_index()) {
-            device = alsa_device_get_pcm_index(device);
+            device = alsa_device_update_pcm_index(device, PLAYBACK);
         }
 
         ALOGI("%s, audio open card(%d), device(%d)", __func__, card, device);

@@ -49,7 +49,6 @@
 #include "aml_audio_stream.h"
 #include "aml_data_utils.h"
 #include "aml_dump_debug.h"
-#include "aml_hw_profile.h"
 #include "audio_hw.h"
 #include "audio_hw_dtv.h"
 #include "audio_hw_profile.h"

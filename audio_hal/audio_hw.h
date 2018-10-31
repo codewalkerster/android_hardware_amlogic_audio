@@ -33,7 +33,6 @@
 
 #include "audio_hwsync.h"
 #include "audio_post_process.h"
-#include "aml_hw_profile.h"
 #include "aml_hw_mixer.h"
 #include "audio_eq_drc_compensation.h"
 #include "aml_dcv_dec_api.h"
@@ -93,7 +92,7 @@ static unsigned int DEFAULT_OUT_SAMPLING_RATE = 48000;
 
 #define DDP_FRAME_SIZE      768
 #define EAC3_MULTIPLIER 4
-/*
+
 enum {
     TYPE_PCM = 0,
     TYPE_AC3 = 2,
@@ -105,7 +104,6 @@ enum {
     TYPE_DTS_HD_MA = 8,//should not used after we unify DTS-HD&DTS-HD MA
     TYPE_PCM_HIGH_SR = 9,
 };
-*/
 
 #define AML_HAL_MIXER_BUF_SIZE  64*1024
 
