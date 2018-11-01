@@ -39,7 +39,7 @@ void DoDumpData(const void *data_buf, int size, int aud_src_type) {
     char file_path[PROPERTY_VALUE_MAX] = { 0 };
 
     memset(prop_value, '\0', PROPERTY_VALUE_MAX);
-    property_get("audio.dumpdata.en", prop_value, "null");
+    property_get("media.audiohal.dumpdata.en", prop_value, "null");
     if (strcasecmp(prop_value, "null") == 0
             || strcasecmp(prop_value, "0") == 0) {
         if (gDumpDataFd >= 0) {
@@ -49,7 +49,7 @@ void DoDumpData(const void *data_buf, int size, int aud_src_type) {
         return;
     }
 
-    property_get("audio.dumpdata.src", prop_value, "null");
+    property_get("media.audiohal.dumpdata.src", prop_value, "null");
     if (strcasecmp(prop_value, "null") == 0
             || strcasecmp(prop_value, "input") == 0
             || strcasecmp(prop_value, "0") == 0) {
@@ -67,7 +67,7 @@ void DoDumpData(const void *data_buf, int size, int aud_src_type) {
     }
 
     memset(file_path, '\0', PROPERTY_VALUE_MAX);
-    property_get("audio.dumpdata.path", file_path, "null");
+    property_get("media.audiohal.dumpdata.path", file_path, "null");
     if (strcasecmp(file_path, "null") == 0) {
         file_path[0] = '\0';
     }
