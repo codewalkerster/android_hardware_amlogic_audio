@@ -281,7 +281,7 @@ static DDPerr ddbs_getbsid(DDP_BSTRM *p_inbstrm,    DDPshort *p_bsid)
     return 0;
 }
 
-static int Get_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChNum)
+static int Get_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChNum, int *is_eac3)
 {
     DDP_BSTRM bstrm = {NULL, 0, 0};
     DDP_BSTRM *p_bstrm = &bstrm;
@@ -310,8 +310,10 @@ static int Get_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChN
     }
     if (ISDDP(bsid)) {
         Get_DDP_Parameters(ptr8, sample_rate, frame_size, ChNum);
+        *is_eac3 = 1;
     } else if (ISDD(bsid)) {
         Get_DD_Parameters(ptr8, sample_rate, frame_size, ChNum);
+        *is_eac3 = 0;
     }
     return 0;
 }
@@ -450,6 +452,7 @@ void *decode_threadloop(void *data)
     int ret = 0;
     int mSample_rate = 0;
     int mFrame_size = 0;
+    int is_eac3 = 0;
     int mChNum = 0;
     int in_sync = 0;
     unsigned char temp;
@@ -525,7 +528,7 @@ void *decode_threadloop(void *data)
         while (parser->decode_ThreadExitFlag == 0 && remain_size > 16) {
             if ((read_pointer[0] == 0x0b && read_pointer[1] == 0x77) || \
                 (read_pointer[0] == 0x77 && read_pointer[1] == 0x0b)) {
-                Get_Parameters(read_pointer, &mSample_rate, &mFrame_size, &mChNum);
+                Get_Parameters(read_pointer, &mSample_rate, &mFrame_size, &mChNum, &is_eac3);
                 if ((mFrame_size == 0) || (mFrame_size < PTR_HEAD_SIZE) || \
                     (mChNum == 0) || (mSample_rate == 0)) {
                 } else {
@@ -701,6 +704,7 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
     int mSample_rate = 0;
     int mFrame_size = 0;
     int mChNum = 0;
+    int is_eac3 = 0;
     int in_sync = 0;
     int used_size;
     int i = 0;
@@ -737,7 +741,7 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
         while (ddp_dec->remain_size > 16) {
             if ((read_pointer[0] == 0x0b && read_pointer[1] == 0x77) || \
                 (read_pointer[0] == 0x77 && read_pointer[1] == 0x0b)) {
-                Get_Parameters(read_pointer, &mSample_rate, &mFrame_size, &mChNum);
+                Get_Parameters(read_pointer, &mSample_rate, &mFrame_size, &mChNum,&is_eac3);
                 if ((mFrame_size == 0) || (mFrame_size < PTR_HEAD_SIZE) || \
                     (mChNum == 0) || (mSample_rate == 0)) {
                 } else {

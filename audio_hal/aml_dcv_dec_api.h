@@ -34,7 +34,7 @@ struct dolby_ddp_dec {
     int nIsEc3;
     int digital_raw;
     bool is_iec61937;
-    int (*get_parameters)(void *, int *, int *, int *);
+    int (*get_parameters)(void *, int *, int *, int *,int *);
     int (*decoder_process)(unsigned char*, int, unsigned char *, int *, char *, int *, int, struct pcm_info *);
     pthread_mutex_t lock;
     struct pcm_info pcm_out_info;
