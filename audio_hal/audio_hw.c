@@ -1152,6 +1152,7 @@ static int out_flush (struct audio_stream_out *stream)
     out->frame_skip_sum = 0;
     out->skip_frame = 0;
     out->pause_status = false;
+    out->input_bytes_size = 0;
     aml_audio_hwsync_init(out->hwsync, out);
 
 exit:
