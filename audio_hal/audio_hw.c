@@ -4254,8 +4254,13 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
 
     ret = str_parms_get_int(parms, "Audio hdmi-out mute", &val);
     if (ret >= 0) {
-        aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_HDMI_OUT_AUDIO_MUTE, val);
-        ALOGI("audio hdmi out status: %d\n", val);
+        /* for tv,hdmitx module is not registered, do not reponse this control interface */
+#ifndef TV_AUDIO_OUTPUT
+        {
+            aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_HDMI_OUT_AUDIO_MUTE, val);
+            ALOGI("audio hdmi out status: %d\n", val);
+        }
+#endif
         goto exit;
     }
 
