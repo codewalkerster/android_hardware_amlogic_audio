@@ -400,8 +400,8 @@ static int handle_audio_drc_data(IniParser* pIniParser, struct audio_eq_drc_info
     p_attr->drc_byte_mode = strtoul(ini_value, NULL, 0);
 
     tmp_ret |= handle_one_audio_eq_drc_data(pIniParser, &p_attr->drc_table, (char *)"drc_param", (char *)"drc_table");
-    tmp_ret |= handle_one_audio_eq_drc_data(pIniParser, &p_attr->drc_ead, (char *)"drc_param", (char *)"drc_ead_table");
-    tmp_ret |= handle_one_audio_eq_drc_data(pIniParser, &p_attr->drc_tko, (char *)"drc_param", (char *)"drc_tko_table");
+ //   tmp_ret |= handle_one_audio_eq_drc_data(pIniParser, &p_attr->drc_ead, (char *)"drc_param", (char *)"drc_ead_table");
+ //   tmp_ret |= handle_one_audio_eq_drc_data(pIniParser, &p_attr->drc_tko, (char *)"drc_param", (char *)"drc_tko_table");
 #if 0
     PrintRegData(p_attr->eq_byte_mode, p_attr->drc_ead.reg_cnt, p_attr->drc_ead.regs);
     PrintRegData(p_attr->eq_byte_mode, p_attr->drc_tko.reg_cnt, p_attr->drc_tko.regs);

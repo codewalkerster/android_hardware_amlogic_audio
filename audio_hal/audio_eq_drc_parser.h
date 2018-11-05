@@ -90,8 +90,6 @@ struct audio_eq_drc_info_s {
     char drc_name[32];
     int drc_byte_mode;
     struct audio_eq_drc_reg_s drc_table;
-    struct audio_eq_drc_reg_s drc_ead;
-    struct audio_eq_drc_reg_s drc_tko;
     int aml_ng_enable;
     float aml_ng_level;
     int aml_ng_attrack_time;

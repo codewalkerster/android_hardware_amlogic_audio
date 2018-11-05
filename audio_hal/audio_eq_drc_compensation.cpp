@@ -31,13 +31,6 @@
 #define MODEL_SUM_DEFAULT_PATH "/vendor/etc/tvconfig/model/model_sum.ini"
 #define EQ_DRC_SOC_DEFAULT_PATH "/vendor/etc/tvconfig/audio/AMLOGIC_SOC_DEFAULT.ini"
 #define EXT_AMP_DEFAULT_PATH "/vendor/etc/tvconfig/audio/EXT_AMP_DEFAULT.ini"
-struct eq_drc_sys_file_node {
-    char eq[256];
-    char drc[256];
-    char drc_tko[256];
-};
-
-static struct eq_drc_sys_file_node *file_node = NULL;
 
 static struct eq_drc_device_config_s dev_cfg[] = {
     {/*amlogic inner EQ & DRC*/
@@ -73,36 +66,22 @@ static struct eq_drc_device_config_s dev_cfg[] = {
 */
 static int get_model_name(char *model_name, int size)
 {
-    int fd;
     int ret = -1;
-    char node[50] = {0};
-    const char *filename = "/proc/idme/model_name";
+    char node[PROPERTY_VALUE_MAX];
 
-    fd = open(filename, O_RDONLY);
-    if (fd < 0) {
-        ALOGE("%s: open %s failed", __FUNCTION__, filename);
-        goto exit;
-    }
-    if (read (fd, node, 50) < 0) {
-        ALOGE("%s: read Model Name failed", __FUNCTION__);
-        goto exit;
-    }
+    ret = property_get("tv.model_name", node, NULL);
 
-    ret = 0;
-exit:
     if (ret < 0)
         snprintf(model_name, size, "DEFAULT");
     else
         snprintf(model_name, size, "%s", node);
     ALOGD("%s: Model Name -> %s", __FUNCTION__, model_name);
-    close(fd);
     return ret;
 }
 
-static int eq_drc_ctl_value_set(struct eq_drc_data *pdata, int val_count, int *buf, char *name)
+static int eq_drc_ctl_value_set(struct eq_drc_data *pdata, int val, char *name)
 {
     int ret = -1;
-    int index, num_values;
     struct mixer_ctl *ctl;
 
     pdata->mixer = mixer_open(pdata->card);
@@ -115,16 +94,9 @@ static int eq_drc_ctl_value_set(struct eq_drc_data *pdata, int val_count, int *b
         ALOGE("%s: get mixer ctl failed", __FUNCTION__);
         goto ERROR;
     }
-    num_values = mixer_ctl_get_num_values(ctl);
-    if (num_values != val_count) {
-        ALOGE("%s: num_values[%d] != val_count[%d] failed", __FUNCTION__, num_values, val_count);
+    if (mixer_ctl_set_value(ctl, 0, val)) {
+        ALOGE("%s: set value = %d failed", __FUNCTION__, val);
         goto ERROR;
-    }
-    for (index = 0; index < num_values; index++) {
-        if (mixer_ctl_set_value(ctl, index, buf[index])) {
-            ALOGE("%s: set value = %d failed", __FUNCTION__, index);
-            goto ERROR;
-        }
     }
 
     ret = 0;
@@ -147,81 +119,66 @@ int16_t swapInt16(int16_t value)
            ((value & 0xFF00) >> 8) ;
 }
 
-static int eq_drc_write_sys_file(const char *path, const char *val)
+static int eq_drc_ctl_array_set(struct eq_drc_data *pdata, int val_count, unsigned int *values, char *name, int reg_mode)
 {
-    int fd;
-    int len;
+    int i, num_values;
+    struct mixer_ctl *ctl;
 
-    fd = open(path, O_RDWR);
-    if (fd < 0) {
-        ALOGE("%s: open %s error(%s)", __FUNCTION__, path, strerror(errno));
+    pdata->mixer = mixer_open(pdata->card);
+    if (pdata->mixer == NULL) {
+        ALOGE("%s: mixer is closed", __FUNCTION__);
         return -1;
     }
-
-    len = write(fd, val, strlen(val));
-    if (len < 0) {
-        ALOGE("%s: write error %s", __FUNCTION__, strerror(errno));
+    ctl = mixer_get_ctl_by_name(pdata->mixer, name);
+    if (ctl == NULL) {
+        ALOGE("%s: get mixer ctl failed", __FUNCTION__);
+        goto ERROR;
     }
-    close(fd);
-
-    return len;
-}
-
-static int eq_param_set(int id, unsigned int value[], int size)
-{
-    int i = 0;
-    int ret = 0;
-    char tmp[256] = {0};
-    char tmp_buf[4096] = {0};
-
-    for (i = 0; i < size; i++) {
-        sprintf(tmp,"%u,",value[i]);
-        strcat((char *)tmp_buf, tmp);
-        memset(tmp, 0, sizeof(tmp));
+    num_values = mixer_ctl_get_num_values(ctl);
+    if (num_values != val_count * reg_mode) {
+        ALOGE("%s: num_values[%d] != val_count[%d] failed", __FUNCTION__, num_values, val_count);
+        goto ERROR;
     }
-    tmp_buf[strlen(tmp_buf) - 1] = '\0';
-    ALOGD("%s: [%d] = %s", __FUNCTION__, size, tmp_buf);
-    ret = eq_drc_write_sys_file(file_node[id].eq, tmp_buf);
 
-    return ret;
-}
-
-static int drc_param_set(int id, unsigned int value[], int size)
-{
-    int i = 0;
-    int ret = 0;
-    char tmp[256] = {0};
-    char tmp_buf[4096] = {0};
-
-    for (i = 0; i < size; i++) {
-        sprintf(tmp,"%u,",value[i]);
-        strcat((char *)tmp_buf, tmp);
-        memset(tmp, 0, sizeof(tmp));
+    ALOGI("%s: reg_mode = %d", __FUNCTION__, reg_mode);
+    if (reg_mode == 1) {
+        /* register type is u8 */
+        char *buf;
+        buf = (char *)calloc(1, num_values);
+        if (buf == NULL) {
+            ALOGE("%s: Failed to alloc mem for bytes: %d", __FUNCTION__, num_values);
+            goto ERROR;
+        }
+        for (i = 0; i < num_values; i++) {
+            /*ALOGI("buf[%d] = 0x%x", i, values[i]);*/
+            buf[i] = (char)values[i];
+        }
+        mixer_ctl_set_array(ctl, buf, (size_t)num_values);
+    } else if (reg_mode == 2) {
+        /* register type is u16 */
+        int16_t *buf;
+        buf = (int16_t *)calloc(2, num_values);
+        if (buf == NULL) {
+            ALOGE("%s: Failed to alloc mem for bytes: %d", __FUNCTION__, num_values);
+            goto ERROR;
+        }
+        for (i = 0; i < val_count; i++) {
+            /*ALOGI("buf[%d] = 0x%x", i, values[i]);*/
+            buf[i] = swapInt16((int16_t)values[i]);
+        }
+        mixer_ctl_set_array(ctl, buf, (size_t)num_values);
+    } else if (reg_mode == 4) {
+        /*register type is u32*/
+        for (i = 0; i < val_count; i++) {
+            /*ALOGI("buf[%d] = 0x%x", i, values[i]);*/
+            values[i] = swapInt32(values[i]);
+        }
+        mixer_ctl_set_array(ctl, values, (size_t)num_values);
     }
-    tmp_buf[strlen(tmp_buf) - 1] = '\0';
-    ALOGD("%s: [%d] = %s", __FUNCTION__, size, tmp_buf);
-    ret = eq_drc_write_sys_file(file_node[id].drc, tmp_buf);
 
-    return ret;
-}
-
-static int drc_tko_param_set(int id, unsigned int value[], int size)
-{
-    int i = 0;
-    int ret = 0;
-    char tmp[256] = {0};
-    char tmp_buf[4096] = {0};
-
-    for (i = 0; i < size; i++) {
-        sprintf(tmp,"%u,",value[i]);
-        strcat((char *)tmp_buf, tmp);
-        memset(tmp, 0, sizeof(tmp));
-    }
-    tmp_buf[strlen(tmp_buf) - 1] = '\0';
-    ALOGD("%s: [%d] = %s", __FUNCTION__, size, tmp_buf);
-    ret = eq_drc_write_sys_file(file_node[id].drc_tko, tmp_buf);
-
-    return ret;
+ERROR:
+    mixer_close(pdata->mixer);
+    return 0;
 }
 
 static int eq_status_set(struct eq_drc_data *pdata, int id, int status)
@@ -229,7 +186,7 @@ static int eq_status_set(struct eq_drc_data *pdata, int id, int status)
     int val = status;
 
     ALOGD("%s: name = %s val = %d", __FUNCTION__, dev_cfg[id].eq, val);
-    return eq_drc_ctl_value_set(pdata, 1, &val, dev_cfg[id].eq);
+    return eq_drc_ctl_value_set(pdata, val, dev_cfg[id].eq);
 }
 
 static int drc_status_set(struct eq_drc_data *pdata, int id, int status)
@@ -237,7 +194,7 @@ static int drc_status_set(struct eq_drc_data *pdata, int id, int status)
     int val = status;
 
     ALOGD("%s: name = %s val = %d", __FUNCTION__, dev_cfg[id].drc, val);
-    return eq_drc_ctl_value_set(pdata, 1, &val, dev_cfg[id].drc);
+    return eq_drc_ctl_value_set(pdata, val, dev_cfg[id].drc);
 }
 
 static int eq_param_init(struct eq_drc_data *pdata, int id)
@@ -363,7 +320,8 @@ static int eq_param_init(struct eq_drc_data *pdata, int id)
         break;
     }
 
-    if (eq_param_set(id, eq_vale, k) < 0) {
+    if (eq_drc_ctl_array_set(pdata, k, eq_vale, dev_cfg[id].eq_table,
+                p_attr->drc_byte_mode) < 0) {
         ALOGD("%s: eq_param_set failed", __FUNCTION__);
         return -1;
     }
@@ -380,8 +338,7 @@ static int eq_param_init(struct eq_drc_data *pdata, int id)
 static int drc_param_init(struct eq_drc_data *pdata, int id)
 {
     int i, j, k;
-    unsigned int drc_tko_value[32] = {0};
-    unsigned int drc_ead_value[32] = {0};
+    unsigned int drc_value[64] = {0};
     struct audio_eq_drc_info_s *p_attr = &pdata->p_attr[id];
 
     if (drc_status_set(pdata, id, 0) < 0) {
@@ -398,25 +355,14 @@ static int drc_param_init(struct eq_drc_data *pdata, int id)
     }
 
     k = 0;
-    for (i = 0; i < p_attr->drc_ead.reg_cnt; i++) {
-        for (j = 0; j < p_attr->drc_ead.regs[i].len; j++, k++) {
-            drc_ead_value[k] = p_attr->drc_ead.regs[i].data[j];
-            //ALOGD("%s: %d %d", __FUNCTION__, k, p_attr->drc_ead.regs[i].data[j]);
+    for (i = 0; i < p_attr->drc_table.reg_cnt; i++) {
+        for (j = 0; j < p_attr->drc_table.regs[i].len; j++, k++) {
+            drc_value[k] = p_attr->drc_table.regs[i].data[j];
         }
     }
-    if (drc_param_set(id, drc_ead_value, k) < 0) {
+    if (eq_drc_ctl_array_set(pdata, k, drc_value, dev_cfg[id].drc_table,
+            p_attr->eq_byte_mode) < 0) {
         ALOGD("%s: drc_param_set failed", __FUNCTION__);
-        return -1;
-    }
-
-    k = 0;
-    for (i = 0; i < p_attr->drc_tko.reg_cnt; i++) {
-        for (j = 0; j < p_attr->drc_tko.regs[i].len; j++, k++) {
-            drc_tko_value[k] = p_attr->drc_tko.regs[i].data[j];
-        }
-    }
-    if (drc_tko_param_set(id, drc_tko_value, k) < 0) {
-        ALOGD("%s: drc_tko_param_set failed", __FUNCTION__);
         return -1;
     }
 
@@ -438,19 +384,19 @@ static int volume_set(struct eq_drc_data *pdata, int id)
     if (!p_attr->volume.support)
         goto exit;
 
-    ret = eq_drc_ctl_value_set(pdata, 1, &p_attr->volume.master, dev_cfg[id].master_vol);
+    ret = eq_drc_ctl_value_set(pdata, p_attr->volume.master, dev_cfg[id].master_vol);
     if (ret < 0) {
         ALOGE("%s: set Device(%d) Master volume failed", __FUNCTION__, id);
         goto exit;
     }
 
-    ret = eq_drc_ctl_value_set(pdata, 1, &p_attr->volume.ch1, dev_cfg[id].ch1_vol);
+    ret = eq_drc_ctl_value_set(pdata, p_attr->volume.ch1, dev_cfg[id].ch1_vol);
     if (ret < 0) {
         ALOGE("%s: set Device(%d) CH1 volume failed", __FUNCTION__, id);
         goto exit;
     }
 
-    ret = eq_drc_ctl_value_set(pdata, 1, &p_attr->volume.ch2, dev_cfg[id].ch2_vol);
+    ret = eq_drc_ctl_value_set(pdata, p_attr->volume.ch2, dev_cfg[id].ch2_vol);
     if (ret < 0) {
         ALOGE("%s: set Device(%d) CH2 volume failed", __FUNCTION__, id);
         goto exit;
@@ -468,7 +414,7 @@ static int model_id_set(struct eq_drc_data *pdata, int id)
     if (!p_attr->mod.support)
         return ret;
 
-    ret = eq_drc_ctl_value_set(pdata, 1, &p_attr->mod.model, dev_cfg[id].model);
+    ret = eq_drc_ctl_value_set(pdata, p_attr->mod.model, dev_cfg[id].model);
     if (ret < 0)
         ALOGE("%s: set Device(%d) Model ID failed", __FUNCTION__, id);
     return ret;
@@ -530,7 +476,7 @@ int eq_drc_init(struct eq_drc_data *pdata)
     char node[50] = {0};
     char buffer[100] = {0};
     char model_name[50] = {0};
-    const char *filename = "/tvconfig/model/model_sum.ini";
+    const char *filename = MODEL_SUM_DEFAULT_PATH;
 
     pdata->s_gain.atv = 1.0;
     pdata->s_gain.dtv = 1.0;
@@ -542,11 +488,7 @@ int eq_drc_init(struct eq_drc_data *pdata)
 
     pdata->dev_num = sizeof(dev_cfg) / sizeof(struct eq_drc_device_config_s);
     ALOGD("%s: device num = %d", __FUNCTION__, pdata->dev_num);
-    file_node = (struct eq_drc_sys_file_node *)calloc(pdata->dev_num, sizeof(struct eq_drc_sys_file_node));
-    if (!file_node) {
-        ALOGE("%s: calloc eq_drc_sys_file_node failed", __FUNCTION__);
-        return -1;
-    }
+
     pdata->p_attr = (struct audio_eq_drc_info_s *)calloc(pdata->dev_num, sizeof(struct audio_eq_drc_info_s));
     if (!pdata->p_attr) {
         ALOGE("%s: calloc audio_eq_drc_info_s failed", __FUNCTION__);
@@ -566,12 +508,8 @@ int eq_drc_init(struct eq_drc_data *pdata)
         volume_set(pdata, i);
 
         if (strcmp(pdata->p_attr[i].eq_name, pdata->p_attr[i].drc_name) != 0)
-            ALOGW("%s: EQ name = %s DRC name = %s", __FUNCTION__, pdata->p_attr[i].eq_name, pdata->p_attr[i].drc_name);
+            ALOGD("%s: EQ name = %s DRC name = %s", __FUNCTION__, pdata->p_attr[i].eq_name, pdata->p_attr[i].drc_name);
         if (strstr(dev_cfg[i].ini_header, "AMLOGIC_SOC_INI_PATH")) {
-            strcpy(file_node[i].eq, "/sys/module/snd_soc_aml_g9tv/parameters/aml_EQ_param");
-            strcpy(file_node[i].drc, "/sys/module/snd_soc_aml_g9tv/parameters/aml_drc_table");
-            strcpy(file_node[i].drc_tko, "/sys/module/snd_soc_aml_g9tv/parameters/aml_drc_tko_table");
-
             if (pdata->p_attr[i].s_gain.support) {
                 pdata->s_gain.atv = DbToAmpl(pdata->p_attr[i].s_gain.atv);
                 pdata->s_gain.dtv = DbToAmpl(pdata->p_attr[i].s_gain.dtv);
@@ -585,17 +523,11 @@ int eq_drc_init(struct eq_drc_data *pdata)
             }
         } else {
             strcpy(node, pdata->p_attr[i].eq_name);
-            sprintf(file_node[i].eq, "%s%s%s%s%s", "/sys/module/snd_soc_", node, "/parameters/", node, "_EQ_table");
-            sprintf(file_node[i].drc, "%s%s%s%s%s", "/sys/module/snd_soc_", node, "/parameters/", node, "_drc1_table");
-            sprintf(file_node[i].drc_tko, "%s%s%s%s%s", "/sys/module/snd_soc_", node, "/parameters/", node, "_drc1_tko_table");
         }
 
         memset(buffer, 0, sizeof(buffer));
         memset(node, 0, sizeof(node));
 
-        ALOGD("%s: EQ node -> %s", __FUNCTION__, file_node[i].eq);
-        ALOGD("%s: DRC node -> %s", __FUNCTION__, file_node[i].drc);
-        ALOGD("%s: DRC TKO node -> %s", __FUNCTION__, file_node[i].drc_tko);
     }
 
     ret = eq_drc_param_init(pdata, 1, 1);
@@ -606,10 +538,6 @@ int eq_drc_init(struct eq_drc_data *pdata)
 
     return 0;
 ERROR:
-    if (file_node) {
-        free(file_node);
-        file_node = NULL;
-    }
     if (pdata->p_attr) {
         free(pdata->p_attr);
         pdata->p_attr = NULL;
@@ -623,10 +551,6 @@ int eq_drc_release(struct eq_drc_data *pdata)
     if (pdata->p_attr) {
         free(pdata->p_attr);
         pdata->p_attr = NULL;
-    }
-    if (file_node) {
-        free(file_node);
-        file_node = NULL;
     }
 
     return 0;
