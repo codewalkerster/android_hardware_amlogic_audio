@@ -106,6 +106,7 @@ struct cmd_list {
     int cmd;
     int cmd_num;
     int used;
+    int initd;
 };
 
 struct cmd_list dtv_cmd_list = {
@@ -146,18 +147,27 @@ static unsigned long decoder_apts_lookup(unsigned int offset)
 
 static void init_cmd_list(void)
 {
-    pthread_mutex_lock(&dtv_patch_mutex);
     dtv_cmd_list.next = NULL;
     dtv_cmd_list.cmd = -1;
     dtv_cmd_list.cmd_num = 0;
     dtv_cmd_list.used = 0;
+    dtv_cmd_list.initd = 1;
     memset(cmd_array, 0, sizeof(cmd_array));
-    pthread_mutex_unlock(&dtv_patch_mutex);
+}
+
+static void deinit_cmd_list(void)
+{
+    dtv_cmd_list.next = NULL;
+    dtv_cmd_list.cmd = -1;
+    dtv_cmd_list.cmd_num = 0;
+    dtv_cmd_list.used = 0;
+    dtv_cmd_list.initd = 0;
 }
 
 static struct cmd_list *cmd_array_get(void)
 {
     int index = 0;
+
     pthread_mutex_lock(&dtv_patch_mutex);
     for (index = 0; index < 16; index++) {
         if (cmd_array[index].used == 0) {
@@ -193,7 +203,13 @@ static void _add_cmd_to_tail(struct cmd_list *node)
 
 int dtv_patch_add_cmd(int cmd)
 {
-    struct cmd_list *list = cmd_array_get();
+    struct cmd_list *list = NULL;
+
+    if (dtv_cmd_list.initd  == 0) {
+        return 0;
+    }
+
+    list = cmd_array_get();
     if (list == NULL) {
         ALOGI("can't get cmd list, add by live \n");
         return -1;
@@ -1059,7 +1075,6 @@ int create_dtv_patch(struct audio_hw_device *dev, audio_devices_t input,
 
     int ret = 0;
     // ALOGI("++%s live period_size %d\n", __func__, period_size);
-    init_cmd_list();
     pthread_mutex_lock(&dtv_patch_mutex);
     patch = calloc(1, sizeof(*patch));
     if (!patch) {
@@ -1096,7 +1111,7 @@ int create_dtv_patch(struct audio_hw_device *dev, audio_devices_t input,
     }
     create_dtv_output_stream_thread(patch);
     pthread_mutex_unlock(&dtv_patch_mutex);
-
+    init_cmd_list();
     ALOGI("--%s", __FUNCTION__);
     return 0;
 err_parse_thread:
@@ -1128,7 +1143,7 @@ int release_dtv_patch(struct aml_audio_device *aml_dev)
         return -1;
     }
 
-
+    deinit_cmd_list();
 
     pthread_mutex_lock(&patch->dtv_input_mutex);
     patch->input_thread_exit = 1;
