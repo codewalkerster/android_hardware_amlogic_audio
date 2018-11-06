@@ -5582,7 +5582,11 @@ ssize_t aml_audio_spdif_output (struct audio_stream_out *stream,
         /* init pcm configs, no DDP case in dual output */
         memset(&config, 0, sizeof(struct pcm_config));
         config.channels = 2;
-        config.rate = MM_FULL_POWER_SAMPLING_RATE;
+        if (eDolbyDcvLib == aml_dev->dolby_lib_type) {
+            config.rate = aml_out->config.rate;
+        } else {
+            config.rate = MM_FULL_POWER_SAMPLING_RATE;
+        }
         config.period_size = DEFAULT_PLAYBACK_PERIOD_SIZE * 2;
         config.period_count = PLAYBACK_PERIOD_COUNT;
         config.start_threshold = DEFAULT_PLAYBACK_PERIOD_SIZE * 2 * PLAYBACK_PERIOD_COUNT;
@@ -7017,12 +7021,14 @@ re_write:
                 }
                 /*wirte raw data*/
                 if (ddp_dec->outlen_raw > 0 && aml_out->dual_output_flag) {/*dual output: pcm & raw*/
+                    if (ddp_dec->pcm_out_info.sample_rate > 0)
+                        aml_out->config.rate = ddp_dec->pcm_out_info.sample_rate;
                     aml_audio_spdif_output(stream, (void *)ddp_dec->outbuf_raw, ddp_dec->outlen_raw);
                 }
                 //now only TV ARC output is using single output. we are implementing the OTT HDMI output in this case.
                 // TODO  add OUTPUT_HDMI in this case
                 else if (ddp_dec->digital_raw > 0 && adev->active_outport == OUTPORT_HDMI_ARC) {/*single raw output*/
-					if (ddp_dec->pcm_out_info.sample_rate > 0)
+                    if (ddp_dec->pcm_out_info.sample_rate > 0)
                         aml_out->config.rate = ddp_dec->pcm_out_info.sample_rate;
                     if (patch)
                            patch->sample_rate = ddp_dec->pcm_out_info.sample_rate;
