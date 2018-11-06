@@ -98,7 +98,7 @@ int aml_alsa_output_open(struct audio_stream_out *stream)
             memset(&config_raw, 0, sizeof(struct pcm_config));
             int period_mul = (adev->sink_format  == AUDIO_FORMAT_E_AC3) ? 4 : 1;
             config_raw.channels = 2;
-            config_raw.rate = MM_FULL_POWER_SAMPLING_RATE ;
+            config_raw.rate = aml_out->config.rate;//MM_FULL_POWER_SAMPLING_RATE ;
             config_raw.period_size = DEFAULT_PLAYBACK_PERIOD_SIZE * period_mul;
             config_raw.period_count = PLAYBACK_PERIOD_COUNT;
             config_raw.start_threshold = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
