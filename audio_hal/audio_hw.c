@@ -7624,6 +7624,14 @@ void *audio_patch_input_threadloop(void *data)
             }
             ALOGV("++%s start to in read, periodmul %d, threshold %d",
                   __func__, period_mul, read_threshold);
+
+            // buffer size diff from allocation size, need to resize.
+            if (patch->in_buf_size < (size_t)read_bytes * period_mul) {
+                ALOGI("%s: !!realloc in buf size from %zu to %zu", __func__, patch->in_buf_size, read_bytes * period_mul);
+                patch->in_buf = realloc(patch->in_buf, read_bytes * period_mul);
+                patch->in_buf_size = read_bytes * period_mul;
+            }
+
             bytes_avail = in_read(stream_in, patch->in_buf, read_bytes * period_mul);
             ALOGV("++%s in read over read_bytes = %d, in_read returns = %d",
                   __FUNCTION__, read_bytes * period_mul, bytes_avail);
@@ -7753,6 +7761,14 @@ void *audio_patch_output_threadloop(void *data)
     prctl(PR_SET_NAME, (unsigned long)"audio_output_patch");
     while (!patch->output_thread_exit) {
         int period_mul = (patch->aformat == AUDIO_FORMAT_E_AC3) ? EAC3_MULTIPLIER : 1;
+
+        // buffer size diff from allocation size, need to resize.
+        if (patch->out_buf_size < (size_t)write_bytes * period_mul) {
+            ALOGI("%s: !!realloc out buf size from %zu to %zu", __func__, patch->out_buf_size, write_bytes * period_mul);
+            patch->out_buf = realloc(patch->out_buf, write_bytes * period_mul);
+            patch->out_buf_size = write_bytes * period_mul;
+        }
+
         pthread_mutex_lock(&patch->mutex);
         ALOGV("%s(), ringbuffer level read before wait--%d",
               __func__, get_buffer_read_space(ringbuffer));
