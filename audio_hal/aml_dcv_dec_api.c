@@ -642,6 +642,7 @@ int dcv_decoder_init_patch(struct dolby_ddp_dec *ddp_dec)
     ddp_dec->outlen_pcm = 0;
     ddp_dec->outlen_raw = 0;
     ddp_dec->nIsEc3 = 0;
+    ddp_dec->curFrmSize = 0;
     ddp_dec->inbuf = NULL;
     ddp_dec->outbuf = NULL;
     ddp_dec->outbuf_raw = NULL;
@@ -680,6 +681,7 @@ int dcv_decoder_release_patch(struct dolby_ddp_dec *ddp_dec)
         ddp_dec->outlen_pcm = 0;
         ddp_dec->outlen_raw = 0;
         ddp_dec->nIsEc3 = 0;
+        ddp_dec->curFrmSize = 0;
         free(ddp_dec->inbuf);
         free(ddp_dec->outbuf);
         ddp_dec->inbuf = NULL;
@@ -779,7 +781,7 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
         }
         read_offset = 8;
     }
-
+    ddp_dec->curFrmSize = mFrame_size;
     ALOGV("remain %d, frame size %d,in sync %d\n", ddp_dec->remain_size, mFrame_size, in_sync);
 
     //we do not have one complete dolby frames.we need cache the

@@ -708,6 +708,11 @@ void *audio_dtv_patch_output_threadloop(void *data)
                 } else {
                     avail = 512;
                 }
+
+                if (aml_dev->ddp.curFrmSize != 0) {
+                    avail = aml_dev->ddp.curFrmSize;
+                }
+
                 //ALOGE("%s(), ring_buffer_read now read %d data", __func__, avail);
                 ret = ring_buffer_read(
                           ringbuffer, (unsigned char *)patch->out_buf, avail);
