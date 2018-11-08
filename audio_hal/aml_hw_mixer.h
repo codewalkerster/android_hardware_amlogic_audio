@@ -21,8 +21,8 @@
 #include <system/audio.h>
 
 // just keep the original size. Have no idea why
-//#define AML_HW_MIXER_BUF_SIZE  64*1024
-#define AML_HW_MIXER_BUF_SIZE  256*1024
+#define AML_HW_MIXER_BUF_SIZE  64*1024
+//#define AML_HW_MIXER_BUF_SIZE  256*1024
 struct aml_hw_mixer {
     unsigned char *start_buf;
     unsigned int wp;

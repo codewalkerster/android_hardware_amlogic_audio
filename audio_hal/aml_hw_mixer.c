@@ -96,7 +96,7 @@ int aml_hw_mixer_get_content_l(struct aml_hw_mixer *mixer)
 //need called by device mutux locked
 int aml_hw_mixer_write(struct aml_hw_mixer *mixer, const void *buffer, size_t bytes)
 {
-    int retry = 2;
+    int retry = 5;
     unsigned tail, space, write_bytes = bytes;
 
     if (!mixer || !mixer->start_buf)
