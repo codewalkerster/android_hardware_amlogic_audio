@@ -3871,7 +3871,12 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
                 out->config.rate /= 4;
                 out->hal_internal_format = AUDIO_FORMAT_E_AC3;
             } else if (out->config.channels == 2 && out->config.rate >= 32000 && out->config.rate <= 48000) {
-                out->hal_internal_format =  AUDIO_FORMAT_AC3;
+                if (adev->audio_type == DTS) {
+                    out->hal_internal_format = AUDIO_FORMAT_DTS;
+                    adev->dolby_lib_type = eDolbyDcvLib;
+                } else {
+                    out->hal_internal_format = AUDIO_FORMAT_AC3;
+                }
             } else if (out->config.channels >= 6 && out->config.rate == 192000) {
                 out->hal_internal_format = AUDIO_FORMAT_DTS_HD;
             } else {
