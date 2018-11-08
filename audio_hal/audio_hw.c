@@ -5946,121 +5946,127 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
     } else {
         /*atom project supports 32bit hal only*/
         /*TODO: Direct PCM case, I think still needs EQ and AEC */
-        int16_t *tmp_buffer = (int16_t *)buffer;
-        size_t out_frames = bytes / (2 * 2);
+        if (aml_out->is_tv_platform == 1) {
+            int16_t *tmp_buffer = (int16_t *)buffer;
+            size_t out_frames = bytes / (2 * 2);
 
-        int16_t *effect_tmp_buf, *hp_tmp_buf;
-        float source_gain;
-        float gain_headphone = adev->eq_data.p_gain.headphone;
-        float gain_speaker = adev->eq_data.p_gain.speaker;
-        float gain_spdif_arc = adev->eq_data.p_gain.spdif_arc;
+            int16_t *effect_tmp_buf, *hp_tmp_buf;
+            float source_gain;
+            float gain_headphone = adev->eq_data.p_gain.headphone;
+            float gain_speaker = adev->eq_data.p_gain.speaker;
+            float gain_spdif_arc = adev->eq_data.p_gain.spdif_arc;
 
-        /* handling audio effect process here */
-        if (adev->effect_buf_size < bytes) {
-            adev->effect_buf = realloc(adev->effect_buf, bytes);
-            if (!adev->effect_buf) {
-                ALOGE ("realloc effect buf failed size %zu format = %#x", bytes, output_format);
-                return -ENOMEM;
-            } else {
-                ALOGI("realloc effect_buf size from %zu to %zu format = %#x", adev->effect_buf_size, bytes, output_format);
-            }
-            adev->effect_buf_size = bytes;
+            /* handling audio effect process here */
+            if (adev->effect_buf_size < bytes) {
+                adev->effect_buf = realloc(adev->effect_buf, bytes);
+                if (!adev->effect_buf) {
+                    ALOGE ("realloc effect buf failed size %zu format = %#x", bytes, output_format);
+                    return -ENOMEM;
+                } else {
+                    ALOGI("realloc effect_buf size from %zu to %zu format = %#x", adev->effect_buf_size, bytes, output_format);
+                }
+                adev->effect_buf_size = bytes;
 
-            adev->hp_output_buf = realloc(adev->hp_output_buf, bytes);
-            if (!adev->hp_output_buf) {
-                ALOGE ("realloc headphone buf failed size %zu format = %#x", bytes, output_format);
-                return -ENOMEM;
-            }
-        }
-        effect_tmp_buf = (int16_t *)adev->effect_buf;
-        hp_tmp_buf = (int16_t *)adev->hp_output_buf;
-#ifdef ENABLE_AVSYNC_TUNING
-        tuning_spker_latency(adev, effect_tmp_buf, tmp_buffer, bytes);
-#else
-        memcpy(effect_tmp_buf, tmp_buffer, bytes);
-#endif
-        memcpy(hp_tmp_buf, tmp_buffer, bytes);
-
-        /*aduio effect process for speaker*/
-        for (j = 0; j < adev->native_postprocess.num_postprocessors; j++) {
-            audio_post_process(adev->native_postprocess.postprocessors[j], effect_tmp_buf, out_frames);
-        }
-        if (aml_getprop_bool("media.audiohal.outdump")) {
-            FILE *fp1 = fopen("/data/audio_spk.pcm", "a+");
-            if (fp1) {
-                int flen = fwrite((char *)effect_tmp_buf, 1, bytes, fp1);
-                ALOGV("%s buffer %p size %zu\n", __FUNCTION__, effect_tmp_buf, bytes);
-                fclose(fp1);
-            }
-        }
-
-        if (adev->patch_src == SRC_DTV)
-            source_gain = adev->eq_data.s_gain.dtv;
-        else if (adev->patch_src == SRC_HDMIIN)
-            source_gain = adev->eq_data.s_gain.hdmi;
-        else if (adev->patch_src == SRC_LINEIN)
-            source_gain = adev->eq_data.s_gain.av;
-        else if (adev->patch_src == SRC_ATV)
-            source_gain = adev->eq_data.s_gain.atv;
-        else
-            source_gain = 1.0;
-        if (adev->patch_src == SRC_DTV && adev->audio_patch != NULL) {
-            int16_t tmp;
-            int16_t *buf = (int16_t *)effect_tmp_buf;
-            for (unsigned int i= 0; i < bytes / 2; i = i + 2) {
-                switch ( adev->audio_patch->mode) {
-                    case AM_AOUT_OUTPUT_DUAL_LEFT:
-                      buf[i + 1] = buf[i];
-                      break;
-                    case AM_AOUT_OUTPUT_DUAL_RIGHT:
-                      buf[i] = buf[i + 1];
-                      break;
-                    case AM_AOUT_OUTPUT_SWAP:
-                      tmp = buf[i];
-                      buf[i] = buf[i + 1];
-                      buf[i + 1] = tmp;
-                      break;
-                    default :
-                      break;
-
+                adev->hp_output_buf = realloc(adev->hp_output_buf, bytes);
+                if (!adev->hp_output_buf) {
+                    ALOGE ("realloc headphone buf failed size %zu format = %#x", bytes, output_format);
+                    return -ENOMEM;
                 }
             }
-        }
-        /* apply volume for spk/hp, SPDIF/HDMI keep the max volume */
-        gain_speaker *= (adev->sink_gain[OUTPORT_SPEAKER] * source_gain);
-        /*gain_headphone *= (adev->sink_gain[OUTPORT_HEADPHONE] * source_gain);*/
-        /*gain_spdif_arc *= source_gain;*/
+            effect_tmp_buf = (int16_t *)adev->effect_buf;
+            hp_tmp_buf = (int16_t *)adev->hp_output_buf;
+#ifdef ENABLE_AVSYNC_TUNING
+            tuning_spker_latency(adev, effect_tmp_buf, tmp_buffer, bytes);
+#else
+            memcpy(effect_tmp_buf, tmp_buffer, bytes);
+#endif
+            memcpy(hp_tmp_buf, tmp_buffer, bytes);
 
-        apply_volume(gain_speaker, effect_tmp_buf, sizeof(uint16_t), bytes);
-        /*apply_volume(gain_headphone, hp_tmp_buf, sizeof(uint16_t), bytes);*/
-        /*apply_volume(gain_spdif_arc, tmp_buffer, sizeof(uint16_t), bytes);*/
-
-
-        /* 2 ch 16 bit --> 8 ch 32 bit mapping, need 8X size of input buffer size */
-        if (aml_out->tmp_buffer_8ch_size < 8 * bytes) {
-            aml_out->tmp_buffer_8ch = realloc(aml_out->tmp_buffer_8ch, 8 * bytes);
-            if (!aml_out->tmp_buffer_8ch) {
-                ALOGE("%s: realloc tmp_buffer_8ch buf failed size = %zu format = %#x", __func__, 8 * bytes, output_format);
-                return -ENOMEM;
-            } else {
-                ALOGI("%s: realloc tmp_buffer_8ch size from %zu to %zu format = %#x", __func__, aml_out->tmp_buffer_8ch_size, 8 * bytes, output_format);
+            /*aduio effect process for speaker*/
+            for (j = 0; j < adev->native_postprocess.num_postprocessors; j++) {
+                audio_post_process(adev->native_postprocess.postprocessors[j], effect_tmp_buf, out_frames);
             }
-            aml_out->tmp_buffer_8ch_size = 8 * bytes;
-        }
-        for (i = 0; i < out_frames; i++) {
-            aml_out->tmp_buffer_8ch[8 * i] = (int32_t)tmp_buffer[2 * i] << 16;
-            aml_out->tmp_buffer_8ch[8 * i + 1] = (int32_t)tmp_buffer[2 * i + 1] << 16;
-            aml_out->tmp_buffer_8ch[8 * i + 2] = (int32_t)effect_tmp_buf[2 * i] << 16;
-            aml_out->tmp_buffer_8ch[8 * i + 3] = (int32_t)effect_tmp_buf[2 * i + 1] << 16;
-            aml_out->tmp_buffer_8ch[8 * i + 4] = (int32_t)tmp_buffer[2 * i] << 16;
-            aml_out->tmp_buffer_8ch[8 * i + 5] = (int32_t)tmp_buffer[2 * i + 1] << 16;
-            aml_out->tmp_buffer_8ch[8 * i + 6] = 0;
-            aml_out->tmp_buffer_8ch[8 * i + 7] = 0;
-        }
+            if (aml_getprop_bool("media.audiohal.outdump")) {
+                FILE *fp1 = fopen("/data/audio_spk.pcm", "a+");
+                if (fp1) {
+                    int flen = fwrite((char *)effect_tmp_buf, 1, bytes, fp1);
+                    ALOGV("%s buffer %p size %zu\n", __FUNCTION__, effect_tmp_buf, bytes);
+                    fclose(fp1);
+                }
+            }
 
-        *output_buffer = aml_out->tmp_buffer_8ch;
-        *output_buffer_bytes = 8 * bytes;
+            if (adev->patch_src == SRC_DTV)
+                source_gain = adev->eq_data.s_gain.dtv;
+            else if (adev->patch_src == SRC_HDMIIN)
+                source_gain = adev->eq_data.s_gain.hdmi;
+            else if (adev->patch_src == SRC_LINEIN)
+                source_gain = adev->eq_data.s_gain.av;
+            else if (adev->patch_src == SRC_ATV)
+                source_gain = adev->eq_data.s_gain.atv;
+            else
+                source_gain = 1.0;
+            if (adev->patch_src == SRC_DTV && adev->audio_patch != NULL) {
+                int16_t tmp;
+                int16_t *buf = (int16_t *)effect_tmp_buf;
+                for (unsigned int i= 0; i < bytes / 2; i = i + 2) {
+                    switch ( adev->audio_patch->mode) {
+                        case AM_AOUT_OUTPUT_DUAL_LEFT:
+                          buf[i + 1] = buf[i];
+                          break;
+                        case AM_AOUT_OUTPUT_DUAL_RIGHT:
+                          buf[i] = buf[i + 1];
+                          break;
+                        case AM_AOUT_OUTPUT_SWAP:
+                          tmp = buf[i];
+                          buf[i] = buf[i + 1];
+                          buf[i + 1] = tmp;
+                          break;
+                        default :
+                          break;
 
+                    }
+                }
+            }
+            /* apply volume for spk/hp, SPDIF/HDMI keep the max volume */
+            gain_speaker *= (adev->sink_gain[OUTPORT_SPEAKER] * source_gain);
+            /*gain_headphone *= (adev->sink_gain[OUTPORT_HEADPHONE] * source_gain);*/
+            /*gain_spdif_arc *= source_gain;*/
+
+            apply_volume(gain_speaker, effect_tmp_buf, sizeof(uint16_t), bytes);
+            /*apply_volume(gain_headphone, hp_tmp_buf, sizeof(uint16_t), bytes);*/
+            /*apply_volume(gain_spdif_arc, tmp_buffer, sizeof(uint16_t), bytes);*/
+
+
+            /* 2 ch 16 bit --> 8 ch 32 bit mapping, need 8X size of input buffer size */
+            if (aml_out->tmp_buffer_8ch_size < 8 * bytes) {
+                aml_out->tmp_buffer_8ch = realloc(aml_out->tmp_buffer_8ch, 8 * bytes);
+                if (!aml_out->tmp_buffer_8ch) {
+                    ALOGE("%s: realloc tmp_buffer_8ch buf failed size = %zu format = %#x", __func__, 8 * bytes, output_format);
+                    return -ENOMEM;
+                } else {
+                    ALOGI("%s: realloc tmp_buffer_8ch size from %zu to %zu format = %#x", __func__, aml_out->tmp_buffer_8ch_size, 8 * bytes, output_format);
+                }
+                aml_out->tmp_buffer_8ch_size = 8 * bytes;
+            }
+            for (i = 0; i < out_frames; i++) {
+                aml_out->tmp_buffer_8ch[8 * i] = (int32_t)tmp_buffer[2 * i] << 16;
+                aml_out->tmp_buffer_8ch[8 * i + 1] = (int32_t)tmp_buffer[2 * i + 1] << 16;
+                aml_out->tmp_buffer_8ch[8 * i + 2] = (int32_t)effect_tmp_buf[2 * i] << 16;
+                aml_out->tmp_buffer_8ch[8 * i + 3] = (int32_t)effect_tmp_buf[2 * i + 1] << 16;
+                aml_out->tmp_buffer_8ch[8 * i + 4] = (int32_t)tmp_buffer[2 * i] << 16;
+                aml_out->tmp_buffer_8ch[8 * i + 5] = (int32_t)tmp_buffer[2 * i + 1] << 16;
+                aml_out->tmp_buffer_8ch[8 * i + 6] = 0;
+                aml_out->tmp_buffer_8ch[8 * i + 7] = 0;
+            }
+
+            *output_buffer = aml_out->tmp_buffer_8ch;
+            *output_buffer_bytes = 8 * bytes;
+        } else {
+            float gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
+            *output_buffer = (void *) buffer;
+            *output_buffer_bytes = bytes;
+            apply_volume(gain_speaker, *output_buffer, sizeof(uint16_t), bytes);
+        }
     }
 
     if (adev->patch_src == SRC_HDMIIN || adev->patch_src == SRC_SPDIFIN) {
@@ -9040,16 +9046,21 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->hw_device.get_parameters = adev_get_parameters;
     adev->hw_device.get_input_buffer_size = adev_get_input_buffer_size;
 #ifdef TV_AUDIO_OUTPUT
-    //if (getprop_bool("ro.vendor.platform.is.tv")) 
+    //if (getprop_bool("ro.vendor.platform.is.tv"))
     {
         adev->hw_device.open_output_stream = adev_open_output_stream_new;
         adev->hw_device.close_output_stream = adev_close_output_stream_new;
     }
-#else 
-    //else 
+#else
+    //else
     {
-        adev->hw_device.open_output_stream = adev_open_output_stream;
-        adev->hw_device.close_output_stream = adev_close_output_stream;
+        if (getprop_bool("ro.vendor.platform.support.livetv")) {
+            adev->hw_device.open_output_stream = adev_open_output_stream_new;
+            adev->hw_device.close_output_stream = adev_close_output_stream_new;
+        } else {
+            adev->hw_device.open_output_stream = adev_open_output_stream;
+            adev->hw_device.close_output_stream = adev_close_output_stream;
+        }
     }
 #endif
     adev->hw_device.open_input_stream = adev_open_input_stream;
