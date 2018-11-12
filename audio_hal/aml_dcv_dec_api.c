@@ -228,7 +228,7 @@ static int Get_DDP_Parameters(void *buf, int *sample_rate, int *frame_size, int 
     ddbs_unprj(p_bstrm, &tmp, 11);
 
     *frame_size = 2 * (tmp + 1);
-    if (strmtyp != 0 && strmtyp != 2) {
+    if (strmtyp != 0 && strmtyp != 1 && strmtyp != 2) {
         return -1;
     }
     ddbs_unprj(p_bstrm, &tmp, 2);
@@ -531,6 +531,7 @@ void *decode_threadloop(void *data)
                 Get_Parameters(read_pointer, &mSample_rate, &mFrame_size, &mChNum, &is_eac3);
                 if ((mFrame_size == 0) || (mFrame_size < PTR_HEAD_SIZE) || \
                     (mChNum == 0) || (mSample_rate == 0)) {
+                    ALOGI("error dolby frame !!!");
                 } else {
                     in_sync = 1;
                     break;
