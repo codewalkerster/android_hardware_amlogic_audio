@@ -751,7 +751,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
             } else {
                 ALOGE("%s(), ring_buffer has not enough data! %d in_avail()", __func__, avail);
                 pthread_mutex_unlock(&(patch->dtv_output_mutex));
-                usleep(50000);
+                usleep(20000);
             }
 
         } else if (patch->aformat == AUDIO_FORMAT_DTS) {
