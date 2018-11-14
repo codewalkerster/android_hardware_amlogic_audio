@@ -8303,15 +8303,16 @@ static int adev_create_audio_patch(struct audio_hw_device *dev,
 
         aml_dev->out_device = sink_config->ext.device.type;
         ALOGI("%s: mix->device patch: outport(%d)", __func__, outport);
+#if defined(IS_ATOM_PROJECT)
 #ifdef DEBUG_VOLUME_CONTROL
         int vol = property_get_int32("media.audio_hal.volume", -1);
         if (vol != -1) {
             aml_dev->sink_gain[outport] = (float)vol;
             aml_dev->sink_gain[OUTPORT_SPEAKER] = (float)vol;
-        } else
-#endif
-#if defined(IS_ATOM_PROJECT)
+        }
+else
         aml_dev->sink_gain[outport] = 1.0;
+#endif
 #endif
         return 0;
     }
@@ -8482,7 +8483,7 @@ static int adev_create_audio_patch(struct audio_hw_device *dev,
         }
         aml_dev->active_inport = inport;
         aml_dev->src_gain[inport] = 1.0;
-        aml_dev->sink_gain[outport] = 1.0;
+        //aml_dev->sink_gain[outport] = 1.0;
         ALOGI("%s: dev->dev patch: inport(%s), outport(%s)",
               __func__, input_ports[inport], output_ports[outport]);
 
@@ -8604,9 +8605,9 @@ static int adev_release_audio_patch(struct audio_hw_device *dev,
     int vol = property_get_int32("media.audio_hal.volume", -1);
     if (vol != -1)
         aml_dev->sink_gain[OUTPORT_SPEAKER] = (float)vol;
-    else
-#endif
+else
     aml_dev->sink_gain[OUTPORT_SPEAKER] = 1.0;
+#endif
 #endif
 exit:
     return ret;
@@ -8782,6 +8783,49 @@ static int adev_set_audio_port_config (struct audio_hw_device *dev, const struct
         return -EINVAL;
     }
 
+    struct audio_patch_set *patch_set = NULL;
+    struct audio_patch *patch = NULL;
+    struct listnode *node = NULL;
+
+    /* find the corrisponding sink for this src */
+    list_for_each(node, &aml_dev->patch_list) {
+        patch_set = node_to_item(node, struct audio_patch_set, list);
+        patch = &patch_set->audio_patch;
+        if (patch->sources[0].ext.device.type == config->ext.device.type) {
+            ALOGI("patch set found id %d, patchset %p", patch->id, patch_set);
+            break;
+        } else if (patch->sources[0].type == AUDIO_PORT_TYPE_MIX &&
+                   patch->sinks[0].type == AUDIO_PORT_TYPE_DEVICE &&
+                   patch->sinks[0].id == config->id) {
+            ALOGI("patch found mix->dev id %d, patchset %p", patch->id, patch_set);
+            break;
+        } else {
+            patch_set = NULL;
+            patch = NULL;
+        }
+    }
+
+    if (!patch_set || !patch) {
+        ALOGE("%s(): no right patch available", __func__);
+        return -EINVAL;
+    }
+
+    num_sinks = patch->num_sinks;
+    if (num_sinks == 2) {
+        if ((patch->sinks[0].ext.device.type == AUDIO_DEVICE_OUT_HDMI_ARC &&
+             patch->sinks[1].ext.device.type == AUDIO_DEVICE_OUT_SPEAKER) ||
+             (patch->sinks[0].ext.device.type == AUDIO_DEVICE_OUT_SPEAKER &&
+             patch->sinks[1].ext.device.type == AUDIO_DEVICE_OUT_HDMI_ARC)) {
+            if (aml_dev->bHDMIARCon) {
+                outport = OUTPORT_HDMI_ARC;
+                ALOGI("%s() speaker and HDMI_ARC co-exist case, output=ARC", __func__);
+            } else {
+                outport = OUTPORT_SPEAKER;
+                ALOGI("%s() speaker and HDMI_ARC co-exist case, output=SPEAKER", __func__);
+            }
+        }
+    }
+
     if (config->type == AUDIO_PORT_TYPE_DEVICE) {
         if (config->role == AUDIO_PORT_ROLE_SINK) {
             if (num_sinks == 1) {
@@ -8858,48 +8902,7 @@ static int adev_set_audio_port_config (struct audio_hw_device *dev, const struct
                 break;
             }
 
-            struct audio_patch_set *patch_set = NULL;
-            struct audio_patch *patch = NULL;
-            struct listnode *node = NULL;
-
-            /* find the corrisponding sink for this src */
-            list_for_each (node, &aml_dev->patch_list) {
-                patch_set = node_to_item (node, struct audio_patch_set, list);
-                patch = &patch_set->audio_patch;
-                if (patch->sources[0].ext.device.type == config->ext.device.type) {
-                    ALOGI ("patch set found id %d, patchset %p", patch->id, patch_set);
-                    break;
-                } else if (patch->sources[0].type == AUDIO_PORT_TYPE_MIX &&
-                           patch->sinks[0].type == AUDIO_PORT_TYPE_DEVICE &&
-                           patch->sources[0].id == config->id) {
-                    ALOGI("patch found mix->dev id %d, patchset %p", patch->id, patch_set);
-                    break;
-                } else {
-                    patch_set = NULL;
-                    patch = NULL;
-                }
-            }
-
-            if (!patch_set || !patch) {
-                ALOGE ("%s(): no right patch available", __func__);
-                return -EINVAL;
-            }
-            num_sinks = patch->num_sinks;
-            if (num_sinks == 2) {
-                if ((patch->sinks[0].ext.device.type == AUDIO_DEVICE_OUT_HDMI_ARC &&
-                     patch->sinks[1].ext.device.type == AUDIO_DEVICE_OUT_SPEAKER) ||
-                    (patch->sinks[0].ext.device.type == AUDIO_DEVICE_OUT_SPEAKER &&
-                     patch->sinks[1].ext.device.type == AUDIO_DEVICE_OUT_HDMI_ARC)) {
-                    if (aml_dev->bHDMIARCon) {
-                        outport = OUTPORT_HDMI_ARC;
-                        ALOGI("%s() speaker and HDMI_ARC co-exist case, output=ARC", __func__);
-                    } else {
-                        outport = OUTPORT_SPEAKER;
-                        ALOGI("%s() speaker and HDMI_ARC co-exist case, output=SPEAKER", __func__);
-                    }
-                }
-            }
-
+            aml_dev->src_gain[inport] = 1.0;
             if (patch->sinks[0].type == AUDIO_PORT_TYPE_DEVICE) {
                 if (num_sinks == 2) {
                     switch (outport) {
@@ -8937,22 +8940,19 @@ static int adev_set_audio_port_config (struct audio_hw_device *dev, const struct
                         break;
                     case AUDIO_DEVICE_OUT_WIRED_HEADPHONE:
                         outport = OUTPORT_HEADPHONE;
-                    break;
-                case AUDIO_DEVICE_OUT_REMOTE_SUBMIX:
-                    outport = OUTPORT_REMOTE_SUBMIX;
-                    break;
+                        aml_dev->sink_gain[outport] = get_volume_by_index(config->gain.values[0]);
+                        break;
+                    case AUDIO_DEVICE_OUT_REMOTE_SUBMIX:
+                        outport = OUTPORT_REMOTE_SUBMIX;
+                        aml_dev->sink_gain[outport] = get_volume_by_index(config->gain.values[0]);
+                        break;
                 default:
                     ALOGE ("%s: invalid out device type %#x",
                               __func__, patch->sinks->ext.device.type);
                     }
                 }
 #if defined(IS_ATOM_PROJECT)
-                aml_dev->src_gain[inport] = 1.0;
                 aml_dev->sink_gain[outport] = DbToAmpl(config->gain.values[0] / 100);
-#else
-                //aml_dev->src_gain[inport] = get_volume_by_index(config->gain.values[0]);
-                aml_dev->src_gain[inport] = 1.0;
-                aml_dev->sink_gain[outport] = get_volume_by_index(config->gain.values[0]);
 #endif
                 if (eDolbyMS12Lib == aml_dev->dolby_lib_type) {
                     /* dev->dev and DTV src gain using MS12 primary gain */
