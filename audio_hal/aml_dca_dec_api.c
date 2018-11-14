@@ -41,7 +41,7 @@ enum {
     EXITING_STATUS = -1001,
     NO_ENOUGH_DATA = -1002,
 };
-#define MAX_DECODER_FRAME_LENGTH 6144
+#define MAX_DECODER_FRAME_LENGTH 32768
 #define READ_PERIOD_LENGTH 2048 * 4
 
 //#define MAX_DDP_FRAME_LENGTH 2048
@@ -161,12 +161,12 @@ int dca_decoder_init_patch(struct dca_dts_dec *dts_dec)
         ALOGE("malloc buffer failed\n");
         return -1;
     }
-    dts_dec->outbuf = (unsigned char*) malloc(MAX_DECODER_FRAME_LENGTH * 4 + MAX_DECODER_FRAME_LENGTH + 8);
+    dts_dec->outbuf = (unsigned char*) malloc(MAX_DECODER_FRAME_LENGTH * 3 + MAX_DECODER_FRAME_LENGTH + 8);
     if (!dts_dec->outbuf) {
         ALOGE("malloc buffer failed\n");
         return -1;
     }
-    dts_dec->outbuf_raw = dts_dec->outbuf + MAX_DECODER_FRAME_LENGTH;
+    dts_dec->outbuf_raw = dts_dec->outbuf + MAX_DECODER_FRAME_LENGTH * 3;
     dts_dec->decoder_process = dca_decode_process;
     //dts_dec->get_parameters = Get_Parameters;
     return 1;
