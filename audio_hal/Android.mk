@@ -69,8 +69,12 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
         $(LOCAL_PATH)/../utils/include \
         $(LOCAL_PATH)/../utils/ini/include \
         $(LOCAL_PATH)/../rcaudio \
-        $(LOCAL_PATH)/../../LibAudio/amadec/include
+        $(LOCAL_PATH)/../../LibAudio/amadec/include \
+        $(LOCAL_PATH)/../bt_voice/kehwin
     LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/lib_aml_ng.a
+    LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/../bt_voice/kehwin/32/btmic.a
+    LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/../bt_voice/kehwin/64/btmic.a
+
     LOCAL_SHARED_LIBRARIES := \
         liblog libcutils libtinyalsa \
         libaudioutils libdl libaudioroute libutils \

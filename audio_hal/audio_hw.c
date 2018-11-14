@@ -80,6 +80,7 @@
 #include "dolby_lib_api.h"
 // for dtv playback
 #include "audio_hw_dtv.h"
+#include "../bt_voice/kehwin/audio_kw.h"
 
 #define ENABLE_DTV_PATCH
 //#define SUBMIXER_V1_1
@@ -5139,20 +5140,42 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     if (!in)
         return -ENOMEM;
 
-    in->stream.common.get_sample_rate = in_get_sample_rate;
-    in->stream.common.set_sample_rate = in_set_sample_rate;
-    in->stream.common.get_buffer_size = in_get_buffer_size;
-    in->stream.common.get_channels = in_get_channels;
-    in->stream.common.get_format = in_get_format;
-    in->stream.common.set_format = in_set_format;
-    in->stream.common.standby = in_standby;
-    in->stream.common.dump = in_dump;
-    in->stream.common.set_parameters = in_set_parameters;
-    in->stream.common.get_parameters = in_get_parameters;
-    in->stream.set_gain = in_set_gain;
-    in->stream.read = in_read;
-    in->stream.get_input_frames_lost = in_get_input_frames_lost;
-    in->stream.get_active_microphones = in_get_active_microphones;
+	if (remoteDeviceOnline()) {
+        in->stream.common.set_sample_rate = kehwin_in_set_sample_rate;
+        in->stream.common.get_sample_rate = kehwin_in_get_sample_rate;
+        in->stream.common.get_buffer_size = kehwin_in_get_buffer_size;
+        in->stream.common.get_channels = kehwin_in_get_channels;
+        in->stream.common.get_format = kehwin_in_get_format;
+        in->stream.common.set_format = kehwin_in_set_format;
+        in->stream.common.dump = kehwin_in_dump;
+        in->stream.common.set_parameters = kehwin_in_set_parameters;
+        in->stream.common.get_parameters = kehwin_in_get_parameters;
+        in->stream.common.add_audio_effect = kehwin_in_add_audio_effect;
+        in->stream.common.remove_audio_effect = kehwin_in_remove_audio_effect;
+        in->stream.set_gain = kehwin_in_set_gain;
+        in->stream.common.standby = kehwin_in_standby;
+        in->stream.read = kehwin_in_read;
+        in->stream.get_input_frames_lost = kehwin_in_get_input_frames_lost;
+        in->stream.get_capture_position =  kehwin_in_get_capture_position;
+
+    }
+
+    else {
+        in->stream.common.get_sample_rate = in_get_sample_rate;
+        in->stream.common.set_sample_rate = in_set_sample_rate;
+        in->stream.common.get_buffer_size = in_get_buffer_size;
+        in->stream.common.get_channels = in_get_channels;
+        in->stream.common.get_format = in_get_format;
+        in->stream.common.set_format = in_set_format;
+        in->stream.common.standby = in_standby;
+        in->stream.common.dump = in_dump;
+        in->stream.common.set_parameters = in_set_parameters;
+        in->stream.common.get_parameters = in_get_parameters;
+        in->stream.set_gain = in_set_gain;
+        in->stream.read = in_read;
+        in->stream.get_input_frames_lost = in_get_input_frames_lost;
+        in->stream.get_active_microphones = in_get_active_microphones;
+    }
 
     in->device = devices & ~AUDIO_DEVICE_BIT_IN;
     in->dev = adev;
@@ -5284,6 +5307,10 @@ err:
 static void adev_close_input_stream(struct audio_hw_device *dev,
                                 struct audio_stream_in *stream)
 {
+    if (remoteDeviceOnline()) {
+        kehwin_adev_close_input_stream(dev,stream);
+        return;
+    }
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     struct aml_stream_in *in = (struct aml_stream_in *)stream;
 
@@ -9252,7 +9279,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
         ret = -ENOMEM;
         goto err;
     }
-
+    initAudio(1);  /*Judging whether it is Google's search engine*/
     adev->hw_device.common.tag = HARDWARE_DEVICE_TAG;
     adev->hw_device.common.version = AUDIO_DEVICE_API_VERSION_3_0;
     adev->hw_device.common.module = (struct hw_module_t *)module;
