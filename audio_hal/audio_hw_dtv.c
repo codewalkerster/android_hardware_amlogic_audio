@@ -813,6 +813,12 @@ void *audio_dtv_patch_output_threadloop(void *data)
                     continue;
                 }
 
+                struct aml_stream_out *aml_out = (struct aml_stream_out *) stream_out;
+                if (aml_out->hal_internal_format != patch->aformat) {
+                    aml_out->hal_format = aml_out->hal_internal_format = patch->aformat;
+                    get_sink_format(stream_out);
+                }
+
                 ret = out_write_new(stream_out, patch->out_buf, ret);
                 {
                     aml_out = (struct aml_stream_out*)stream_out;
@@ -890,6 +896,8 @@ static void *audio_dtv_patch_process_threadloop(void *data)
                 continue;
             }
 
+            ring_buffer_reset(&patch->aml_ringbuffer);
+
             if (cmd == AUDIO_DTV_PATCH_CMD_START) {
                 dtv_patch_input_start(adec_handle, patch->dtv_aformat,
                                       patch->dtv_has_video);
@@ -907,6 +915,11 @@ static void *audio_dtv_patch_process_threadloop(void *data)
                 } else if (patch->dtv_aformat == ACODEC_FMT_DTS) {
                     patch->aformat = AUDIO_FORMAT_DTS;
                     dca_decoder_init_patch(dts_dec);
+                    patch->decoder_offset = 0;
+                }
+                else
+                {
+                    patch->aformat = AUDIO_FORMAT_PCM;
                     patch->decoder_offset = 0;
                 }
                 patch->dtv_pcm_readed = patch->dtv_pcm_writed = 0;
