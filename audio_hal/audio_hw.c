@@ -6915,19 +6915,19 @@ ssize_t mixer_main_buffer_write (struct audio_stream_out *stream, const void *bu
         } else {
             config_output(stream);
         }
-        if (ret < 0) {
-            return bytes;
-        }
         //wirte raw data
         if (dts_dec->digital_raw == 1 && aml_out->dual_output_flag) {
             //aml_audio_spdif_output(stream, (void *)dts_dec->outbuf_raw, dts_dec->outlen_raw);
             aml_audio_spdif_output(stream, (void *)buffer, bytes);
         }
+        if (ret < 0) {
+            return bytes;
+        }
 
         //add by lianlian.zhu ,for dts cerfication becase dts cd hdmi in pcm output distortion
-        if (dts_dec->is_dtscd == 1) {
-            memset(dts_dec->outbuf, 0, dts_dec->outlen_pcm);
-        }
+        //if (dts_dec->is_dtscd == 1) {
+            //memset(dts_dec->outbuf, 0, dts_dec->outlen_pcm);
+        //}
 
         //write pcm data
         void *tmp_buffer = (void *) dts_dec->outbuf;
