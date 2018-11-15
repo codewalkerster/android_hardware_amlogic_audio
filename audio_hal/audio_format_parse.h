@@ -1,3 +1,16 @@
+/*
+ * hardware/amlogic/audio/TvAudio/audio_format_parse.c
+ *
+ * Copyright (C) 2017 Amlogic, Inc. All rights reserved.
+ *
+ * This source code is subject to the terms and conditions defined in the
+ * file 'LICENSE' which is part of this source code package.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ */
+
 #ifndef __AUDIO_FORMAT_PARSE_H__
 #define __AUDIO_FORMAT_PARSE_H__
 
