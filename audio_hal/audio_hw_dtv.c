@@ -256,7 +256,7 @@ static int dtv_patch_buffer_space(void *args)
     return left;
 }
 
-unsigned long dtv_hal_get_pts(struct aml_audio_patch *patch)
+unsigned long dtv_hal_get_pts(struct aml_audio_patch *patch, unsigned int lantcy)
 {
     unsigned long val, offset;
     unsigned long pts;
@@ -284,32 +284,26 @@ unsigned long dtv_hal_get_pts(struct aml_audio_patch *patch)
         return pts;
     }
 
-    if (pts == 0) {
+    if (pts == 0 || pts == patch->last_valid_pts) {
         if (patch->last_valid_pts) {
             pts = patch->last_valid_pts;
         }
         frame_nums =
             (patch->outlen_after_last_validpts / (data_width * channels));
         pts += (frame_nums * 90 / samplerate);
-
-        //ALOGI("decode_offset:%d out_pcm:%d   pts:%lx,audec->last_valid_pts %lx\n",
-        //     patch->decoder_offset, patch->outlen_after_last_validpts, pts,
-        //     patch->last_valid_pts);
+        ALOGI("decode_offset:%d out_pcm:%d   pts:%lx,audec->last_valid_pts %lx\n",
+              patch->decoder_offset, patch->outlen_after_last_validpts, pts,
+              patch->last_valid_pts);
         return pts;
     }
+    val =  patch->last_valid_pts = pts - lantcy * 90;
 
-    val = pts;
-    if (pts < patch->last_valid_pts)
-        ALOGI("==== error the pts is %lx the last checkout pts is %lx\n", pts,
-              patch->last_valid_pts);
-    patch->last_valid_pts = pts;
     patch->outlen_after_last_validpts = 0;
-    //ALOGI("====get pts:%lx offset:%d\n", val, patch->decoder_offset);
+    ALOGI("====get pts:%lx offset:%d\n", val, patch->decoder_offset);
     return val;
 }
 
-void process_ac3_sync(struct aml_audio_patch *patch, unsigned long pts,
-                      unsigned int lantcy)
+void process_ac3_sync(struct aml_audio_patch *patch, unsigned long pts)
 {
 
     int channel_count = 2;
@@ -317,7 +311,7 @@ void process_ac3_sync(struct aml_audio_patch *patch, unsigned long pts,
     int symbol = 48;
     char tempbuf[128];
     unsigned int pcrpts;
-
+    unsigned long pts_diff;
     unsigned long cur_out_pts;
 
     if (patch->dtv_first_apts_flag == 0) {
@@ -328,30 +322,20 @@ void process_ac3_sync(struct aml_audio_patch *patch, unsigned long pts,
         }
         patch->dtv_first_apts_flag = 1;
     } else {
-        unsigned int pts_diff;
-        cur_out_pts = pts - lantcy * 90;
+        cur_out_pts = pts;
         get_sysfs_uint(TSYNC_PCRSCR, &pcrpts);
-        //  ALOGI("The iniput pts is %lx pcrpts %x  "
-        //      "cur_outpts %lx\n",
-        //    pts,  pcrpts, cur_out_pts);
-
         if (pcrpts > cur_out_pts) {
             pts_diff = pcrpts - cur_out_pts;
-            // ALOGI(" the pts %lx  diff is %d pcm_lantcy is %d\n", pts, pts_diff,
-            //      lantcy);
         } else {
-            pts_diff = pcrpts - cur_out_pts;
-            //   ALOGI(" the pts is %lx the pcrpts is %x pcm_lantcy is %d\n",
-            //   pts, pcrpts, lantcy);
-            //    ALOGI("the pts diff is %d\n", (int)pts_diff);
+            pts_diff = cur_out_pts - pcrpts;
         }
 
         if (pts_diff < SYSTIME_CORRECTION_THRESHOLD) {
             // now the av is syncd ,so do nothing;
         } else if (pts_diff > SYSTIME_CORRECTION_THRESHOLD &&
                    pts_diff < AUDIO_PTS_DISCONTINUE_THRESHOLD) {
-            sprintf(tempbuf, "0x%lx", (unsigned long)cur_out_pts);
-            //ALOGI("reset the apts to %lx \n", cur_out_pts);
+            sprintf(tempbuf, "%u", (unsigned int)cur_out_pts);
+            ALOGI("reset the apts to %u pcr pts %u\n", (unsigned int)cur_out_pts, pcrpts);
 
             sysfs_set_sysfs_str(TSYNC_APTS, tempbuf);
         } else {
@@ -378,7 +362,9 @@ void  process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
     unsigned long cur_out_pts = 0;
 
     pts = dtv_patch_get_pts();
-
+    if (pts == patch->last_valid_pts) {
+        ALOGI("dtv_patch_get_pts pts  -> %lx", pts);
+    }
     if (patch->dtv_first_apts_flag == 0) {
         sprintf(tempbuf, "AUDIO_START:0x%x", (unsigned int)pts);
         ALOGI("dtv set tsync -> %s", tempbuf);
@@ -406,28 +392,18 @@ void  process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
         }
 
         get_sysfs_uint(TSYNC_PCRSCR, &pcrpts);
-        // ALOGI("dtv The iniput pts is %lx abuf_level "
-        //       "%d pcrpts %x  "
-        //       "cur_outpts %lx\n",
-        //       pts, rbuf_level, pcrpts, cur_out_pts);
 
         if (pcrpts > cur_out_pts) {
             pts_diff = pcrpts - cur_out_pts;
-            // ALOGI(" the pts %lx  diff is %d pcm_lantcy is %d\n", pts, pts_diff,
-            //       pcm_lancty);
         } else {
             pts_diff = cur_out_pts - pcrpts;
-            // ALOGI(" the pts is %lx the pcrpts is %x pcm_lantcy is %d the "
-            //       "cache_pts is %lx ",
-            //       pts, pcrpts, pcm_lancty, cache_pts);
-            // ALOGI("the pts diff is %d\n", (int)pts_diff);
         }
 
         if (pts_diff < SYSTIME_CORRECTION_THRESHOLD) {
             // now the av is syncd ,so do nothing;
         } else if (pts_diff > SYSTIME_CORRECTION_THRESHOLD &&
                    pts_diff < AUDIO_PTS_DISCONTINUE_THRESHOLD) {
-            sprintf(tempbuf, "0x%lx", (unsigned long)cur_out_pts);
+            sprintf(tempbuf, "%u", (unsigned int)cur_out_pts);
             ALOGI("reset the apts to %lx pcrpts %x pts_diff %d \n",
                   cur_out_pts, pcrpts, pts_diff);
             sysfs_set_sysfs_str(TSYNC_APTS, tempbuf);
@@ -743,8 +719,8 @@ void *audio_dtv_patch_output_threadloop(void *data)
                     aml_out = (struct aml_stream_out*)stream_out;
                     if (aml_out != NULL) {
                         unsigned int lancty = out_get_latency(&(aml_out->stream));
-                        pts = dtv_hal_get_pts(patch);
-                        process_ac3_sync(patch, pts, lancty);
+                        pts = dtv_hal_get_pts(patch, lancty);
+                        process_ac3_sync(patch, pts);
                     }
 
                 }
@@ -795,8 +771,8 @@ void *audio_dtv_patch_output_threadloop(void *data)
                     aml_out = (struct aml_stream_out*)stream_out;
                     if (aml_out != NULL) {
                         unsigned int lancty = out_get_latency(&(aml_out->stream));
-                        pts = dtv_hal_get_pts(patch);
-                        process_ac3_sync(patch, pts, lancty);
+                        pts = dtv_hal_get_pts(patch, lancty);
+                        process_ac3_sync(patch, pts);
                     }
                 }
                 remain_size = aml_dev->dts_hd.remain_size;
