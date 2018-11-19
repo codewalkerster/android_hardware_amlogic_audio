@@ -4927,12 +4927,17 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
     } else if (strstr (keys, "is_passthrough_active") ) {
         bool active = false;
         pthread_mutex_lock (&adev->lock);
-        if (adev->usecase_masks & RAW_USECASE_MASK)
+        // "is_passthrough_active" is used by amnuplayer to check is current audio hal have passthrough instance(DD/DD+/DTS)
+        // if already have one passthrough instance, it will not invoke another one.
+        // While in HDMI plug off/in test case. Player will query "is_passthrough_active" before adev->usecase_masks finally settle
+        // So Player will have a chance get a middle-term value, which is wrong.
+        // now only one passthrough instance, do not check
+        /* if (adev->usecase_masks & RAW_USECASE_MASK)
             active = true;
         else if (adev->audio_patch && (adev->audio_patch->aformat == AUDIO_FORMAT_E_AC3 \
                                        || adev->audio_patch->aformat == AUDIO_FORMAT_AC3) ) {
             active = true;
-        }
+        } */
         pthread_mutex_unlock (&adev->lock);
         sprintf (temp_buf, "is_passthrough_active=%d",active);
         return  strdup (temp_buf);
