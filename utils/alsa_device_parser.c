@@ -43,14 +43,20 @@
 #define CARD_NAME_M8         "AMLM8AUDIO"
 #define CARD_NAME_TV         "AMLTVAUDIO"
 
-/* for pars device port */
-#define ALSAPORT_PCM         "alsaPORT-pcm" /* usally for bt pcm */
-#define ALSAPORT_I2S         "alsaPORT-i2s"
-#define ALSAPORT_TDM         "alsaPORT-tdm"
-#define ALSAPORT_PDM         "alsaPORT-pdm"
-#define ALSAPORT_SPDIF       "alsaPORT-spdif"
-#define ALSAPORT_SPDIFB2HDMI "alsaPORT-spdifb2hdmi"
-#define ALSAPORT_I2S2HDMI    "alsaPORT-i2s2hdmi" /* virtual link for i2s to hdmi */
+/* for parse device port
+ * for i2s, i2s_playback, i2s_capture,  when select device, firstly to check i2s_playback,
+ * i2s_capure, then i2s
+ */
+#define ALSAPORT_PCM              "alsaPORT-pcm"         /* usally for bt pcm */
+#define ALSAPORT_I2S              "alsaPORT-i2s"         /* Playback,Capture */
+#define ALSAPORT_I2SPLAYPLAYBACK  "alsaPORT-i2sPlayback" /* Only Playback */
+#define ALSAPORT_I2SCAPTURE       "alsaPORT-i2sCapture"  /* Only Capture */
+#define ALSAPORT_TDM              "alsaPORT-tdm"
+#define ALSAPORT_PDM              "alsaPORT-pdm"
+#define ALSAPORT_SPDIF            "alsaPORT-spdif"
+#define ALSAPORT_SPDIFB2HDMI      "alsaPORT-spdifb2hdmi"
+#define ALSAPORT_I2S2HDMI         "alsaPORT-i2s2hdmi"    /* virtual link */
+#define ALSAPORT_TV               "alsaPORT-tv"          /* Now for TV input */
 
 struct AudioDeviceDescriptor {
 	char name[NAME_LEN];
@@ -71,11 +77,14 @@ struct alsa_info {
 
 	struct AudioDeviceDescriptor *pcm_descrpt;
 	struct AudioDeviceDescriptor *i2s_descrpt;
+	struct AudioDeviceDescriptor *i2s_playback_descrpt; /* only playback */
+	struct AudioDeviceDescriptor *i2s_capture_descrpt; /* only capture */
 	struct AudioDeviceDescriptor *tdm_descrpt;
 	struct AudioDeviceDescriptor *pdm_descrpt;
 	struct AudioDeviceDescriptor *spdif_descrpt;
 	struct AudioDeviceDescriptor *spdifb2hdmi_descrpt;
 	struct AudioDeviceDescriptor *i2s2hdmi_descrpt;
+	struct AudioDeviceDescriptor *tvin_descrpt;
 };
 
 static struct alsa_info *p_aml_alsa_info;
@@ -116,10 +125,12 @@ int alsa_device_get_card_index()
 		char tempbuffer[READ_BUFFER_SIZE];
 
 		ALOGD("card open success");
-		p_aml_alsa_info = calloc(1, sizeof(struct alsa_info));
 		if (!p_aml_alsa_info) {
-			ALOGE ("NOMEM for alsa info\n");
-			return -1;;
+			p_aml_alsa_info = calloc(1, sizeof(struct alsa_info));
+			if (!p_aml_alsa_info) {
+				ALOGE ("NOMEM for alsa info\n");
+				return -1;;
+			}
 		}
 
 		while (!feof(mCardFile)) {
@@ -196,6 +207,10 @@ void alsa_device_parser_pcm_string(struct alsa_info *p_info, char *InputBuffer)
 
 				if (!strcmp(PortName, ALSAPORT_PCM))
 					p_info->pcm_descrpt = mAudioDeviceDescriptor;
+				else if (!strcmp(PortName, ALSAPORT_I2SPLAYPLAYBACK))
+					p_info->i2s_playback_descrpt = mAudioDeviceDescriptor;
+				else if (!strcmp(PortName, ALSAPORT_I2SCAPTURE))
+					p_info->i2s_capture_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_I2S))
 					p_info->i2s_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_TDM))
@@ -208,6 +223,8 @@ void alsa_device_parser_pcm_string(struct alsa_info *p_info, char *InputBuffer)
 					p_info->spdifb2hdmi_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_I2S2HDMI))
 					p_info->i2s2hdmi_descrpt = mAudioDeviceDescriptor;
+				else if (!strcmp(PortName, ALSAPORT_TV))
+					p_info->tvin_descrpt = mAudioDeviceDescriptor;
 			} else
 				ALOGD("\t Unknown alsaPORT, StreamName:%s\n", mStreamName);
 		}
@@ -226,10 +243,11 @@ void alsa_device_parser_pcm_string(struct alsa_info *p_info, char *InputBuffer)
  * 00-04: SPDIF-dummy-alsaPORT-spdif dummy-4 :	: playback 1 : capture 1
  * 00-05: SPDIF-B-dummy-alsaPORT-hdmi dummy-5 :  : playback 1
  */
-int alsa_device_get_pcm_index(int alsaPORT)
+int alsa_device_update_pcm_index(int alsaPORT, int stream)
 {
 	struct alsa_info *p_info = alsa_device_get_info();
 	int new_port = -1;
+	struct AudioDeviceDescriptor *pADD = NULL;
 
 	if (!p_info || !p_info->is_auge) {
 		/* fix to spdif port */
@@ -259,31 +277,49 @@ int alsa_device_get_pcm_index(int alsaPORT)
 	}
 	switch (alsaPORT) {
 	case PORT_I2S:
-		new_port = p_info->i2s_descrpt->mPcmIndex;
+		if (stream == PLAYBACK) {
+			if (p_info->i2s_playback_descrpt)
+				pADD = p_info->i2s_playback_descrpt;
+			else
+				pADD = p_info->i2s_descrpt;
+		} else if (stream == CAPTURE) {
+			if (p_info->i2s_capture_descrpt)
+				pADD = p_info->i2s_capture_descrpt;
+			else
+				pADD = p_info->i2s_descrpt;
+		} else
+			pADD = p_info->i2s_descrpt;
 		break;
 	case PORT_SPDIF:
-		new_port = p_info->spdif_descrpt->mPcmIndex;
+		pADD = p_info->spdif_descrpt;
 		break;
 	case PORT_PCM:
-		new_port = p_info->pcm_descrpt->mPcmIndex;
+		pADD = p_info->pcm_descrpt;
 		break;
 	case PROT_TDM:
-		new_port = p_info->tdm_descrpt->mPcmIndex;
+		pADD = p_info->tdm_descrpt;
 		break;
 	case PROT_PDM:
-		new_port = p_info->pdm_descrpt->mPcmIndex;
+		pADD = p_info->pdm_descrpt;
 		break;
 	case PORT_SPDIFB2HDMI:
-		new_port = p_info->spdifb2hdmi_descrpt->mPcmIndex;
+		pADD = p_info->spdifb2hdmi_descrpt;
 		break;
 	case PORT_I2S2HDMI:
-		new_port = p_info->i2s2hdmi_descrpt->mPcmIndex;
+		pADD = p_info->i2s2hdmi_descrpt;
+		break;
+	case PORT_TV:
+		pADD = p_info->tvin_descrpt;
 		break;
 	default:
-		new_port = p_info->i2s_descrpt->mPcmIndex;
+		pADD = p_info->i2s_descrpt;
 		ALOGD("Default port is I2s\n");
 		break;
 	}
+
+	if (pADD)
+		new_port = pADD->mPcmIndex;
+
 	ALOGD("auge sound card, fix alsaPORT:%d to :%d\n", alsaPORT, new_port);
 
 	return new_port;

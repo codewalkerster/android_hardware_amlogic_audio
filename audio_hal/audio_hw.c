@@ -50,7 +50,6 @@
 #include <aml_android_utils.h>
 #include <aml_alsa_mixer.h>
 
-#include "aml_hw_profile.h"
 #include "audio_format_parse.h"
 #include "SPDIFEncoderAD.h"
 #include "aml_volume_utils.h"
@@ -544,7 +543,7 @@ static int start_output_stream (struct aml_stream_out *out)
     }
 
     /* check to update port */
-    port = alsa_device_get_pcm_index(port);
+    port = alsa_device_update_pcm_index(port, PLAYBACK);
 
     ALOGD ("*%s, open card(%d) port(%d)", __FUNCTION__, card, port);
 
@@ -719,7 +718,7 @@ static int start_output_stream_direct (struct aml_stream_out *out)
                 port = PORT_I2S;
         }
         /* check to update port */
-        port = alsa_device_get_pcm_index(port);
+        port = alsa_device_update_pcm_index(port, PLAYBACK);
         ALOGD("%s(), pcm_open card %u port %u\n", __func__, card, port);
         out->pcm = pcm_open (card, port, PCM_OUT, &out->config);
         if (!pcm_is_ready (out->pcm) ) {
@@ -3016,8 +3015,10 @@ static int start_input_stream(struct aml_stream_in *in)
     unsigned int card = CARD_AMLOGIC_BOARD;
     unsigned int port = PORT_I2S;
     struct aml_audio_device *adev = in->dev;
+
     ALOGD("%s(need_echo_reference=%d, channels=%d, rate=%d, requested_rate=%d, mode= %d)",
           __FUNCTION__, in->need_echo_reference, in->config.channels, in->config.rate, in->requested_rate, adev->mode);
+
     adev->active_input = in;
     if (adev->mode != AUDIO_MODE_IN_CALL) {
         adev->in_device &= ~AUDIO_DEVICE_IN_ALL;
@@ -3033,13 +3034,25 @@ static int start_input_stream(struct aml_stream_in *in)
     } else if (getprop_bool("sys.hdmiIn.Capture") ||
                (adev->in_device & AUDIO_DEVICE_IN_HDMI) ||
                (adev->in_device & AUDIO_DEVICE_IN_SPDIF)) {
-        port = PORT_SPDIF;
+        /* fix auge tv input, hdmirx, tunner */
+        if (alsa_device_is_auge() &&
+            (adev->in_device & AUDIO_DEVICE_IN_HDMI))
+            port = PORT_TV;
+        else
+            port = PORT_SPDIF;
     } else {
-        port = PORT_I2S;
+        /* fix auge tv input, hdmirx, tunner */
+        if (alsa_device_is_auge() &&
+            (adev->in_device & AUDIO_DEVICE_IN_TV_TUNER))
+            port = PORT_TV;
+        else
+            port = PORT_I2S;
     }
      /* check to update port */
-    port = alsa_device_get_pcm_index(port);
-    ALOGD("*%s, open card(%d) port(%d)", __FUNCTION__, card, port);
+    port = alsa_device_update_pcm_index(port, CAPTURE);
+    ALOGD("*%s, open card(%d) port(%d), in_device:0x%x\n",
+        __FUNCTION__, card, port, adev->in_device);
+
     in->config.period_size = DEFAULT_CAPTURE_PERIOD_SIZE;
 #if defined(IS_ATOM_PROJECT)
     /*mic and linein share the same input device*/
@@ -3653,6 +3666,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
          */
         int mute_mdelay = 0;
         bool stable = signal_status_check(adev->in_device, &mute_mdelay, stream);
+
         if (!stable) {
             if (in->mute_log_cntr == 0)
                 ALOGI("%s: audio is unstable, mute channel", __func__);
@@ -8212,7 +8226,7 @@ static int adev_create_audio_patch(struct audio_hw_device *dev,
     struct audio_patch_set *patch_set;
     const struct audio_port_config *src_config = sources;
     const struct audio_port_config *sink_config = sinks;
-    enum input_source input_src = HDMIIN;
+    int input_src = HDMIIN;
     uint32_t sample_rate = 48000, channel_cnt = 2;
     enum OUT_PORT outport = OUTPORT_SPEAKER;
     enum IN_PORT inport = INPORT_HDMIIN;
@@ -8332,7 +8346,10 @@ else
 
         switch (src_config->ext.device.type) {
         case AUDIO_DEVICE_IN_HDMI:
-            input_src = HDMIIN;
+            if (alsa_device_is_auge())
+                input_src = FRHDMIRX;
+            else
+                input_src = HDMIIN;
             inport = INPORT_HDMIIN;
             aml_dev->patch_src = SRC_HDMIIN;
             break;
@@ -8347,7 +8364,10 @@ else
             aml_dev->patch_src = SRC_SPDIFIN;
             break;
         case AUDIO_DEVICE_IN_TV_TUNER:
-            input_src = ATV;
+            if (alsa_device_is_auge())
+                input_src = FRATV;
+            else
+                input_src = ATV;
             inport = INPORT_TUNER;
             break;
         case AUDIO_DEVICE_IN_REMOTE_SUBMIX:
@@ -8447,7 +8467,10 @@ else
 
         switch (src_config->ext.device.type) {
         case AUDIO_DEVICE_IN_HDMI:
-            input_src = HDMIIN;
+            if (alsa_device_is_auge())
+                input_src = FRHDMIRX;
+            else
+                input_src = HDMIIN;
             inport = INPORT_HDMIIN;
             aml_dev->patch_src = SRC_HDMIIN;
             break;
@@ -8457,7 +8480,10 @@ else
             aml_dev->patch_src = SRC_LINEIN;
             break;
         case AUDIO_DEVICE_IN_TV_TUNER:
-            input_src = ATV;
+            if (alsa_device_is_auge())
+                input_src = FRATV;
+            else
+                input_src = ATV;
             inport = INPORT_TUNER;
             break;
         case AUDIO_DEVICE_IN_SPDIF:
@@ -8495,7 +8521,8 @@ else
         // ATV path goes to dev set_params which could
         // tell atv or dtv source and decide to create or not.
         // One more case is ATV->ATV, should recreate audio patch.
-        if (input_src != ATV || (input_src == ATV && aml_dev->patch_src == SRC_ATV)) {
+        if (input_src != ATV || (input_src == ATV && aml_dev->patch_src == SRC_ATV)
+            || (alsa_device_is_auge() && input_src == FRATV && aml_dev->patch_src == SRC_ATV)) {
             set_audio_source(&aml_dev->alsa_mixer, input_src);
             ret = create_patch(dev,
                                src_config->ext.device.type, outport);
@@ -8504,7 +8531,8 @@ else
                 goto err_patch;
             }
             aml_dev->audio_patching = 1;
-            if (input_src == ATV) {
+            if (input_src == ATV ||
+                (alsa_device_is_auge() && (input_src == FRATV))) {
                 aml_dev->patch_src = SRC_ATV;
             }
         }

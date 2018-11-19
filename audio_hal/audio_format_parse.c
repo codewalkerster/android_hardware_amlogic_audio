@@ -25,12 +25,14 @@
 
 #include "aml_audio_stream.h"
 #include "audio_format_parse.h"
-#include "aml_hw_profile.h"
 #include "aml_dump_debug.h"
 #include "ac3_parser_utils.h"
 
 #include "aml_alsa_mixer.h"
 #include "audio_hw_utils.h"
+
+#include "alsa_device_parser.h"
+
 /*Find the position of 61937 sync word in the buffer*/
 static int seek_61937_sync_word(char *buffer, int size)
 {
@@ -218,8 +220,8 @@ static int audio_type_parse_init(audio_type_parse_t *status)
     struct pcm *in;
     int ret, bytes;
 
-    audio_type_status->card = (unsigned int)aml_get_sound_card_main();
-    audio_type_status->device = (unsigned int)aml_get_i2s_port();
+    audio_type_status->card = (unsigned int)alsa_device_get_card_index();
+    audio_type_status->device = (unsigned int)alsa_device_update_pcm_index(PORT_I2S, CAPTURE);
     audio_type_status->flags = PCM_IN;
 
     if (config_in->channels == 0) {
@@ -342,6 +344,11 @@ void* audio_type_parse_threadloop(void *data)
                 }
             }
 #endif
+            if (alsa_device_is_auge()) {
+                audio_type_status->cur_audio_type = LPCM;
+                continue;
+            }
+
             audio_type_status->cur_audio_type = audio_type_parse(audio_type_status->parse_buffer,
                                                 bytes, &(audio_type_status->package_size), &(audio_type_status->audio_ch_mask));
             // ALOGD("cur_audio_type=%d\n", audio_type_status->cur_audio_type);

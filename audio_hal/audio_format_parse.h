@@ -66,6 +66,11 @@ enum input_source {
     BUILTIN_MIC,
 };
 
+enum auge_input_source {
+	FRATV    = 5,
+	FRHDMIRX = 8,
+};
+
 typedef struct audio_type_parse {
     struct pcm_config config_in;
     struct pcm *in;

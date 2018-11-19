@@ -29,8 +29,8 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <tinyalsa/asoundlib.h>
-#include <aml_hw_profile.h>
 #include <aml_alsa_mixer.h>
+#include "alsa_device_parser.h"
 
 #undef  LOG_TAG
 #define LOG_TAG "audio_alsa_mixer"
@@ -85,7 +85,7 @@ int open_mixer_handle(struct aml_mixer_handle *mixer_handle)
     int card = 0;
     struct mixer *pmixer = NULL;
 
-    card = aml_get_sound_card_main();
+    card = alsa_device_get_card_index();
     if (card < 0) {
         ALOGE("[%s:%d] Failed to get sound card\n", __FUNCTION__, __LINE__);
         return -1;
@@ -141,6 +141,7 @@ int aml_mixer_ctrl_get_int(struct aml_mixer_handle *mixer_handle, int mixer_id)
     if (pCtrl == NULL) {
         ALOGE("[%s:%d] Failed to open mixer %s\n", __FUNCTION__, __LINE__,
               get_mixer_name_by_id(mixer_id));
+        pthread_mutex_unlock (&mixer_handle->lock);
         return -1;
     }
 
@@ -167,6 +168,7 @@ int aml_mixer_ctrl_get_enum_str_to_int(struct aml_mixer_handle *mixer_handle, in
     if (pCtrl == NULL) {
         ALOGE("[%s:%d] Failed to open mixer %s\n", __FUNCTION__, __LINE__,
               get_mixer_name_by_id(mixer_id));
+        pthread_mutex_unlock (&mixer_handle->lock);
         return -1;
     }
     value = mixer_ctl_get_value(pCtrl, 0);
@@ -196,6 +198,7 @@ int aml_mixer_ctrl_set_int(struct aml_mixer_handle *mixer_handle, int mixer_id, 
     if (pCtrl == NULL) {
         ALOGE("[%s:%d] Failed to open mixer %s\n", __FUNCTION__, __LINE__,
               get_mixer_name_by_id(mixer_id));
+        pthread_mutex_unlock (&mixer_handle->lock);
         return -1;
     }
     mixer_ctl_set_value(pCtrl, 0, value);
@@ -219,6 +222,7 @@ int aml_mixer_ctrl_set_str(struct aml_mixer_handle *mixer_handle, int mixer_id, 
     if (pCtrl == NULL) {
         ALOGE("[%s:%d] Failed to open mixer %s\n", __FUNCTION__, __LINE__,
               get_mixer_name_by_id(mixer_id));
+        pthread_mutex_unlock (&mixer_handle->lock);
         return -1;
     }
     mixer_ctl_set_enum_by_string(pCtrl, value);
