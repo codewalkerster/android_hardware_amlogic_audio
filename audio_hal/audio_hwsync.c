@@ -34,6 +34,85 @@
 #include "audio_hwsync.h"
 #include "audio_hw.h"
 
+void aml_hwsync_set_tsync_pause(void)
+{
+    sysfs_set_sysfs_str(TSYNC_EVENT, "AUDIO_PAUSE");
+}
+
+void aml_hwsync_set_tsync_resume(void)
+{
+    sysfs_set_sysfs_str(TSYNC_EVENT, "AUDIO_RESUME");
+}
+
+int aml_hwsync_set_tsync_start_pts(uint32_t pts)
+{
+    char buf[64] = {0};
+
+    snprintf(buf, 64, "AUDIO_START:0x%x", pts);
+    ALOGI("tsync -> %s", buf);
+    return sysfs_set_sysfs_str(TSYNC_EVENT, buf);
+}
+
+int aml_hwsync_open_tsync(void)
+{
+    return open(TSYNC_PCRSCR, O_RDONLY);
+}
+
+void aml_hwsync_close_tsync(int fd)
+{
+    if (fd >= 0) {
+        ALOGE("%s(), fd = %d", __func__, fd);
+        close(fd);
+    }
+}
+
+int aml_hwsync_get_tsync_pts_by_handle(int fd, uint32_t *pts)
+{
+    char valstr[64];
+    uint val = 0;
+
+    if (!pts) {
+        ALOGE("%s(), NULL pointer", __func__);
+        return -EINVAL;
+    }
+
+    if (fd >= 0) {
+        memset(valstr, 0, 64);
+        lseek(fd, 0, SEEK_SET);
+        read(fd, valstr, 64 - 1);
+        valstr[strlen(valstr)] = '\0';
+    } else {
+        ALOGE("invalid fd\n");
+        return -EINVAL;
+    }
+
+    if (sscanf(valstr, "0x%x", &val) < 1) {
+        ALOGE("unable to get pts from: fd(%d), str(%s)", fd, valstr);
+        return -EINVAL;
+    }
+    *pts = val;
+    return 0;
+}
+
+int aml_hwsync_get_tsync_pts(uint32_t *pts)
+{
+    if (!pts) {
+        ALOGE("%s(), NULL pointer", __func__);
+        return -EINVAL;
+    }
+
+    return get_sysfs_uint(TSYNC_PCRSCR, pts);
+}
+
+int aml_hwsync_reset_tsync_pcrscr(uint32_t pts)
+{
+    char buf[64] = {0};
+
+    snprintf(buf, 64, "0x%x", pts);
+    ALOGI("tsync -> reset pcrscr 0x%x", pts);
+    return sysfs_set_sysfs_str(TSYNC_APTS, buf);
+}
+
 static int aml_audio_hwsync_get_pcr(audio_hwsync_t *p_hwsync, uint *value)
 {
     int fd = -1;
@@ -142,11 +221,11 @@ int aml_audio_hwsync_find_frame(audio_hwsync_t *p_hwsync,
                 pts = pts * 90 / 1000000;
                 time_diff = get_pts_gap(pts, p_hwsync->last_apts_from_header) / 90;
                 if (debug_enable > 8) {
-                    ALOGV("pts %"PRIx64",frame len %u\n", pts, p_hwsync->hw_sync_body_cnt);
-                    ALOGV("last pts %"PRIx64",diff %"PRIx64" ms\n", p_hwsync->last_apts_from_header, time_diff);
+                ALOGV("pts 0x%"PRIx64",frame len %u\n", pts, p_hwsync->hw_sync_body_cnt);
+                ALOGV("last pts 0x%"PRIx64",diff 0x%"PRIx64" ms\n", p_hwsync->last_apts_from_header, time_diff);
                 }
                 if (time_diff > 32) {
-                    ALOGI("pts  time gap %"PRIx64" ms,last %"PRIx64",cur %"PRIx64"\n", time_diff,
+                    ALOGV("pts  time gap %"PRIx64" ms,last %"PRIx64",cur %"PRIx64"\n", time_diff,
                           p_hwsync->last_apts_from_header, pts);
                 }
                 p_hwsync->last_apts_from_header = pts;
@@ -213,12 +292,9 @@ int aml_audio_hwsync_set_first_pts(audio_hwsync_t *p_hwsync, uint64_t pts)
     pts32 = (uint32_t)pts;
     p_hwsync->first_apts_flag = true;
     p_hwsync->first_apts = pts;
-    sprintf(tempbuf, "AUDIO_START:0x%x", pts32);
-    ALOGI("hwsync set tsync -> %s", tempbuf);
-    if (sysfs_set_sysfs_str(TSYNC_EVENT, tempbuf) == -1) {
-        ALOGE("set AUDIO_START failed \n");
-        return -1;
-    }
+
+    if (aml_hwsync_set_tsync_start_pts(pts32) < 0)
+        return -EINVAL;
 
     return 0;
 }

@@ -1093,6 +1093,8 @@ int create_dtv_patch(struct audio_hw_device *dev, audio_devices_t input,
         ALOGE("Fail to init audio ringbuffer!");
         goto err_ring_buf;
     }
+    // switch normal stream to old tv mode writing
+    switchNormalStream(aml_dev->active_outputs[STREAM_PCM_NORMAL], 0);
 
     ret = pthread_create(&(patch->audio_input_threadID), NULL,
                          audio_dtv_patch_process_threadloop, patch);
@@ -1151,6 +1153,7 @@ int release_dtv_patch(struct aml_audio_device *aml_dev)
     aml_dev->audio_patch = NULL;
     ALOGI("--%s", __FUNCTION__);
     pthread_mutex_unlock(&dtv_patch_mutex);
+    switchNormalStream(aml_dev->active_outputs[STREAM_PCM_NORMAL], 1);
 
     return 0;
 }

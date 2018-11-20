@@ -49,7 +49,13 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
         audio_post_process.c \
         aml_avsync_tuning.c \
         audio_format_parse.c \
-	dolby_lib_api.c
+        dolby_lib_api.c \
+        amlAudioMixer.c \
+        hw_avsync.c \
+        hw_avsync_callbacks.c \
+        audio_port.c \
+        sub_mixing_factory.c \
+        audio_data_process.c
 
     LOCAL_C_INCLUDES += \
         external/tinyalsa/include \

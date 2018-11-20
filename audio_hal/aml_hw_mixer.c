@@ -89,6 +89,7 @@ int aml_hw_mixer_get_content_l(struct aml_hw_mixer *mixer)
         content = mixer->wp - mixer->rp + mixer->buf_size;
     }
     //ALOGI("wp %d,rp %d\n",mixer->wp,mixer->rp);
+    //ALOGI("%s(), buffer level = %d", __func__, content);
     return content;
 }
 
@@ -99,8 +100,10 @@ int aml_hw_mixer_write(struct aml_hw_mixer *mixer, const void *buffer, size_t by
     int retry = 5;
     unsigned tail, space, write_bytes = bytes;
 
-    if (!mixer || !mixer->start_buf)
+    if (!mixer || !mixer->start_buf) {
+        ALOGE("%s(), no mixer or mixer not inited!", __func__);
         return bytes;
+    }
 
     while (retry--) {
         pthread_mutex_lock(&mixer->lock);
@@ -113,8 +116,8 @@ int aml_hw_mixer_write(struct aml_hw_mixer *mixer, const void *buffer, size_t by
     }
 
     if (retry < 0) {
-        //ALOGW("%s: write data no space,space %d,bytes %zu,rp %d,wp %d, reset all ptr",
-        //__func__, space, bytes, mixer->rp, mixer->wp);
+        ALOGE("%s: write data no space,space %d,bytes %zu,rp %d,wp %d, reset all ptr",
+            __func__, space, bytes, mixer->rp, mixer->wp);
         mixer->wp = 0;
         mixer->rp = 0;
         pthread_mutex_unlock(&mixer->lock);
@@ -175,49 +178,51 @@ int aml_hw_mixer_mixing(struct aml_hw_mixer *mixer, void *buffer, int bytes, aud
         if (read_bytes + mixer->rp > mixer->buf_size) {
             tail = mixer->buf_size - mixer->rp;
             for (i = 0; i < tail / 4; i++) {
-                tmp = *tmp_buffer + *cached_buf++;
+                tmp = (int64_t)*tmp_buffer + (int64_t)*cached_buf++;
                 *tmp_buffer++ = CLIPINT(tmp);
             }
             read_bytes -= tail;
             cached_buf = (int32_t *)mixer->start_buf;
             for (i = 0; i < read_bytes / 4; i++) {
-                tmp = *tmp_buffer + *cached_buf++;
+                tmp = (int64_t)*tmp_buffer + (int64_t)*cached_buf++;
                 *tmp_buffer++ = CLIPINT(tmp);
             }
             mixer->rp = read_bytes;
         } else {
             for (i = 0; i < read_bytes / 4; i++) {
-                tmp = *tmp_buffer + *cached_buf++;
+                tmp = (int64_t)*tmp_buffer + (int64_t)*cached_buf++;
                 *tmp_buffer++ = CLIPINT(tmp);
             }
             mixer->rp += read_bytes;
             mixer->rp %= AML_HW_MIXER_BUF_SIZE;
         }
-    } else {
+    } else if (format == AUDIO_FORMAT_PCM_16_BIT) {
         int32_t tmp;
         int16_t *tmp_buffer = (int16_t *)buffer;
         int16_t *cached_buf = (int16_t *)(mixer->start_buf + mixer->rp);
         if (read_bytes + mixer->rp > mixer->buf_size) {
             tail = mixer->buf_size - mixer->rp;
             for (i = 0; i < tail / 2; i++) {
-                tmp = *tmp_buffer + *cached_buf++;
+                tmp = (int32_t)*tmp_buffer + (int32_t)*cached_buf++;
                 *tmp_buffer++ = CLIPSHORT(tmp);
             }
             read_bytes -= tail;
             cached_buf = (int16_t *)mixer->start_buf;
             for (i = 0; i < read_bytes / 2; i++) {
-                tmp = *tmp_buffer + *cached_buf++;
+                tmp = (int32_t)*tmp_buffer + (int32_t)*cached_buf++;
                 *tmp_buffer++ = CLIPSHORT(tmp);
             }
             mixer->rp = read_bytes;
         } else {
             for (i = 0; i < read_bytes / 2; i++) {
-                tmp = *tmp_buffer + *cached_buf++;
+                tmp = (int32_t)*tmp_buffer + (int32_t)*cached_buf++;
                 *tmp_buffer++ = CLIPSHORT(tmp);
             }
             mixer->rp += read_bytes;
             mixer->rp %= AML_HW_MIXER_BUF_SIZE;
         }
+    } else {
+        ALOGE("%s(), format %#x not supporte!", __func__, format);
     }
     pthread_mutex_unlock(&mixer->lock);
 
