@@ -719,6 +719,8 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
     int outRAWLen = 0;
     int total_size = 0;
     int read_offset = 0;
+    ddp_dec->outlen_pcm = 0;
+    ddp_dec->outlen_raw = 0;
 #if 0
     if (getprop_bool("media.audio_hal.ddp.outdump")) {
         FILE *fp1 = fopen("/data/tmp/audio_decode_61937.raw", "a+");

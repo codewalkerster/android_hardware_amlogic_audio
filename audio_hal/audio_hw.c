@@ -7180,6 +7180,8 @@ re_write:
                 }
 
                 int read_bytes =  PLAYBACK_PERIOD_COUNT * DEFAULT_PLAYBACK_PERIOD_SIZE ;
+                if (patch && adev->patch_src == SRC_DTV)
+                    read_bytes = 6144;
                 bytes  = read_bytes;
 
                 while (get_buffer_read_space(&ddp_dec->output_ring_buf) > (int)bytes) {
