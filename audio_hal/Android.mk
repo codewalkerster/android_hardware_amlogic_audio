@@ -93,6 +93,9 @@ endif
 ifeq ($(strip $(TARGET_WITH_TV_AUDIO_MODE)),true)
 $(info "---------tv audio mode, compiler configured 8 channels output by default--------")
 LOCAL_CFLAGS += -DTV_AUDIO_OUTPUT
+else
+$(info "---------ott audio mode, compiler configure 2 channels output by default--------")
+LOCAL_CFLAGS += -DSUBMIXER_V1_1
 endif
     #LOCAL_CFLAGS += -Wall -Wunknown-pragmas
 

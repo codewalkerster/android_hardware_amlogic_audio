@@ -82,7 +82,7 @@
 #include "audio_hw_dtv.h"
 
 #define ENABLE_DTV_PATCH
-#define SUBMIXER_V1_1
+//#define SUBMIXER_V1_1
 
 #if defined(IS_ATOM_PROJECT)
 #include "harman_dsp_process.h"
@@ -1524,7 +1524,7 @@ static int out_pause (struct audio_stream_out *stream)
         }
     }
 
-    if (pcm_is_ready (out->pcm) ) {
+    if (out->pcm && pcm_is_ready (out->pcm)) {
         r = pcm_ioctl (out->pcm, SNDRV_PCM_IOCTL_PAUSE, 1);
         if (r < 0) {
             ALOGE ("cannot pause channel\n");
@@ -6230,16 +6230,22 @@ ssize_t hw_write (struct audio_stream_out *stream
         } else {
             aml_tinymix_set_spdif_format(output_format,aml_out);
         }
-        if (aml_out->usecase == STREAM_PCM_DIRECT && adev->audio_patching) {
+#ifdef SUBMIXER_V1_1
+        if (aml_out->usecase == STREAM_PCM_DIRECT &&
+            adev->audio_patching &&
+            adev->sink_format == AUDIO_FORMAT_PCM_16_BIT) {
             aml_out->pcm = getSubMixingPCMdev(adev->sm);
             if (aml_out->pcm == NULL)
                 ALOGE("%s() get pcm handle failed", __func__);
-        } else {
+        } else
+#else
+        {
             ret = aml_alsa_output_open(stream);
             if (ret) {
                 ALOGE("%s() open failed", __func__);
             }
         }
+#endif
         aml_out->status = STREAM_HW_WRITING;
     }
 
@@ -7650,8 +7656,10 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
         }
     } else {
         ALOGI("%s(), direct usecase: %s", __func__, usecase_to_str(aml_out->usecase));
-        //aml_out->stream.write = out_write_new;
-        //aml_out->stream.common.standby = out_standby_new;
+        if (adev->is_TV) {
+            aml_out->stream.write = out_write_new;
+            aml_out->stream.common.standby = out_standby_new;
+        }
     }
 #else
     aml_out->stream.write = out_write_new;
@@ -8033,9 +8041,10 @@ static int create_patch(struct audio_hw_device *dev,
     patch->in_format = AUDIO_FORMAT_PCM_16_BIT;
     patch->out_format = AUDIO_FORMAT_PCM_16_BIT;
 #endif
+#ifdef SUBMIXER_V1_1
     // switch normal stream to old tv mode writing
     switchNormalStream(aml_dev->active_outputs[STREAM_PCM_NORMAL], 0);
-
+#endif
     if (patch->out_format == AUDIO_FORMAT_PCM_16_BIT)
         ret = ring_buffer_init(&patch->aml_ringbuffer, 2 * 2 * play_buffer_size * PATCH_PERIOD_COUNT);
     else
@@ -8124,7 +8133,9 @@ static int release_patch(struct aml_audio_device *aml_dev)
     aml_dev->output_tmp_buf = NULL;
     aml_dev->output_tmp_buf_size = 0;
 #endif
+#ifdef SUBMIXER_V1_1
     switchNormalStream(aml_dev->active_outputs[STREAM_PCM_NORMAL], 1);
+#endif
     return 0;
 }
 
@@ -9395,12 +9406,13 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->sink_gain[OUTPORT_HDMI] = 1.0;
     ALOGI("%s(), OTT platform", __func__);
 #endif
+#ifdef SUBMIXER_V1_1
     ret = initHalSubMixing(&adev->sm, MIXER_LPCM, adev, adev->is_TV);
     adev->tsync_fd = aml_hwsync_open_tsync();
     if (adev->tsync_fd < 0) {
         ALOGE("%s() open tsync failed", __func__);
     }
-
+#endif
     ALOGD("%s: exit", __func__);
     return 0;
 
