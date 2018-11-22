@@ -48,9 +48,9 @@
  * i2s_capure, then i2s
  */
 #define ALSAPORT_PCM              "alsaPORT-pcm"         /* usally for bt pcm */
-#define ALSAPORT_I2S              "alsaPORT-i2s"         /* Playback,Capture */
-#define ALSAPORT_I2SPLAYPLAYBACK  "alsaPORT-i2sPlayback" /* Only Playback */
-#define ALSAPORT_I2SCAPTURE       "alsaPORT-i2sCapture"  /* Only Capture */
+#define ALSAPORT_I2S              "alsaPORT-i2s"         /* i2s0, Playback,Capture */
+#define ALSAPORT_I2SPLAYPLAYBACK  "alsaPORT-i2s1"        /* i2s1 */
+#define ALSAPORT_I2SCAPTURE       "alsaPORT-i2s2"        /* i2s2 */
 #define ALSAPORT_TDM              "alsaPORT-tdm"
 #define ALSAPORT_PDM              "alsaPORT-pdm"
 #define ALSAPORT_SPDIF            "alsaPORT-spdif"
@@ -77,8 +77,8 @@ struct alsa_info {
 
 	struct AudioDeviceDescriptor *pcm_descrpt;
 	struct AudioDeviceDescriptor *i2s_descrpt;
-	struct AudioDeviceDescriptor *i2s_playback_descrpt; /* only playback */
-	struct AudioDeviceDescriptor *i2s_capture_descrpt; /* only capture */
+	struct AudioDeviceDescriptor *i2s1_descrpt;
+	struct AudioDeviceDescriptor *i2s2_descrpt;
 	struct AudioDeviceDescriptor *tdm_descrpt;
 	struct AudioDeviceDescriptor *pdm_descrpt;
 	struct AudioDeviceDescriptor *spdif_descrpt;
@@ -208,9 +208,9 @@ void alsa_device_parser_pcm_string(struct alsa_info *p_info, char *InputBuffer)
 				if (!strcmp(PortName, ALSAPORT_PCM))
 					p_info->pcm_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_I2SPLAYPLAYBACK))
-					p_info->i2s_playback_descrpt = mAudioDeviceDescriptor;
+					p_info->i2s1_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_I2SCAPTURE))
-					p_info->i2s_capture_descrpt = mAudioDeviceDescriptor;
+					p_info->i2s2_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_I2S))
 					p_info->i2s_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_TDM))
@@ -278,14 +278,14 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 	switch (alsaPORT) {
 	case PORT_I2S:
 		if (stream == PLAYBACK) {
-			if (p_info->i2s_playback_descrpt)
-				pADD = p_info->i2s_playback_descrpt;
-			else
+			/*if (p_info->i2s1_descrpt)
+				pADD = p_info->i2s1_descrpt;
+			else*/
 				pADD = p_info->i2s_descrpt;
 		} else if (stream == CAPTURE) {
-			if (p_info->i2s_capture_descrpt)
-				pADD = p_info->i2s_capture_descrpt;
-			else
+			/*if (p_info->i2s2_descrpt)
+				pADD = p_info->i2s2_descrpt;
+			else*/
 				pADD = p_info->i2s_descrpt;
 		} else
 			pADD = p_info->i2s_descrpt;
@@ -310,6 +310,12 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 		break;
 	case PORT_TV:
 		pADD = p_info->tvin_descrpt;
+		break;
+	case PORT_I2S1:
+		pADD = p_info->i2s1_descrpt;
+		break;
+	case PORT_I2S2:
+		pADD = p_info->i2s2_descrpt;
 		break;
 	default:
 		pADD = p_info->i2s_descrpt;
