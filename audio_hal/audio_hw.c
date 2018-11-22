@@ -6732,11 +6732,13 @@ ssize_t mixer_main_buffer_write (struct audio_stream_out *stream, const void *bu
         ALOGE ("%s() invalid buffer %p\n", __FUNCTION__, buffer);
         return -1;
     }
+#ifdef SUBMIXER_V1_1
     // For compatible
     if (aml_out->standby) {
         ALOGI("%s(), standby to unstandby", __func__);
         aml_out->standby = false;
     }
+#endif
     // why clean up, ms12 thead will handle all?? zz
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
         if (patch && continous_mode(adev)) {
@@ -7334,12 +7336,13 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
     if (aml_out->status == STREAM_STANDBY) {
         aml_out->status = STREAM_MIXING;
     }
+#ifdef SUBMIXER_V1_1
     // For compatible
     if (aml_out->standby) {
         ALOGI("%s(), standby to unstandby", __func__);
         aml_out->standby = false;
     }
-
+#endif
     if (aml_out->is_normal_pcm && !aml_out->normal_pcm_mixing_config) {
         if (0 == set_system_app_mixing_status(aml_out, aml_out->status)) {
             aml_out->normal_pcm_mixing_config = true;
