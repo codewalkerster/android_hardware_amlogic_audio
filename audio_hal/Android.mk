@@ -24,7 +24,7 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 # required type is 'primary'. Other possibilites are 'a2dp', 'usb', etc.
 	include $(CLEAR_VARS)
 
-    LOCAL_MODULE := audio.primary.amlogic
+    LOCAL_MODULE := audio.primary.$(TARGET_PRODUCT)
     ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 26 && echo OK),OK)
         LOCAL_PROPRIETARY_MODULE := true
     endif
