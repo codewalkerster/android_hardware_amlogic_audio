@@ -56,7 +56,7 @@ include $(BUILD_PREBUILT)
     ifeq ($(ANDROID_BUILD_TYPE), 64)
         LOCAL_CFLAGS += -DARM64_BIT
     endif
-    LOCAL_MODULE := audio.primary.amlogic
+    LOCAL_MODULE := audio.primary.$(TARGET_PRODUCT)
     ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 26 && echo OK),OK)
         LOCAL_PROPRIETARY_MODULE := true
     endif
