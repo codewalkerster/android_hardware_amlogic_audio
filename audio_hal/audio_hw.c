@@ -8864,6 +8864,26 @@ else
                 (alsa_device_is_auge() && (input_src == FRATV))) {
                 aml_dev->patch_src = SRC_ATV;
             }
+        } else if (input_src == ATV && aml_dev->patch_src == SRC_DTV ) {
+#ifdef ENABLE_DTV_PATCH
+             if ((aml_dev->patch_src == SRC_DTV) && aml_dev->audio_patching) {
+                 ALOGI("%s, now release the dtv patch now\n ", __func__);
+                 ret = release_dtv_patch(aml_dev);
+                 if (!ret) {
+                     aml_dev->audio_patching = 0;
+                 }
+             }
+             ALOGI("%s, now end release dtv patch the audio_patching is %d ", __func__, aml_dev->audio_patching);
+             ALOGI("%s, now create the dtv patch now\n ", __func__);
+             aml_dev->patch_src = SRC_DTV;
+
+             ret = create_dtv_patch(dev, AUDIO_DEVICE_IN_TV_TUNER,
+                                    AUDIO_DEVICE_OUT_SPEAKER);
+             if (ret == 0) {
+                 aml_dev->audio_patching = 1;
+             }
+            ALOGI("%s, now end create dtv patch the audio_patching is %d ", __func__, aml_dev->audio_patching);
+#endif
         }
         if (input_src == LINEIN && aml_dev->aml_ng_enable) {
             aml_dev->aml_ng_handle = init_noise_gate(aml_dev->aml_ng_level,
@@ -8939,7 +8959,7 @@ static int adev_release_audio_patch(struct audio_hw_device *dev,
         }
         aml_dev->audio_patching = 0;
         /* save ATV src to deal with ATV HP hotplug */
-        if (aml_dev->patch_src != SRC_ATV) {
+        if (aml_dev->patch_src != SRC_ATV && aml_dev->patch_src != SRC_DTV) {
             aml_dev->patch_src = SRC_INVAL;
         }
         aml_dev->parental_control_av_mute = false;
