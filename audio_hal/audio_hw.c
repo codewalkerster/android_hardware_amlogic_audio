@@ -4428,8 +4428,15 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
             if (strncmp(value, "dtv", 3) == 0) {
                 adev->patch_src = SRC_DTV;
             } else if (strncmp(value, "atv", 3) == 0) {
+                int input_src;
+
+                if (alsa_device_is_auge())
+                    input_src = FRATV;
+                else
+                    input_src = ATV;
+
                 adev->patch_src = SRC_ATV;
-                set_audio_source(&adev->alsa_mixer, ATV);
+                set_audio_source(&adev->alsa_mixer, input_src);
             }
             ALOGI("%s, tuner to mixer case, no need to create patch", __func__);
             goto exit;
@@ -4476,8 +4483,15 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
             }
 #endif
             if (!adev->audio_patching) {
+                int input_src;
+
+                if (alsa_device_is_auge())
+                    input_src = FRATV;
+                else
+                    input_src = ATV;
+
                 ALOGI ("%s, create atv patching", __func__);
-                set_audio_source(&adev->alsa_mixer, ATV);
+                set_audio_source(&adev->alsa_mixer, input_src);
                 ret = create_patch (dev, AUDIO_DEVICE_IN_TV_TUNER, AUDIO_DEVICE_OUT_SPEAKER);
                 // audio_patching ok, mark the patching status
                 if (ret == 0) {

@@ -34,6 +34,8 @@
 #define PORT_SPDIFB2HDMI   5
 #define PORT_I2S2HDMI      6
 #define PORT_TV            7
+#define PORT_I2S1          8
+#define PORT_I2S2          9
 
 #define PLAYBACK           0
 #define CAPTURE            1
