@@ -114,6 +114,8 @@ struct input_port {
     /* consumed by read after init */
     uint64_t mix_consumed_frames;
     uint64_t presentation_frames;
+    int padding_frames;
+    bool pts_valid;
 };
 
 enum MIXER_OUTPUT_PORT {
@@ -142,7 +144,7 @@ struct output_port {
     pthread_cond_t cond;
     ssize_t (*write)(struct output_port *port, void *buffer, int bytes);
     //ssize_t (*read)(struct output_port *port, void *buffer, int bytes);
-    uint64_t last_write_time_us;
+    struct timespec tval_last;
 };
 bool is_inport_valid(enum MIXER_INPUT_PORT index);
 bool is_outport_valid(enum MIXER_OUTPUT_PORT index);
@@ -153,7 +155,10 @@ enum MIXER_INPUT_PORT get_input_port_index(struct audio_config *config,
 struct input_port *new_input_port(
         size_t buf_size,
         struct audio_config *config,
-        audio_output_flags_t flags);
+        audio_output_flags_t flags,
+        float volume,
+        bool direct_on);
+int set_inport_padding_size(struct input_port *port, size_t bytes);
 int reset_input_port(struct input_port *port);
 int resize_input_port_buffer(struct input_port *port, uint buf_size);
 int free_input_port(struct input_port *port);
@@ -187,4 +192,6 @@ struct output_port *new_output_port(
 int free_output_port(struct output_port *port);
 int resize_output_port_buffer(struct output_port *port, size_t buf_frames);
 int outport_get_latency_frames(struct output_port *port);
+int set_inport_pts_valid(struct input_port *in_port, bool valid);
+bool is_inport_pts_valid(struct input_port *in_port);
 #endif /* _AUDIO_PORT_H_ */

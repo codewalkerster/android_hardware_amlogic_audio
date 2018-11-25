@@ -84,6 +84,7 @@
 
 #define ENABLE_DTV_PATCH
 //#define SUBMIXER_V1_1
+#define HDMI_LATENCY_MS 60
 
 #if defined(IS_ATOM_PROJECT)
 #include "harman_dsp_process.h"
@@ -680,9 +681,9 @@ static int start_output_stream_direct (struct aml_stream_out *out)
 
     switch (out->hal_internal_format) {
     case AUDIO_FORMAT_E_AC3:
-        out->config.period_size = DEFAULT_PLAYBACK_PERIOD_SIZE * 2;
-        out->write_threshold = PLAYBACK_PERIOD_COUNT * DEFAULT_PLAYBACK_PERIOD_SIZE * 2;
-        out->config.start_threshold = PLAYBACK_PERIOD_COUNT * DEFAULT_PLAYBACK_PERIOD_SIZE * 2;
+        out->config.period_size = DEFAULT_PLAYBACK_PERIOD_SIZE * 4;
+        //out->write_threshold = PLAYBACK_PERIOD_COUNT * DEFAULT_PLAYBACK_PERIOD_SIZE * 2;
+        //out->config.start_threshold = PLAYBACK_PERIOD_COUNT * DEFAULT_PLAYBACK_PERIOD_SIZE * 2;
         //as dd+ frame size = 1 and alsa sr as divide 16
         //out->raw_61937_frame_size = 16;
         break;
@@ -922,7 +923,7 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
             size = DEFAULT_PLAYBACK_PERIOD_SIZE * 2;
         else
             // bug_id - 158018, modify size value from PERIOD_SIZE to (PERIOD_SIZE * PLAYBACK_PERIOD_COUNT)
-            size = DEFAULT_PLAYBACK_PERIOD_SIZE/* * PLAYBACK_PERIOD_COUNT*/;
+            size = DEFAULT_PLAYBACK_PERIOD_SIZE*2/* * PLAYBACK_PERIOD_COUNT*/;
     }
     size = ( (size + 15) / 16) * 16;
     return size * audio_stream_out_frame_size ( (struct audio_stream_out *) stream);
@@ -932,7 +933,7 @@ static audio_channel_mask_t out_get_channels(const struct audio_stream *stream _
 {
     const struct aml_stream_out *out = (const struct aml_stream_out *)stream;
 
-    ALOGV("Amlogic_HAL - out_get_channels return out->hal_channel_mask:%0x", out->hal_channel_mask);
+    //ALOGV("Amlogic_HAL - out_get_channels return out->hal_channel_mask:%0x", out->hal_channel_mask);
     return out->hal_channel_mask;
 }
 
@@ -946,7 +947,7 @@ static audio_channel_mask_t out_get_channels_direct(const struct audio_stream *s
 static audio_format_t out_get_format(const struct audio_stream *stream __unused)
 {
     const struct aml_stream_out *out = (const struct aml_stream_out *)stream;
-    ALOGV("Amlogic_HAL - out_get_format() = %d", out->hal_format);
+    //ALOGV("Amlogic_HAL - out_get_format() = %d", out->hal_format);
     // if hal_format doesn't have a valid value,
     // return default value AUDIO_FORMAT_PCM_16_BIT
     if (out->hal_format == 0) {
@@ -1495,6 +1496,7 @@ static uint32_t out_get_latency (const struct audio_stream_out *stream)
 {
     const struct aml_stream_out *out = (const struct aml_stream_out *) stream;
     snd_pcm_sframes_t frames = out_get_latency_frames (stream);
+    //snd_pcm_sframes_t frames = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
     return (frames * 1000) / out->config.rate;
 }
 
@@ -1766,7 +1768,7 @@ static int out_flush_new (struct audio_stream_out *stream)
     out->last_frames_postion = 0;
     out->spdif_enc_init_frame_write_sum =  0;
     out->frame_skip_sum = 0;
-    out->skip_frame = 3;
+    out->skip_frame = 0;
     out->input_bytes_size = 0;
     out->pause_status = false;
 
@@ -2604,8 +2606,9 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
     * on the output stream mutex - e.g. executing select_mode() while holding the hw device
     * mutex
     */
-    ALOGV ("out_write_direct:out %p,position %zu, out_write size %"PRIu64,
-           out, bytes, out->frame_write_sum);
+    ALOGV ("%s(): out %p, bytes %zu, hwsync:%d, last frame_write_sum %"PRIu64,
+           __func__, out, bytes,
+           out->hw_sync_mode, out->frame_write_sum);
 #if 0
     FILE *fp1 = fopen ("/data/out_write_direct_passthrough.pcm", "a+");
     if (fp1) {
@@ -2632,7 +2635,7 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
         ALOGI ("call out_write when pause status,size %zu,(%p)\n", bytes, out);
         return 0;
     }
-    ALOGV ("%s with flag 0x%x\n", __func__, out->flags);
+    //ALOGV ("%s with flag 0x%x\n", __func__, out->flags);
     if ( (out->standby) && out->hw_sync_mode) {
         /*
         there are two types of raw data come to hdmi  audio hal
@@ -2674,8 +2677,8 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
         if (cur_pts > 0xffffffff) {
             ALOGE ("APTS exeed the max 32bit value");
         }
-        ALOGV ("after aml_audio_hwsync_find_frame bytes remain %zu,cost %zu,outsize %d,pts %"PRIx64"\n",
-               bytes - hwsync_cost_bytes, hwsync_cost_bytes, outsize, cur_pts);
+        ALOGV ("after aml_audio_hwsync_find_frame bytes remain %zu,cost %zu,outsize %d,pts %"PRId64"ms\n",
+               bytes - hwsync_cost_bytes, hwsync_cost_bytes, outsize, cur_pts / 90);
         //TODO,skip 3 frames after flush, to tmp fix seek pts discontinue issue.need dig more
         // to find out why seek ppint pts frame is remained after flush.WTF.
         if (out->skip_frame > 0) {
@@ -2690,13 +2693,20 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
             //we take this frame pts as the first apts.
             //this can fix the seek discontinue,we got a fake frame,which maybe cached before the seek
             if (hw_sync->first_apts_flag == false) {
-                aml_audio_hwsync_set_first_pts(out->hwsync, cur_pts);
+                if (cur_pts >= ((out_get_latency (stream)/4) + HDMI_LATENCY_MS) * 90
+                    /*&& out->last_frames_postion > 0*/) {
+                    cur_pts -= ((out_get_latency (stream)/4) + HDMI_LATENCY_MS) * 90;
+                    aml_audio_hwsync_set_first_pts(out->hwsync, cur_pts);
+                } else {
+                    ALOGI("%s(), first pts not set, cur_pts %lld, last position %lld",
+                        __func__, cur_pts, out->last_frames_postion);
+                }
             } else {
                 uint64_t apts;
                 uint32_t apts32;
                 uint pcr = 0;
                 uint apts_gap = 0;
-                uint64_t latency = out_get_latency (stream) * 90;
+                uint64_t latency = ((out_get_latency (stream)/4) + HDMI_LATENCY_MS) * 90;
                 // check PTS discontinue, which may happen when audio track switching
                 // discontinue means PTS calculated based on first_apts and frame_write_sum
                 // does not match the timestamp of next audio samples
@@ -2712,6 +2722,10 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
                     enum hwsync_status sync_status = CONTINUATION;
                     apts_gap = get_pts_gap (pcr, apts32);
                     sync_status = check_hwsync_status (apts_gap);
+
+                    ALOGV("%s()audio pts %dms, pcr %dms, latency %lldms, diff %dms",
+                        __func__, apts32/90, pcr/90, latency/90,
+                        (apts32 > pcr) ? (apts32 - pcr)/90 : (pcr - apts32)/90);
 
                     // limit the gap handle to 0.5~5 s.
                     if (sync_status == ADJUSTMENT) {
@@ -2779,7 +2793,7 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
     }
     if (codec_type_is_raw_data (out->codec_type) && ! (out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO) ) {
         //here to do IEC61937 pack
-        ALOGV ("IEC61937 write size %zu,hw_sync_mode %d,flag %x\n", out_frames * frame_size, out->hw_sync_mode, out->flags);
+        //ALOGV ("IEC61937 write size %zu,hw_sync_mode %d,flag %x\n", out_frames * frame_size, out->hw_sync_mode, out->flags);
         if (out->codec_type  > 0) {
             // compressed audio DD/DD+
             bytes = spdifenc_write ( (void *) buf, out_frames * frame_size);
@@ -2787,13 +2801,15 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
             if (out->hw_sync_mode == 1) {
                 bytes = hwsync_cost_bytes;
             }
-            ALOGV ("spdifenc_write return %zu\n", bytes);
+            //ALOGV ("spdifenc_write return %zu\n", bytes);
             if (out->codec_type == TYPE_EAC3) {
                 out->frame_write_sum = spdifenc_get_total() / 16 + out->spdif_enc_init_frame_write_sum;
             } else {
                 out->frame_write_sum = spdifenc_get_total() / 4 + out->spdif_enc_init_frame_write_sum;
             }
-            ALOGV ("out %p,out->frame_write_sum %"PRId64"\n", out, out->frame_write_sum);
+            //ALOGV ("out %p, after out->frame_write_sum %"PRId64"\n", out, out->frame_write_sum);
+            ALOGV("---after out->frame_write_sum %"PRId64",spdifenc total %lld\n",
+                out->frame_write_sum, spdifenc_get_total() / 16);
         }
         goto exit;
     }
@@ -2881,22 +2897,23 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
 
 exit:
     total_frame = out->frame_write_sum + out->frame_skip_sum;
-    latency_frames = out_get_latency_frames (stream);
+    latency_frames = out_get_latency_frames(stream)/4;
+    latency_frames += HDMI_LATENCY_MS * 48;
     clock_gettime (CLOCK_MONOTONIC, &out->timestamp);
     out->lasttimestamp.tv_sec = out->timestamp.tv_sec;
     out->lasttimestamp.tv_nsec = out->timestamp.tv_nsec;
     if (total_frame >= latency_frames) {
         out->last_frames_postion = total_frame - latency_frames;
     } else {
-        out->last_frames_postion = total_frame;
+        out->last_frames_postion = 0;//total_frame;
     }
-    ALOGV ("\nout %p,out->last_frames_postion %"PRId64", latency = %d\n", out, out->last_frames_postion, latency_frames);
+    ALOGV("out %p,out->last_frames_postion %"PRId64", latency = %d\n", out, out->last_frames_postion, latency_frames);
     pthread_mutex_unlock (&out->lock);
     if (ret != 0) {
         usleep (bytes * 1000000 / audio_stream_out_frame_size (stream) /
                 out_get_sample_rate (&stream->common) );
     }
-
+    ALOGV("\n");
     return return_bytes;
 }
 
@@ -3033,6 +3050,11 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
         if (out->hal_rate != MM_FULL_POWER_SAMPLING_RATE) {
             frames_written_hw = (frames_written_hw * out->hal_rate) / MM_FULL_POWER_SAMPLING_RATE;
         }
+    }
+
+    if (frames_written_hw == 0) {
+        ALOGV("%s(), not ready yet", __func__);
+        return -EINVAL;
     }
     *frames = frames_written_hw;
     *timestamp = out->lasttimestamp;
@@ -7902,8 +7924,8 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
     if (aml_getprop_bool("media.audio.hal.debug")) {
         aml_out->debug_stream = 1;
     }
-    ALOGD("%s: exit: usecase = %s card = %d devices = %d", __func__,
-        usecase_to_str(aml_out->usecase), aml_out->card, aml_out->device);
+    ALOGD("-%s: out %p: usecase = %s card = %d devices = %d", __func__,
+        aml_out, usecase_to_str(aml_out->usecase), aml_out->card, aml_out->device);
 
     return 0;
 }
