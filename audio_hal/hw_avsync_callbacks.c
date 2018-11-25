@@ -23,6 +23,29 @@ enum hwsync_status pcm_check_hwsync_status(uint apts_gap)
     return sync_status;
 }
 
+enum hwsync_status pcm_check_hwsync_status1(uint32_t pcr, uint32_t apts)
+{
+    uint32_t apts_gap = get_pts_gap(pcr, apts);
+    enum hwsync_status sync_status;
+
+    if (apts >= pcr) {
+        if (apts_gap < APTS_DISCONTINUE_THRESHOLD_MIN_35MS)
+            sync_status = CONTINUATION;
+        else if (apts_gap > APTS_DISCONTINUE_THRESHOLD)
+            sync_status = RESYNC;
+        else
+            sync_status = ADJUSTMENT;
+    } else {
+        if (apts_gap < APTS_DISCONTINUE_THRESHOLD_MIN)
+            sync_status = CONTINUATION;
+        else if (apts_gap > APTS_DISCONTINUE_THRESHOLD)
+            sync_status = RESYNC;
+        else
+            sync_status = ADJUSTMENT;
+    }
+    return sync_status;
+}
+
 int on_meta_data_cbk(void *cookie,
         uint64_t offset, struct hw_avsync_header *header, int *delay_ms)
 {
@@ -58,9 +81,9 @@ int on_meta_data_cbk(void *cookie,
     header->frame_size = mdata_list->mdata.frame_size;
     header->pts = mdata_list->mdata.pts;
     if (out->debug_stream) {
-        ALOGD("%s(), offset %lld, checkout payload offset %lld",
+        ALOGV("%s(), offset %lld, checkout payload offset %lld",
                     __func__, offset, mdata_list->mdata.payload_offset);
-        ALOGD("%s(), frame_size %d, pts %lldms",
+        ALOGV("%s(), frame_size %d, pts %lldms",
                     __func__, header->frame_size, header->pts/1000000);
     }
     if (offset != mdata_list->mdata.payload_offset) {
@@ -75,12 +98,14 @@ int on_meta_data_cbk(void *cookie,
     free(mdata_list);
 
     if (!out->first_pts_set) {
+        uint32_t latency = 0;
         hwsync_header_construct(header);
-
-        if (aml_hwsync_set_tsync_start_pts(pts32) < 0) {
-            ALOGE("set tsync AUDIO_START failed!");
-        }
+        pts32 -= latency*90;
+        ALOGD("%s(), set tsync start pts %d, latency %d, last position %lld",
+            __func__, pts32, latency, out->last_frames_postion);
+        aml_hwsync_set_tsync_start_pts(pts32);
         out->first_pts_set = true;
+        //*delay_ms = 40;
     } else {
         enum hwsync_status sync_status = CONTINUATION;
         struct hw_avsync_header_extractor *hwsync_extractor;
@@ -89,6 +114,7 @@ int on_meta_data_cbk(void *cookie,
         uint32_t apts_gap;
         // adjust pts based on latency which is only the outport latency
         uint64_t latency = out_get_outport_latency((struct audio_stream_out *)out) * 90;
+        latency += 40 * 90;
         // check PTS discontinue, which may happen when audio track switching
         // discontinue means PTS calculated based on first_apts and frame_write_sum
         // does not match the timestamp of next audio samples
@@ -106,11 +132,12 @@ int on_meta_data_cbk(void *cookie,
                     __func__, adev->tsync_fd, ret);
         }
         if (out->debug_stream)
-            ALOGD("%s()audio pts %dms, pcr %dms, diff %dms",
-                __func__, pts32/90, pcr/90,
+            ALOGD("%s()audio pts %dms, pcr %dms, latency %lldms, diff %dms",
+                __func__, pts32/90, pcr/90, latency/90,
                 (pts32 > pcr) ? (pts32 - pcr)/90 : (pcr - pts32)/90);
         apts_gap = get_pts_gap(pcr, pts32);
-        sync_status = pcm_check_hwsync_status(apts_gap);
+        //sync_status = pcm_check_hwsync_status(apts_gap);
+        sync_status = pcm_check_hwsync_status1(pcr, pts32);
         // limit the gap handle to 0.5~5 s.
         if (sync_status == ADJUSTMENT) {
             // two cases: apts leading or pcr leading
@@ -120,6 +147,7 @@ int on_meta_data_cbk(void *cookie,
 
                 insert_size = apts_gap / 90 * 48 * 4;
                 insert_size = insert_size & (~63);
+                ALOGI("%s(), pcrscr %dms adjusted_apts %dms", __func__, pcr/90, pts32/90);
                 ALOGI("audio gap: pcr < apts %d ms, need insert data %d\n", apts_gap / 90, insert_size);
                 *delay_ms = apts_gap / 90;
             } else {
@@ -128,8 +156,8 @@ int on_meta_data_cbk(void *cookie,
                 aml_hwsync_reset_tsync_pcrscr(pts32);
             }
         } else if (sync_status == RESYNC){
-            ALOGI("tsync -> reset pcrscr 0x%x -> 0x%x",
-                    pcr, pts32);
+            ALOGI("%s(), tsync -> reset pcrscr %dms -> %dms",
+                    __func__, pcr/90, pts32/90);
             int ret_val = aml_hwsync_reset_tsync_pcrscr(pts32);
             if (ret_val < 0) {
                 ALOGE("unable to open file %s,err: %s", TSYNC_APTS, strerror(errno));

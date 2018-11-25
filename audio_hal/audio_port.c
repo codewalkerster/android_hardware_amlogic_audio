@@ -27,8 +27,10 @@
 #include "audio_port.h"
 #include "aml_ringbuffer.h"
 #include "audio_hw_utils.h"
+#include "audio_hwsync.h"
 
-#define BUFF_CNT 3
+#define BUFF_CNT 4
+#define SYS_BUFF_CNT 4
 static ssize_t input_port_write(struct input_port *port, const void *buffer, int bytes)
 {
     unsigned char *data = (unsigned char *)buffer;
@@ -193,6 +195,8 @@ int remove_all_inport_messages(struct input_port *port)
     list_for_each_safe(node, n, &port->msg_list) {
         p_msg = node_to_item(node, struct port_message, list);
         ALOGI("%s(), msg what %s", __func__, port_msg_to_str(p_msg->msg_what));
+        if (p_msg->msg_what == MSG_PAUSE)
+            aml_hwsync_set_tsync_pause();
         list_remove(&p_msg->list);
         free(p_msg);
     }
@@ -214,12 +218,38 @@ static int setPortConfig(struct audioCfg *cfg, struct audio_config *config)
     return 0;
 }
 
+/* padding buf with zero to avoid underrun of audioflinger */
+static int inport_padding_zero(struct input_port *port, size_t bytes)
+{
+    char *feed_mem = NULL;
+    ALOGI("%s(), padding size %d 0s to inport %d",
+            __func__, bytes, port->port_index);
+    feed_mem = calloc(1, bytes);
+    if (!feed_mem) {
+        ALOGE("%s(), no memory", __func__);
+        return -ENOMEM;
+    }
+
+    input_port_write(port, feed_mem, bytes);
+    port->padding_frames = bytes / port->cfg.frame_size;
+    free(feed_mem);
+    return 0;
+}
+
+int set_inport_padding_size(struct input_port *port, size_t bytes)
+{
+    port->padding_frames = bytes / port->cfg.frame_size;
+    return 0;
+}
+
 struct input_port *new_input_port(
         //enum MIXER_INPUT_PORT port_index,
         //audio_format_t format//,
         size_t buf_frames,
         struct audio_config *config,
-        audio_output_flags_t flags)
+        audio_output_flags_t flags,
+        float volume,
+        bool direct_on)
 {
     struct input_port *port = NULL;
     struct ring_buffer *ringbuf = NULL;
@@ -252,12 +282,13 @@ struct input_port *new_input_port(
     port_index = get_input_port_index(config, flags);
     // system buffer larger than direct to cache more for mixing?
     if (port_index == MIXER_INPUT_PORT_PCM_SYSTEM) {
-        rbuf_size = thunk_size * BUFF_CNT;
+        rbuf_size = thunk_size * SYS_BUFF_CNT;
     } else {
         rbuf_size = thunk_size * BUFF_CNT;
     }
 
-    ALOGD("%s(), index %d, rbuf size %d", __func__, port_index, rbuf_size);
+    ALOGD("%s(), index:%d, rbuf size:%d, direct_on:%d",
+            __func__, port_index, rbuf_size, direct_on);
     ALOGD("%s(), fmt %#x, rate %d",
             __func__, port->cfg.format, port->cfg.sampleRate);
     ret = ring_buffer_init(ringbuf, rbuf_size);
@@ -281,11 +312,14 @@ struct input_port *new_input_port(
     port->port_status = STOPPED;
     port->is_hwsync = false;
     port->consumed_bytes = 0;
-    port->volume = 1.0;
+    port->volume = volume;
     list_init(&port->msg_list);
     //TODO
     //set_inport_hwsync(port);
-
+    //if (port_index == MIXER_INPUT_PORT_PCM_SYSTEM && !direct_on) {
+    //if (port_index == MIXER_INPUT_PORT_PCM_SYSTEM) {
+    //    inport_padding_zero(port, rbuf_size);
+    //}
     return port;
 
 err_rbuf_init:
@@ -447,9 +481,7 @@ static ssize_t output_port_write_alsa(struct output_port *port, void *buffer, in
 {
     int bytes_to_write = bytes;
     int ret = 0;
-    //uint64_t now_in_us = 0, tpast_us = 0;
-    //struct timespec tval;
-    //(void *)port;
+
     do {
         int written = 0;
         ALOGV("%s(), line %d", __func__, __LINE__);
@@ -467,13 +499,6 @@ static ssize_t output_port_write_alsa(struct output_port *port, void *buffer, in
         bytes_to_write -= written;
     } while (bytes_to_write > 0);
 
-    //clock_gettime(CLOCK_MONOTONIC, &tval);
-    //now_in_us = tval.tv_sec * 1000000 + tval.tv_nsec / 1000;
-    //tpast_us = now_in_us - port->last_write_time_us;
-    //if (tpast_us > (bytes*2 * 1000 / 48 / 4))
-    //    ALOGW("%s(), actual write time %lld, estimated %d", __func__,
-    //        tpast_us, (bytes * 1000 / 48 / 4));
-    //port->last_write_time_us = now_in_us;
     return bytes;
 }
 
@@ -608,4 +633,15 @@ bool is_inport_valid(enum MIXER_INPUT_PORT index)
 bool is_outport_valid(enum MIXER_OUTPUT_PORT index)
 {
     return (index >= 0 && index < MIXER_OUTPUT_PORT_NUM);
+}
+
+int set_inport_pts_valid(struct input_port *in_port, bool valid)
+{
+    in_port->pts_valid = valid;
+    return 0;
+}
+
+bool is_inport_pts_valid(struct input_port *in_port)
+{
+    return in_port->pts_valid;
 }

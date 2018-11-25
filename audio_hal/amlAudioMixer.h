@@ -64,7 +64,8 @@ int init_mixer_input_port(struct amlAudioMixer *audio_mixer,
         int (*on_input_avail_cbk)(void *data),
         void *input_avail_data,
         meta_data_cbk_t on_meta_data_cbk,
-        void *meta_data);
+        void *meta_data,
+        float volume);
 
 int delete_mixer_input_port(struct amlAudioMixer *audio_mixer,
         enum MIXER_INPUT_PORT port_index);
@@ -93,6 +94,10 @@ int mixer_get_presentation_position(
         enum MIXER_INPUT_PORT port_index,
         uint64_t *frames,
         struct timespec *timestamp);
+int mixer_set_padding_size(
+        struct amlAudioMixer *audio_mixer,
+        enum MIXER_INPUT_PORT port_index,
+        int padding_bytes);
 
 __END_DECLS
 
