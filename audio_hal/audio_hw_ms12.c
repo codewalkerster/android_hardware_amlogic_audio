@@ -33,6 +33,7 @@
 #include "audio_hw.h"
 #include "alsa_manager.h"
 #include "aml_audio_stream.h"
+#include "dolby_lib_api.h"
 
 #define DOLBY_MS12_OUTPUT_FORMAT_TEST
 
@@ -73,7 +74,7 @@ int dolby_ms12_register_callback(struct aml_stream_out *aml_out)
             ret = dolby_ms12_register_pcm_callback(pcm_output, (void *)aml_out);
             ALOGI("%s() dolby_ms12_register_pcm_callback return %d", __FUNCTION__, ret);
         }
-        if (adev->optical_format == AUDIO_FORMAT_AC3) {
+        if (adev->optical_format == AUDIO_FORMAT_AC3 || adev->optical_format == AUDIO_FORMAT_E_AC3) {
             ret = dolby_ms12_register_bitstream_callback(bitstream_output, (void *)aml_out);
             ALOGI("%s() dolby_ms12_register_bitstream_callback return %d", __FUNCTION__, ret);
         }
@@ -171,7 +172,7 @@ int get_the_dolby_ms12_prepared(
         }
         /* copy stream information */
         memcpy(out, aml_out, sizeof(struct aml_stream_out));
-        if (out->is_tv_platform) {
+        if (adev->is_TV) {
             out->config.channels = 8;
             out->config.format = PCM_FORMAT_S32_LE;
             out->tmp_buffer_8ch = malloc(out->config.period_size * 4 * 8);
@@ -194,6 +195,7 @@ int get_the_dolby_ms12_prepared(
         out = aml_out;
     }
     adev->ms12_out = out;
+    ALOGI("%s adev->ms12_out =  %p", __func__, adev->ms12_out);
     /************end**************/
     /*set the system app sound mixing enable*/
     if (adev->continuous_audio_mode) {
@@ -654,7 +656,7 @@ int bitstream_output(void *buffer, void *priv_data, size_t size)
     int ret = 0;
 
     if (adev->debug_flag > 1) {
-        ALOGI("+%s() size %zu", __FUNCTION__, size);
+        ALOGI("+%s() size %zu,dual_output = %d, optical_format = %d, sink_format = %d", __FUNCTION__, size, aml_out->dual_output_flag, adev->optical_format, adev->sink_format);
     }
 
     /*dump ms12 bitstream output*/
@@ -665,7 +667,10 @@ int bitstream_output(void *buffer, void *priv_data, size_t size)
         struct audio_stream_out *stream_out = (struct audio_stream_out *)aml_out;
         ret = aml_audio_spdif_output(stream_out, buffer, size);
     } else {
+        // ms12: netflix not able to output with this branch.zzz
+        // TODO: Fix Me
         output_format = adev->sink_format;
+        ALOGI("+%s() size %zu,dual_output = %d, optical_format = %d, sink_format = %d", __FUNCTION__, size, aml_out->dual_output_flag, adev->optical_format, adev->sink_format);
         if (audio_hal_data_processing((struct audio_stream_out *)aml_out, buffer, size, &output_buffer, &output_buffer_bytes, output_format) == 0) {
             ret = hw_write((struct audio_stream_out *)aml_out, output_buffer, output_buffer_bytes, output_format);
         }

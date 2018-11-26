@@ -311,15 +311,33 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, size_t offset, int 
     uint pcr = 0;
     uint gap = 0;
     int gap_ms = 0;
+    int debug_enable = 0;
     char tempbuf[32] = {0};
-    struct aml_audio_device *adev = p_hwsync->aout->dev;
-    int debug_enable = (adev->debug_flag > 8);
+
+    // add protection to avoid NULL pointer.
+    if (p_hwsync == NULL) {
+        ALOGE("%s,p_hwsync == NULL", __func__);
+        return 0;
+    }
+
+    if (p_hwsync->aout == NULL) {
+        ALOGE("%s,p_hwsync->aout == NULL", __func__);
+    } else {
+        struct aml_audio_device *adev = p_hwsync->aout->dev;
+        if (adev == NULL) {
+            ALOGE("%s,adev == NULL", __func__);
+        } else {
+            debug_enable = (adev->debug_flag > 8);
+        }
+    }
+
     ret = aml_audio_hwsync_lookup_apts(p_hwsync, offset, &apts);
     if (ret) {
         ALOGE("%s lookup failed", __func__);
         return 0;
     }
     if (p_hwsync->first_apts_flag == false && offset > 0) {
+        ALOGI("%s,aml_audio_hwsync_set_first_pts, apts = 0x%x (%d ms)", __FUNCTION__, apts, apts / 90);
         aml_audio_hwsync_set_first_pts(p_hwsync, apts);
     } else  if (p_hwsync->first_apts_flag) {
         ret = aml_audio_hwsync_get_pcr(p_hwsync, &pcr);
@@ -396,16 +414,35 @@ int aml_audio_hwsync_lookup_apts(audio_hwsync_t *p_hwsync, size_t offset, unsign
     int i = 0;
     size_t align  = 0;
     int ret = -1;
-    struct aml_audio_device *adev = p_hwsync->aout->dev;
-    struct audio_stream_out *stream = (struct audio_stream_out *)p_hwsync->aout;
-    int    debug_enable = (adev->debug_flag > 8);
+    struct aml_audio_device *adev = NULL;
+    struct audio_stream_out *stream = NULL;
+    int    debug_enable = 0;
+    //struct aml_audio_device *adev = p_hwsync->aout->dev;
+    //struct audio_stream_out *stream = (struct audio_stream_out *)p_hwsync->aout;
+    //int    debug_enable = (adev->debug_flag > 8);
     uint32_t latency_frames = 0;
     uint32_t latency_pts = 0;
     apts_tab_t *pts_tab = NULL;
+
+    // add protection to avoid NULL pointer.
     if (!p_hwsync) {
         ALOGE("%s null point", __func__);
         return -1;
     }
+
+    if (p_hwsync->aout == NULL) {
+        ALOGE("%s,p_hwsync->aout == NULL", __func__);
+        return -1;
+    }
+    stream = (struct audio_stream_out *)p_hwsync->aout;
+
+    adev = p_hwsync->aout->dev;
+    if (adev == NULL) {
+        ALOGE("%s,adev == NULL", __func__);
+    } else {
+        debug_enable = (adev->debug_flag > 8);
+    }
+
     if (debug_enable) {
         ALOGI("%s offset %zu,first %d", __func__, offset, p_hwsync->first_apts_flag);
     }

@@ -372,6 +372,26 @@ int aml_audio_get_debug_flag()
     return debug_flag;
 }
 
+int aml_audio_debug_set_optical_format()
+{
+    char buf[PROPERTY_VALUE_MAX];
+    int ret = -1;
+
+    ret = property_get("media.audio.hal.optical", buf, NULL);
+    if (ret > 0) {
+        if (strcasecmp(buf, "pcm") == 0 || strcmp(buf, "0") == 0) {
+            return TYPE_PCM;
+        }
+        if (strcasecmp(buf, "dd") == 0 || strcmp(buf, "1") == 0) {
+            return TYPE_AC3;
+        }
+        if (strcasecmp(buf, "ddp") == 0 || strcmp(buf, "2") == 0) {
+            return TYPE_EAC3;
+        }
+    }
+    return -1;
+}
+
 int aml_audio_dump_audio_bitstreams(const char *path, const void *buf, size_t bytes)
 {
     if (!path) {
