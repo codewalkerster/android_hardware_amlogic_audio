@@ -993,6 +993,7 @@ static void *audio_dtv_patch_process_threadloop(void *data)
                 }
                 patch->dtv_pcm_readed = patch->dtv_pcm_writed = 0;
                 patch->dtv_decoder_state = AUDIO_DTV_PATCH_DECODER_STATE_RUNING;
+                create_dtv_output_stream_thread(patch);
             } else {
                 ALOGI("++%s line %d  live state unsupport state %d cmd %d !\n",
                       __FUNCTION__, __LINE__, patch->dtv_decoder_state, cmd);
@@ -1023,6 +1024,7 @@ static void *audio_dtv_patch_process_threadloop(void *data)
             } else if (cmd == AUDIO_DTV_PATCH_CMD_STOP) {
                 ALOGI("++%s live now  stop  the audio decoder now \n",
                       __FUNCTION__);
+                release_dtv_output_stream_thread(patch);
                 dtv_patch_input_stop(adec_handle);
                 release_dtv_output_stream_thread(patch);
                 patch->dtv_decoder_state = AUDIO_DTV_PATCH_DECODER_STATE_INIT;
