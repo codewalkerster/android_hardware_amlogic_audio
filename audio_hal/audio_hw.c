@@ -4056,6 +4056,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     pthread_mutex_lock (&out->lock);
     free(out->audioeffect_tmp_buffer);
     free(out->tmp_buffer_8ch);
+    free(out->hwsync);
     pthread_mutex_unlock (&out->lock);
     free(stream);
     ALOGD("%s: exit", __func__);

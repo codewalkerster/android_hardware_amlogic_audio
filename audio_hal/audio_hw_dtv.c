@@ -1080,17 +1080,20 @@ static int release_dtv_output_stream_thread(struct aml_audio_patch *patch)
 {
     int ret = 0;
     ALOGI("++%s   ---- %d\n", __FUNCTION__, patch->ouput_thread_created);
-
-    if (patch->ouput_thread_created == 1) {
-        patch->output_thread_exit = 1;
-        pthread_join(patch->audio_output_threadID, NULL);
-        pthread_mutex_destroy(&patch->dtv_output_mutex);
-
-        patch->ouput_thread_created = 0;
+    if (patch->resample_outbuf) {
+      free(patch->resample_outbuf);
+      patch->resample_outbuf = NULL;
     }
-    ALOGI("--%s", __FUNCTION__);
+    if (patch->ouput_thread_created == 1) {
+      patch->output_thread_exit = 1;
+      pthread_join(patch->audio_output_threadID, NULL);
+      pthread_mutex_destroy(&patch->dtv_output_mutex);
 
-    return 0;
+      patch->ouput_thread_created = 0;
+  }
+  ALOGI("--%s", __FUNCTION__);
+
+  return 0;
 }
 
 int create_dtv_patch(struct audio_hw_device *dev, audio_devices_t input,
