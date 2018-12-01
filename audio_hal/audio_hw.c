@@ -1448,7 +1448,16 @@ static char *out_get_parameters (const struct audio_stream *stream, const char *
         if (out->out_device & AUDIO_DEVICE_OUT_HDMI_ARC) {
             cap = (char *) strdup_hdmi_arc_cap_default (AUDIO_PARAMETER_STREAM_SUP_FORMATS, format);
         } else {
-            cap = (char *) get_hdmi_sink_cap (AUDIO_PARAMETER_STREAM_SUP_FORMATS,format);
+            if (out->is_tv_platform == 1) {
+                ALOGV ("Amlogic - return hard coded sup_formats list for primary output stream.\n");
+#if defined(IS_ATOM_PROJECT)
+    cap = strdup ("sup_formats=AUDIO_FORMAT_PCM_32_BIT");
+#else
+    cap = strdup ("sup_formats=AUDIO_FORMAT_PCM_16_BIT");
+#endif
+            } else {
+                cap = (char *) get_hdmi_sink_cap (AUDIO_PARAMETER_STREAM_SUP_FORMATS,format);
+            }
         }
         if (cap) {
             para = strdup (cap);
@@ -3291,9 +3300,22 @@ static int in_set_parameters (struct audio_stream *stream, const char *kvpairs)
     return ret;
 }
 
-static char * in_get_parameters (const struct audio_stream *stream __unused,
-                                 const char *keys __unused)
+static char * in_get_parameters (const struct audio_stream *stream, const char *keys)
 {
+    char *cap = NULL;
+    char *para = NULL;
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+
+    ALOGI ("in_get_parameters %s,in %p\n", keys, in);
+    if (strstr (keys, AUDIO_PARAMETER_STREAM_SUP_FORMATS) ) {
+        ALOGV ("Amlogic - return hard coded sup_formats list for in stream.\n");
+        cap = strdup ("sup_formats=AUDIO_FORMAT_PCM_16_BIT");
+        if (cap) {
+            para = strdup (cap);
+            free (cap);
+            return para;
+        }
+    }
     return strdup ("");
 }
 
