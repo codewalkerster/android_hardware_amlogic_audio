@@ -1155,6 +1155,12 @@ static ssize_t out_write_subMixingPCM(struct audio_stream_out *stream,
     //if (aml_out->write) {
     //    write_func_p = aml_out->write;
     //}
+    if (adev->rawtopcm_flag) {
+        if (getSubMixingPCMdev(adev->sm))
+            pcm_stop(getSubMixingPCMdev(adev->sm));
+        adev->rawtopcm_flag = false;
+        ALOGI("rawtopcm_flag disable !!!");
+    }
     pthread_mutex_unlock(&adev->lock);
     if (aml_out->write) {
         ret = aml_out->write(stream, buffer, bytes);

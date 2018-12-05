@@ -444,6 +444,7 @@ struct aml_audio_device {
     bool is_TV;
     //int cnt_stream_using_mixer;
     int tsync_fd;
+    bool rawtopcm_flag;
 };
 
 struct meta_data {

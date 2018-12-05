@@ -4071,7 +4071,10 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
 
     ALOGD("%s: enter: dev(%p) stream(%p)", __func__, dev, stream);
 #ifdef SUBMIXER_V1_1
-    out_standby_subMixingPCM(&stream->common);
+    if (out->usecase == STREAM_PCM_NORMAL || out->usecase == STREAM_PCM_HWSYNC)
+       out_standby_subMixingPCM(&stream->common);
+    else
+       out_standby_new(&stream->common);
 #else
     out_standby_new(&stream->common);
 #endif
@@ -7545,6 +7548,11 @@ static int usecase_change_validate_l(struct aml_stream_out *aml_out, bool is_sta
         aml_out->dev_usecase_masks = 0;
         aml_out->write = NULL;
         aml_dev->usecase_masks &= ~(1 << aml_out->usecase);
+        if (aml_out->usecase == STREAM_RAW_DIRECT ||
+            aml_out->usecase == STREAM_RAW_HWSYNC) {
+            aml_dev->rawtopcm_flag = true;
+            ALOGI("enable rawtopcm_flag !!!");
+        }
         ALOGI("--%s(), dev usecase masks = %#x, is_standby = %d, out usecase %s",
               __func__, aml_dev->usecase_masks, is_standby, aml_out->usecase < STREAM_USECASE_MAX && aml_out->usecase >= STREAM_PCM_NORMAL ? str_usecases[aml_out->usecase] : "STREAM_USECASE_INVAL");
         return 0;
@@ -9479,6 +9487,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     if (adev->tsync_fd < 0) {
         ALOGE("%s() open tsync failed", __func__);
     }
+    adev->rawtopcm_flag = false;
 #endif
     ALOGD("%s: exit", __func__);
     return 0;
