@@ -3475,8 +3475,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
                 parser->decode_dev_op_mutex = &in->lock;
                 parser->data_ready = 0;
                 dcv_decode_init(parser);
-            }
-            if (parser->aformat == AUDIO_FORMAT_PCM_16_BIT && //from pcm -> dd/dd+
+            } else if (parser->aformat == AUDIO_FORMAT_PCM_16_BIT && //from pcm -> dts
                 (cur_aformat == AUDIO_FORMAT_DTS || cur_aformat == AUDIO_FORMAT_DTS_HD)) {
                 parser->aml_pcm = in->pcm;
                 parser->in_sample_rate = in->config.rate;
@@ -3487,7 +3486,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
             } else if (cur_aformat == AUDIO_FORMAT_PCM_16_BIT && //from dd/dd+ -> pcm
                        (parser->aformat == AUDIO_FORMAT_AC3 || parser->aformat == AUDIO_FORMAT_E_AC3)) {
                 dcv_decode_release(parser);
-            } else if (cur_aformat == AUDIO_FORMAT_PCM_16_BIT && //from dd/dd+ -> pcm
+            } else if (cur_aformat == AUDIO_FORMAT_PCM_16_BIT && //from dts -> pcm
                        (parser->aformat == AUDIO_FORMAT_DTS || parser->aformat == AUDIO_FORMAT_DTS_HD)) {
                 dca_decode_release(parser);
             } else {
@@ -3512,9 +3511,8 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
         } else
             memset (buffer, 0, bytes);
     }
-
 #if defined(IS_ATOM_PROJECT)
-    if (in->device & (AUDIO_DEVICE_IN_BUILTIN_MIC | AUDIO_DEVICE_IN_LINE)) {
+    else if (in->device & (AUDIO_DEVICE_IN_BUILTIN_MIC | AUDIO_DEVICE_IN_LINE)) {
         if ((in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) && !adev->mic_running) {
             adev->mic_running = 1;
             if(!adev->pstFir_mic)
@@ -3701,9 +3699,9 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
         } else {/*Aux processing, directly copy aux data to audio patch*/
             memcpy(tmp_buf_32, aux_buf, cur_in_frames * FRAMESIZE_32BIT_STEREO);
         }
-    } else
+    }
 #endif
-    {
+    else {
         /* when audio is unstable, need to mute the audio data for a while
          * the mute time is related to hdmi audio buffer size
          */
@@ -3740,10 +3738,11 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
                 in_get_sample_rate(&stream->common));
             ret = 0;
         } else {
-            if (in->resampler)
+            if (in->resampler) {
                 ret = read_frames(in, buffer, in_frames);
-            else
+            } else {
                 ret = pcm_read(in->pcm, buffer, bytes);
+            }
             if (ret < 0)
                 goto exit;
             if ((adev->in_device & AUDIO_DEVICE_IN_TV_TUNER) && in->first_buffer_discard) {
@@ -8704,6 +8703,7 @@ else
             else
                 input_src = ATV;
             inport = INPORT_TUNER;
+            aml_dev->tuner2mix_patch = true;
             break;
         case AUDIO_DEVICE_IN_REMOTE_SUBMIX:
             input_src = REMOTE_SUBMIXIN;
