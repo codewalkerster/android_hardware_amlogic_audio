@@ -91,7 +91,7 @@ static int eq_drc_ctl_value_set(struct eq_drc_data *pdata, int val, char *name)
     }
     ctl = mixer_get_ctl_by_name(pdata->mixer, name);
     if (ctl == NULL) {
-        ALOGE("%s: get mixer ctl failed", __FUNCTION__);
+        ALOGE("%s: get mixer ctl failed,name %s", __FUNCTION__,name);
         goto ERROR;
     }
     if (mixer_ctl_set_value(ctl, 0, val)) {
