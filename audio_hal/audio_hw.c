@@ -5744,14 +5744,16 @@ ssize_t aml_audio_spdif_output (struct audio_stream_out *stream,
 
         aml_tinymix_set_spdif_format(aml_dev->optical_format,aml_out);
         pthread_mutex_lock(&aml_dev->alsa_pcm_lock);
-        pcm = pcm_open(aml_out->card, DIGITAL_DEVICE, PCM_OUT, &config);
+        unsigned int port = PORT_SPDIF;
+        port = alsa_device_update_pcm_index(port, PLAYBACK);
+        pcm = pcm_open(aml_out->card, port, PCM_OUT, &config);
         if (!pcm_is_ready(pcm)) {
             ALOGE("%s() cannot open pcm_out: %s,card %d,device %d", __func__, pcm_get_error(pcm), aml_out->card, DIGITAL_DEVICE);
             pcm_close (pcm);
             pthread_mutex_unlock(&aml_dev->alsa_pcm_lock);
             return -ENOENT;
         }
-        ALOGI("%s open dual output pcm handle %p", __func__, pcm);
+        ALOGI("%s open dual output pcm handle %p,port %d", __func__, pcm,port);
         aml_dev->pcm_handle[DIGITAL_DEVICE] = pcm;
         pthread_mutex_unlock(&aml_dev->alsa_pcm_lock);
 
