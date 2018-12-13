@@ -2333,7 +2333,10 @@ static ssize_t out_write_legacy (struct audio_stream_out *stream, const void* bu
     }
 
 exit:
+
     clock_gettime (CLOCK_MONOTONIC, &out->timestamp);
+    out->lasttimestamp.tv_sec = out->timestamp.tv_sec;
+    out->lasttimestamp.tv_nsec = out->timestamp.tv_nsec;
     latency_frames = out_get_latency_frames (stream);
     if (out->frame_write_sum >= latency_frames) {
         out->last_frames_postion = out->frame_write_sum - latency_frames;
@@ -2859,6 +2862,8 @@ exit:
     total_frame = out->frame_write_sum + out->frame_skip_sum;
     latency_frames = out_get_latency_frames (stream);
     clock_gettime (CLOCK_MONOTONIC, &out->timestamp);
+    out->lasttimestamp.tv_sec = out->timestamp.tv_sec;
+    out->lasttimestamp.tv_nsec = out->timestamp.tv_nsec;
     if (total_frame >= latency_frames) {
         out->last_frames_postion = total_frame - latency_frames;
     } else {
@@ -2997,7 +3002,6 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
     uint64_t frames_written_hw = out->last_frames_postion;
-
     if (!frames || !timestamp) {
         ALOGI("%s, !frames || !timestamp\n", __FUNCTION__);
         return -EINVAL;
@@ -3010,7 +3014,7 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
         }
     }
     *frames = frames_written_hw;
-    *timestamp = out->timestamp;
+    *timestamp = out->lasttimestamp;
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
         if (direct_continous((struct audio_stream_out *)stream)) {
             *frames = adev->ms12.last_frames_postion;
@@ -6530,7 +6534,9 @@ ssize_t hw_write (struct audio_stream_out *stream
     }
     /*we should also to caculate the alsa latency*/
     {
-        clock_gettime(CLOCK_MONOTONIC, &aml_out->timestamp);
+        clock_gettime (CLOCK_MONOTONIC, &aml_out->timestamp);
+        aml_out->lasttimestamp.tv_sec = aml_out->timestamp.tv_sec;
+        aml_out->lasttimestamp.tv_nsec = aml_out->timestamp.tv_nsec;
         if (total_frame >= latency_frames) {
             aml_out->last_frames_postion = total_frame - latency_frames;
         } else {
@@ -7576,7 +7582,10 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
         }
     }
     aml_out->frame_write_sum += in_frames;
-    clock_gettime(CLOCK_MONOTONIC, &aml_out->timestamp);
+
+    clock_gettime (CLOCK_MONOTONIC, &aml_out->timestamp);
+    aml_out->lasttimestamp.tv_sec = aml_out->timestamp.tv_sec;
+    aml_out->lasttimestamp.tv_nsec = aml_out->timestamp.tv_nsec;
 
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
         /*
