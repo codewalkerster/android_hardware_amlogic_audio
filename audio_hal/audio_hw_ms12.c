@@ -587,7 +587,7 @@ int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12)
 /*
  *@brief set dolby ms12 primary gain
  */
-int set_dolby_ms12_primary_input_db_gain(struct dolby_ms12_desc *ms12, int db_gain)
+int set_dolby_ms12_primary_input_db_gain(struct dolby_ms12_desc *ms12, int db_gain , int duration)
 {
     MixGain gain;
     int ret = 0;
@@ -598,23 +598,24 @@ int set_dolby_ms12_primary_input_db_gain(struct dolby_ms12_desc *ms12, int db_ga
         return -EINVAL;
     }
 
-    pthread_mutex_lock(&ms12->lock);
+    //pthread_mutex_lock(&ms12->lock);
     if (!ms12->dolby_ms12_enable) {
         ret = -EINVAL;
         goto exit;
     }
 
     gain.target = db_gain;
-    gain.duration = 10;
+    gain.duration = duration;
     gain.shape = 0;
     dolby_ms12_set_system_sound_mixer_gain_values_for_primary_input(&gain);
     dolby_ms12_set_input_mixer_gain_values_for_main_program_input(&gain);
     //Fixme when tunnel mode is working, the Alexa start and mute the main input!
     //dolby_ms12_set_input_mixer_gain_values_for_ott_sounds_input(&gain);
-    ret = aml_ms12_update_runtime_params(ms12);
+    // only update very limited parameter with out lock
+    //ret = aml_ms12_update_runtime_params_lite(ms12);
 
 exit:
-    pthread_mutex_unlock(&ms12->lock);
+    //pthread_mutex_unlock(&ms12->lock);
     return ret;
 }
 

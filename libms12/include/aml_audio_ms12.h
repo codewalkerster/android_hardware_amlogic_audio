@@ -70,6 +70,7 @@ struct dolby_ms12_desc {
     whatever what bistream is outputed we need use this latency frames.
     */
     int latency_frame;
+    int curDBGain;
 };
 
 /*
@@ -110,5 +111,6 @@ int aml_ms12_cleanup(struct dolby_ms12_desc *ms12_desc);
 
 int aml_ms12_update_runtime_params(struct dolby_ms12_desc *ms12_desc);
 
+int aml_ms12_update_runtime_params_lite(struct dolby_ms12_desc *ms12_desc);
 
 #endif //end of __AML_AUDIO_MS12_H__

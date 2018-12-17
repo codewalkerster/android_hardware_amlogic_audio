@@ -37,31 +37,35 @@ static float volume_cruve_in_dB[AUDIO_VOLUME_INDEX] = {
     -2.2,  -2,    -1.8,  -1.5,  -1.3,  -1,    -0.8,  -0.5,  -0.3,  0,      /*91-100*/
 };
 
-static inline int16_t clamp16(int32_t sample) {
-    if ((sample >> 15) ^ (sample >> 31))
+static inline int16_t clamp16(int32_t sample)
+{
+    if ((sample >> 15) ^ (sample >> 31)) {
         sample = 0x7FFF ^ (sample >> 31);
+    }
     return sample;
 }
 
 static inline int32_t clamp32(int64_t sample)
 {
-    if ((sample >> 31) ^ (sample >> 63))
+    if ((sample >> 31) ^ (sample >> 63)) {
         sample = 0x7FFFFFFF ^ (sample >> 63);
+    }
     return sample;
 }
 
-void apply_volume(float volume, void *buf, int sample_size, int bytes) {
+void apply_volume(float volume, void *buf, int sample_size, int bytes)
+{
     int16_t *input16 = (int16_t *)buf;
     int32_t *input32 = (int32_t *)buf;
     unsigned int i = 0;
 
     if (sample_size == 2) {
-        for (i = 0; i < bytes/sizeof(int16_t); i++) {
+        for (i = 0; i < bytes / sizeof(int16_t); i++) {
             int32_t samp = (int32_t)(input16[i]);
             input16[i] = clamp16((int32_t)(volume * samp));
         }
     } else if (sample_size == 4) {
-        for (i = 0; i < bytes/sizeof(int32_t); i++) {
+        for (i = 0; i < bytes / sizeof(int32_t); i++) {
             int64_t samp = (int64_t)(input32[i]);
             input32[i] = clamp32((int64_t)(volume * samp));
         }
@@ -71,15 +75,59 @@ void apply_volume(float volume, void *buf, int sample_size, int bytes) {
     return;
 }
 
-float get_volume_by_index(int volume_index) {
+float get_volume_by_index(int volume_index)
+{
     float volume = 1.0;
     if (volume_index >= AUDIO_VOLUME_INDEX) {
         ALOGE("%s, invalid index!\n", __FUNCTION__);
         return volume;
     }
-    if (volume_index >= 0)
+    if (volume_index >= 0) {
         volume *= DbToAmpl(volume_cruve_in_dB[volume_index]);
+    }
 
     return volume;
+}
+
+
+float get_db_by_index(int volume_index)
+{
+    float db = 0.0;
+    if (volume_index >= AUDIO_VOLUME_INDEX) {
+        ALOGE("%s, invalid index!\n", __FUNCTION__);
+        return VOLUME_MIN_DB;
+    }
+    if (volume_index >= 0) {
+        db = volume_cruve_in_dB[volume_index];
+    }
+
+    return db;
+}
+
+// inVol range [0.0---1.0]
+int volume2Ms12DBGain(float inVol)
+{
+    float fTargetDB;
+    // MS12 parameter is INT: -96 is mute
+    int iMS12DB = -96;
+
+    if (inVol > 1 || inVol < 0) {
+        ALOGE("%s, invalid volume %f\n", __FUNCTION__, inVol);
+        inVol = 1;
+    }
+
+    // As compared by human ear, AmplToDb() is better than get_db_by_index() here.
+    fTargetDB = AmplToDb(inVol);
+
+    // backup method here
+    //int iVolIdx;
+    //fTargetDB = get_db_by_index(iVolIdx);
+
+    if (VOLUME_MIN_DB >= fTargetDB) {
+        fTargetDB = -96;
+    }
+
+    iMS12DB = (int)(fTargetDB - 0.5);
+    return iMS12DB;
 }
 

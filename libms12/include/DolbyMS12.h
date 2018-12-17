@@ -86,6 +86,11 @@ public:
         , int configNum
         , char **configParams);
 
+    virtual int     DolbyMS12UpdateRuntimeParamsNoLock(
+        void *DolbyMS12Pointer
+        , int configNum
+        , char **configParams);
+
     virtual int     DolbyMS12SchedulerRun(void *DolbyMS12Pointer);
 
     virtual void    DolbyMS12SetQuitFlag(int is_quit);

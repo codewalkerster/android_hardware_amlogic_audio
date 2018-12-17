@@ -50,6 +50,7 @@ int (*FuncDolbyMS12Output)(void *, const void *, size_t);
 #endif
 
 int (*FuncDolbyMS12UpdateRuntimeParams)(void *, int , char **);
+int (*FuncDolbyMS12UpdateRuntimeParamsNoLock)(void *, int , char **);
 int (*FuncDolbyMS12SchedulerRun)(void *);
 void (*FuncDolbyMS12SetQuitFlag)(int);
 void (*FuncDolbyMS12FlushInputBuffer)(void);
@@ -150,6 +151,12 @@ int DolbyMS12::GetLibHandle(void)
     FuncDolbyMS12UpdateRuntimeParams = (int (*)(void *, int , char **))  dlsym(mDolbyMS12LibHanle, "ms12_update_runtime_params");
     if (!FuncDolbyMS12UpdateRuntimeParams) {
         ALOGE("%s, dlsym ms12_update_runtime_params fail\n", __FUNCTION__);
+        goto ERROR;
+    }
+
+    FuncDolbyMS12UpdateRuntimeParamsNoLock = (int (*)(void *, int , char **))  dlsym(mDolbyMS12LibHanle, "ms12_update_runtime_params_nolock");
+    if (!FuncDolbyMS12UpdateRuntimeParamsNoLock) {
+        ALOGE("%s, dlsym ms12_update_runtime_params_nolock fail\n", __FUNCTION__);
         goto ERROR;
     }
 
@@ -446,6 +453,20 @@ int DolbyMS12::DolbyMS12UpdateRuntimeParams(void *DolbyMS12Pointer, int configNu
     }
 
     ret = (*FuncDolbyMS12UpdateRuntimeParams)(DolbyMS12Pointer, configNum, configParams);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+
+int DolbyMS12::DolbyMS12UpdateRuntimeParamsNoLock(void *DolbyMS12Pointer, int configNum, char **configParams)
+{
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12UpdateRuntimeParamsNoLock) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return -1;
+    }
+
+    ret = (*FuncDolbyMS12UpdateRuntimeParamsNoLock)(DolbyMS12Pointer, configNum, configParams);
     ALOGV("-%s() ret %d", __FUNCTION__, ret);
     return ret;
 }

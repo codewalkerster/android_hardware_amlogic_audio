@@ -213,6 +213,16 @@ extern "C" int dolby_ms12_update_runtime_params(void *dolbyMS12_pointer, int con
     }
 }
 
+extern "C" int dolby_ms12_update_runtime_params_nolock(void *dolbyMS12_pointer, int configNum, char **configParams)
+{
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance) {
+        return dolby_ms12_instance->DolbyMS12UpdateRuntimeParamsNoLock(dolbyMS12_pointer, configNum, configParams);
+    } else {
+        return -1;
+    }
+}
+
 extern "C" int dolby_ms12_scheduler_run(void *dolbyMS12_pointer)
 {
     android::DolbyMS12* dolby_ms12_instance = getInstance();

@@ -75,7 +75,7 @@ int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12);
  *@brief set dolby ms12 primary gain
  */
 int set_dolby_ms12_primary_input_db_gain(struct dolby_ms12_desc *ms12,
-        int db_gain);
+        int db_gain, int duration);
 
 /*
  *@brief set system app mixing status
