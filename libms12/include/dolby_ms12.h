@@ -148,6 +148,16 @@ int dolby_ms12_output(void *dolby_mS12_pointer
 int dolby_ms12_update_runtime_params(void *dolby_mS12_pointer, int argc, char **argv);
 
 /*@@
+    @brief get all the runtime config params, as the style of "int argc, char **argv"
+
+    @void *dolby_mS12_pointer //dolby ms12 handle
+    @int argc
+    @char **argv
+*/
+int dolby_ms12_update_runtime_params_nolock(void *dolby_mS12_pointer, int argc, char **argv);
+
+
+/*@@
     @brief dolby ms12 scheduler run
 
     @void *dolby_mS12_pointer //dolby ms12 handle

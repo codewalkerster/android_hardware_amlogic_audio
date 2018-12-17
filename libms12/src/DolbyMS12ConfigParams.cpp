@@ -911,6 +911,45 @@ int DolbyMS12ConfigParams::SetFunctionalSwitchesRuntime(char **ConfigParams, int
     return 0;
 }
 
+int DolbyMS12ConfigParams::SetFunctionalSwitchesRuntime_lite(char **ConfigParams, int *row_index)
+{
+    ALOGV("+%s() line %d\n", __FUNCTION__, __LINE__);
+
+    sprintf(ConfigParams[*row_index], "%s", "-main1_mixgain");
+    (*row_index)++;
+    sprintf(ConfigParams[*row_index], "%d,%d,%d", mMain1MixGain.target, mMain1MixGain.duration, mMain1MixGain.shape);//choose mid-val
+    (*row_index)++;
+
+    sprintf(ConfigParams[*row_index], "%s", "-main2_mixgain");
+    (*row_index)++;
+    sprintf(ConfigParams[*row_index], "%d,%d,%d", mMain2MixGain.target, mMain2MixGain.duration, mMain2MixGain.shape);//choose mid-val
+    (*row_index)++;
+
+    sprintf(ConfigParams[*row_index], "%s", "-ott_mixgain");
+    (*row_index)++;
+    sprintf(ConfigParams[*row_index], "%d,%d,%d", mOTTMixGain.target, mOTTMixGain.duration, mOTTMixGain.shape);
+    (*row_index)++;
+
+    sprintf(ConfigParams[*row_index], "%s", "-sys_prim_mixgain");
+    (*row_index)++;
+    sprintf(ConfigParams[*row_index], "%d,%d,%d", mSysPrimMixGain.target, mSysPrimMixGain.duration, mSysPrimMixGain.shape);//choose mid-val
+    (*row_index)++;
+
+    sprintf(ConfigParams[*row_index], "%s", "-sys_apps_mixgain");
+    (*row_index)++;
+    sprintf(ConfigParams[*row_index], "%d,%d,%d", mSysApppsMixGain.target, mSysApppsMixGain.duration, mSysApppsMixGain.shape);//choose mid-val
+    (*row_index)++;
+
+    sprintf(ConfigParams[*row_index], "%s", "-sys_syss_mixgain");
+    (*row_index)++;
+    sprintf(ConfigParams[*row_index], "%d,%d,%d", mSysSyssMixGain.target, mSysSyssMixGain.duration, mSysSyssMixGain.shape);//choose mid-val
+    (*row_index)++;
+
+    ALOGV("-%s() line %d\n", __FUNCTION__, __LINE__);
+    return 0;
+}
+
+
 //ddplus switches
 int DolbyMS12ConfigParams::SetDdplusSwitches(char **ConfigParams, int *row_index)
 {
@@ -1318,6 +1357,31 @@ char **DolbyMS12ConfigParams::GetDolbyMS12RuntimeConfigParams(int *argc)
             SetDAPDeviceSwitches(mConfigParams, &mParamNum);
             SetDAPContentSwitches(mConfigParams, &mParamNum);
         }
+        *argc = mParamNum;
+        ALOGV("%s() line %d argc %d\n", __FUNCTION__, __LINE__, *argc);
+        //here is to check the config params
+
+        int config_params_check = 1;
+        if (config_params_check) {
+            int i = 0;
+            for (i = 0; i < mParamNum; i++) {
+                ALOGD("param #%d: %s\n", i, mConfigParams[i]);
+            }
+        }
+    }
+
+    ALOGD("-%s()", __FUNCTION__);
+    return mConfigParams;
+}
+
+char **DolbyMS12ConfigParams::GetDolbyMS12RuntimeConfigParams_lite(int *argc)
+{
+    ALOGD("+%s()", __FUNCTION__);
+
+    if (argc && mConfigParams) {
+        char params_bin[] = "ms12_exec";
+        sprintf(mConfigParams[mParamNum++], "%s", params_bin);
+        SetFunctionalSwitchesRuntime_lite(mConfigParams, &mParamNum);
         *argc = mParamNum;
         ALOGV("%s() line %d argc %d\n", __FUNCTION__, __LINE__, *argc);
         //here is to check the config params

@@ -73,6 +73,7 @@ int get_dolby_ms12_init(struct dolby_ms12_desc *ms12_desc)
             set_offload_playback_dolby_ms12_output_format(ms12_desc->output_format);
             ALOGD("%s() init DolbyMS12 success\n", __FUNCTION__);
         }
+        ms12_desc->curDBGain = 0;
     }
     ALOGD("-%s() dolby_ms12_enable %d\n", __FUNCTION__, ms12_desc->dolby_ms12_enable);
     return 0;
@@ -152,4 +153,21 @@ int aml_ms12_update_runtime_params(struct dolby_ms12_desc *ms12_desc)
     return ret;
 }
 
+int aml_ms12_update_runtime_params_lite(struct dolby_ms12_desc *ms12_desc)
+{
+    ALOGI("+%s()\n", __FUNCTION__);
+    int ret = -1;
+    if (ms12_desc->dolby_ms12_init_argv) {
+        dolby_ms12_config_params_reset_config_params();
+        ms12_desc->dolby_ms12_init_argv = dolby_ms12_config_params_get_runtime_config_params_lite(&ms12_desc->dolby_ms12_init_argc);
+        if (ms12_desc->dolby_ms12_ptr) {
+            // we still need to use this interface, it calls ms12 with lock, then gain can set correctly each time
+            ret = dolby_ms12_update_runtime_params(ms12_desc->dolby_ms12_ptr, ms12_desc->dolby_ms12_init_argc, ms12_desc->dolby_ms12_init_argv);
+            // for thing like gain control, if continously setting volume in short time, we need no lock setting, or sound will break;
+            //ret = dolby_ms12_update_runtime_params_nolock(ms12_desc->dolby_ms12_ptr, ms12_desc->dolby_ms12_init_argc, ms12_desc->dolby_ms12_init_argv);
+        }
+    }
+    ALOGI("-%s() ret %d\n", __FUNCTION__, ret);
+    return ret;
+}
 

@@ -1498,12 +1498,41 @@ static uint32_t out_get_latency (const struct audio_stream_out *stream)
     return (frames * 1000) / out->config.rate;
 }
 
-static int out_set_volume (struct audio_stream_out *stream, float left, float right)
+static int out_set_volume(struct audio_stream_out *stream, float left, float right)
 {
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
-    ALOGI("left:%f right:%f ",left,right);
+    struct aml_audio_device *adev = out->dev;
+    int ret = 0;
+    ALOGI("%s,stream = %p,left:%f right:%f ", __FUNCTION__, stream, left, right);
+
     out->volume_l = left;
     out->volume_r = right;
+
+    // When MS12 input is PCM to OTT, ms12 fail to change volume.we will change volume at input side.
+    // When MS12 input is DD/DDP, we adjust main DD/DDP input volume here
+    if ((eDolbyMS12Lib == adev->dolby_lib_type) && continous_mode(adev) && !audio_is_linear_pcm(out->hal_internal_format)) {
+        int iMS12DB = -96;
+
+        if (out->volume_l != out->volume_r) {
+            ALOGW("%s, left:%f right:%f NOT match", __FUNCTION__, left, right);
+        }
+
+        iMS12DB = volume2Ms12DBGain(out->volume_l);
+
+        // MS12 initial DB gain is 0 when setup
+        // without "adev->ms12->curDBGain != iMS12DB" conditional filter, audio will have gap when continous changing volume
+        if (adev->ms12.curDBGain != iMS12DB) {
+            // set duration to 10 will not introduce gap
+            ret = set_dolby_ms12_primary_input_db_gain(&adev->ms12, iMS12DB , 10);
+            if (ret < 0) {
+                ALOGE("%s,set dolby primary gain failed", __FUNCTION__);
+            }
+            adev->ms12.curDBGain = iMS12DB;
+            aml_ms12_update_runtime_params_lite(&(adev->ms12));
+            ALOGI("%s,out->volume_l = %f,  iMS12DB = %d", __FUNCTION__, out->volume_l, iMS12DB);
+        }
+
+    }
     return 0;
 }
 
@@ -5592,6 +5621,9 @@ int do_output_standby_l(struct audio_stream *stream)
                         dolby_ms12_set_main_dummy(0, true);
                         dolby_ms12_flush_main_input_buffer();
                         dolby_ms12_set_pause_flag(false);
+                        int iMS12DB = 0;//restore to full volume
+                        set_dolby_ms12_primary_input_db_gain(&(adev->ms12), iMS12DB , 10);
+                        adev->ms12.curDBGain = iMS12DB;
                         aml_ms12_update_runtime_params(&(adev->ms12));
                         adev->ms12.is_continuous_paused = false;
                         adev->ms12_main1_dolby_dummy = true;
@@ -7036,6 +7068,22 @@ ssize_t mixer_main_buffer_write (struct audio_stream_out *stream, const void *bu
             write_bytes = outsize;
             //in_frames = outsize / frame_size;
             write_buf = hw_sync->hw_sync_body_buf;
+
+            // Tunnel Mode PCM is 16bits
+            if (aml_out->hw_sync_mode && (eDolbyMS12Lib == adev->dolby_lib_type) &&
+                audio_is_linear_pcm(aml_out->hal_internal_format) && aml_out->config.channels == 2) {
+                short *sample = (short*) write_buf;
+                int l, r;
+                int out_frames = write_bytes / aml_out->config.channels / 2; // 2 bytes per sample
+                int kk;
+                for (kk = 0; kk <  out_frames; kk++) {
+                    l = aml_out->volume_l * sample[kk * 2];
+                    sample[kk * 2] = CLIP(l);
+                    r = aml_out->volume_r * sample[kk * 2 + 1];
+                    sample[kk * 2 + 1] = CLIP(r);
+                }
+            }
+
         } else {
             return_bytes = hwsync_cost_bytes;
             if (need_reconfig_output) {

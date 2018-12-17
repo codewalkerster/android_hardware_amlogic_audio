@@ -27,7 +27,7 @@ static inline float DbToAmpl(float decibels)
     if (decibels <= VOLUME_MIN_DB) {
         return 0.0f;
     }
-    return exp( decibels * 0.115129f); // exp( dB * ln(10) / 20 )
+    return exp(decibels * 0.115129f);  // exp( dB * ln(10) / 20 )
 }
 
 static inline float AmplToDb(float amplification)
@@ -39,6 +39,7 @@ static inline float AmplToDb(float amplification)
 }
 
 float get_volume_by_index(int volume_index);
+int volume2Ms12DBGain(float inVol);
 void apply_volume(float volume, void *buf, int sample_size, int bytes);
 
 #endif

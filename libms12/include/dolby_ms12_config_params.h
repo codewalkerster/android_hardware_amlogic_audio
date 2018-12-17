@@ -95,6 +95,15 @@ char **dolby_ms12_config_params_get_runtime_config_params(int *argc);
 //void dolby_ms12_config_params_cleanup_config_params(char **ConfigParams, int max_raw_size);
 
 /**
+ * @brief Get the dolby_ms12_update_runtime_params() input params
+ * @int *argc //dolby_ms12_init *argc
+
+ * @return the char **argv
+ */
+char **dolby_ms12_config_params_get_runtime_config_params_lite(int *argc);
+
+
+/**
  * @brief Get dolby ms12 output format
  */
 audio_format_t dolby_ms12_config_params_get_dobly_config_output_format(void);
