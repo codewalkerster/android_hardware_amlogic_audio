@@ -509,7 +509,6 @@ struct aml_stream_out {
     unsigned last_dsp_frame;
     audio_hwsync_t *hwsync;
     struct timespec timestamp;
-	struct timespec lasttimestamp;
     stream_usecase_t usecase;
     uint32_t dev_usecase_masks;
     /**
