@@ -276,6 +276,8 @@ static int consume_output_data(void *cookie, const void* buffer, size_t bytes)
     //usleep(bytes * 1000 / 4 / 48 * 1 / 2);
 exit:
     clock_gettime(CLOCK_MONOTONIC, &out->timestamp);
+    out->lasttimestamp.tv_sec = out->timestamp.tv_sec;
+    out->lasttimestamp.tv_nsec = out->timestamp.tv_nsec;
     if (written >= 0) {
         //TODO
         latency_frames = mixer_get_inport_latency_frames(audio_mixer, out->port_index);
@@ -437,6 +439,8 @@ static ssize_t out_write_system(struct audio_stream_out *stream, const void *buf
 exit:
     // update new timestamp
     clock_gettime(CLOCK_MONOTONIC, &out->timestamp);
+    out->lasttimestamp.tv_sec = out->timestamp.tv_sec;
+    out->lasttimestamp.tv_nsec = out->timestamp.tv_nsec;
     if (written >= 0) {
         uint32_t latency_frames = mixer_get_inport_latency_frames(audio_mixer, out->port_index);
                 //+ mixer_get_outport_latency_frames(audio_mixer);
@@ -543,6 +547,8 @@ static ssize_t out_write_direct_pcm(struct audio_stream_out *stream, const void 
 exit:
     // update new timestamp
     clock_gettime(CLOCK_MONOTONIC, &out->timestamp);
+    out->lasttimestamp.tv_sec = out->timestamp.tv_sec;
+    out->lasttimestamp.tv_nsec = out->timestamp.tv_nsec;
     if (written >= 0) {
         uint32_t latency_frames = mixer_get_inport_latency_frames(audio_mixer, out->port_index);
                 //+ mixer_get_outport_latency_frames(audio_mixer);
@@ -1033,6 +1039,8 @@ ssize_t mixer_aux_buffer_write_sm(struct audio_stream_out *stream, const void *b
 
     aml_out->frame_write_sum += in_frames;
     clock_gettime(CLOCK_MONOTONIC, &aml_out->timestamp);
+    aml_out->lasttimestamp.tv_sec = aml_out->timestamp.tv_sec;
+    aml_out->lasttimestamp.tv_nsec = aml_out->timestamp.tv_nsec;
 
     aml_out->last_frames_postion = aml_out->frame_write_sum;
 
