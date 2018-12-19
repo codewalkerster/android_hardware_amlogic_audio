@@ -675,7 +675,9 @@ int dcv_decoder_init_patch(struct dolby_ddp_dec *ddp_dec)
 int dcv_decoder_release_patch(struct dolby_ddp_dec *ddp_dec)
 {
     pthread_mutex_lock(&ddp_dec->lock);
-    (*ddp_decoder_cleanup)();
+    if (ddp_decoder_cleanup != NULL) {
+        (*ddp_decoder_cleanup)();
+    }
     if (ddp_dec->status == 1) {
         ddp_dec->status = 0;
         ddp_dec->remain_size = 0;
