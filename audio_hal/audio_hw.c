@@ -6465,10 +6465,10 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
                 for (i = 0; i < out_frames; i++) {
                     aml_out->tmp_buffer_8ch[8 * i + 0] = (int32_t)effect_tmp_buf[2 * i] << 16;
                     aml_out->tmp_buffer_8ch[8 * i + 1] = (int32_t)effect_tmp_buf[2 * i + 1] << 16;
-                    aml_out->tmp_buffer_8ch[8 * i + 2] = (int32_t)effect_tmp_buf[2 * i] << 16;
-                    aml_out->tmp_buffer_8ch[8 * i + 3] = (int32_t)effect_tmp_buf[2 * i + 1] << 16;
-                    aml_out->tmp_buffer_8ch[8 * i + 4] = (int32_t)effect_tmp_buf[2 * i] << 16;
-                    aml_out->tmp_buffer_8ch[8 * i + 5] = (int32_t)effect_tmp_buf[2 * i + 1] << 16;
+                    aml_out->tmp_buffer_8ch[8 * i + 2] = (int32_t)tmp_buffer[2 * i] << 16;
+                    aml_out->tmp_buffer_8ch[8 * i + 3] = (int32_t)tmp_buffer[2 * i + 1] << 16;
+                    aml_out->tmp_buffer_8ch[8 * i + 4] = (int32_t)tmp_buffer[2 * i] << 16;
+                    aml_out->tmp_buffer_8ch[8 * i + 5] = (int32_t)tmp_buffer[2 * i + 1] << 16;
                     aml_out->tmp_buffer_8ch[8 * i + 6] = 0;
                     aml_out->tmp_buffer_8ch[8 * i + 7] = 0;
                 }
