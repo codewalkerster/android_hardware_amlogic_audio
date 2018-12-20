@@ -266,8 +266,18 @@ int dtv_patch_get_cmd(void)
     ALOGI("enter dtv_patch_get_cmd funciton now\n");
     pthread_mutex_lock(&dtv_cmd_mutex);
     list = dtv_cmd_list.next;
-    dtv_cmd_list.next = list->next;
-    cmd = list->cmd;
+    if(list!= NULL)
+    {
+        dtv_cmd_list.next = list->next;
+        cmd = list->cmd;
+        dtv_cmd_list.cmd_num--;
+    }
+    else
+    {
+        cmd =  AUDIO_DTV_PATCH_CMD_NULL;
+        pthread_mutex_unlock(&dtv_cmd_mutex);
+        return cmd;
+    }
     pthread_mutex_unlock(&dtv_cmd_mutex);
     cmd_array_put(list);
     ALOGI("leave dtv_patch_get_cmd the cmd is %d \n", cmd);
@@ -1143,6 +1153,7 @@ static int create_dtv_output_stream_thread(struct aml_audio_patch *patch)
     ALOGI("++%s   ---- %d\n", __FUNCTION__, patch->ouput_thread_created);
 
     if (patch->ouput_thread_created == 0) {
+        patch->output_thread_exit = 0;
         pthread_mutex_init(&patch->dtv_output_mutex, NULL);
         ret = pthread_create(&(patch->audio_output_threadID), NULL,
                              audio_dtv_patch_output_threadloop, patch);
@@ -1151,7 +1162,7 @@ static int create_dtv_output_stream_thread(struct aml_audio_patch *patch)
             pthread_mutex_destroy(&patch->dtv_output_mutex);
             return -1;
         }
-        patch->output_thread_exit = 0;
+
         patch->ouput_thread_created = 1;
     }
     ALOGI("--%s", __FUNCTION__);
