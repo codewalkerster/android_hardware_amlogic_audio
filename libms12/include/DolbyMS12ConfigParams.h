@@ -196,12 +196,12 @@ public:
     virtual void setAssociatedAudioMixing(int val)
     {
         mAssociatedAudioMixing = val;
-        ALOGI("%s() mAssociatedAudioMixing %d\n", __FUNCTION__, mAssociatedAudioMixing);
+        //ALOGI("%s() mAssociatedAudioMixing %d\n", __FUNCTION__, mAssociatedAudioMixing);
     }
     virtual void setSystemAppAudioMixing(int val)
     {
         mSystemAPPAudioMixing = val;
-        ALOGI("%s() mSystemAPPAudioMixing %d\n", __FUNCTION__, mSystemAPPAudioMixing);
+        //ALOGI("%s() mSystemAPPAudioMixing %d\n", __FUNCTION__, mSystemAPPAudioMixing);
     }
     virtual int getSystemAppAudioMixing(void)
     {
