@@ -510,7 +510,11 @@ static int start_output_stream (struct aml_stream_out *out)
 {
     struct aml_audio_device *adev = out->dev;
     unsigned int card = CARD_AMLOGIC_BOARD;
+#if defined(ODROID)
+	unsigned int port = PORT_SPDIFB2HDMI;
+#else
     unsigned int port = PORT_I2S;
+#endif
     int ret = 0;
     int i  = 0;
     struct aml_stream_out *out_removed = NULL;
@@ -671,7 +675,11 @@ static int start_output_stream_direct (struct aml_stream_out *out)
     * PCM_FORMAT_S32_LE
     */
     if (!format_is_passthrough(out->hal_format) && (out->config.channels == 8)) {
+#if defined(ODROID)
+        port = PORT_SPDIFB2HDMI;
+#else
         port = PORT_I2S;
+#endif
         out->config.format = PCM_FORMAT_S32_LE;
         adev->out_device = AUDIO_DEVICE_OUT_SPEAKER;
         ALOGI ("[%s %d]8CH format output: set port/0 adev->out_device/%d\n",

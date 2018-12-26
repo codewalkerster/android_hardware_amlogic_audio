@@ -51,11 +51,14 @@
 #define ALSAPORT_I2S              "alsaPORT-i2s"         /* i2s0, Playback,Capture */
 #define ALSAPORT_I2SPLAYPLAYBACK  "alsaPORT-i2s1"        /* i2s1 */
 #define ALSAPORT_I2SCAPTURE       "alsaPORT-i2s2"        /* i2s2 */
+#define ALSAPORT_SPDIFB2HDMI      "alsaPORT-spdifb2hdmi"
+
+#if !defined(ODROID)
 #define ALSAPORT_TDM              "alsaPORT-tdm"
 #define ALSAPORT_PDM              "alsaPORT-pdm"
 #define ALSAPORT_SPDIF            "alsaPORT-spdif"
-#define ALSAPORT_SPDIFB2HDMI      "alsaPORT-spdifb2hdmi"
 #define ALSAPORT_I2S2HDMI         "alsaPORT-i2s2hdmi"    /* virtual link */
+#endif
 #define ALSAPORT_TV               "alsaPORT-tv"          /* Now for TV input */
 
 struct AudioDeviceDescriptor {
@@ -79,11 +82,13 @@ struct alsa_info {
 	struct AudioDeviceDescriptor *i2s_descrpt;
 	struct AudioDeviceDescriptor *i2s1_descrpt;
 	struct AudioDeviceDescriptor *i2s2_descrpt;
+	struct AudioDeviceDescriptor *spdifb2hdmi_descrpt;
+#if !defined(ODROID)
 	struct AudioDeviceDescriptor *tdm_descrpt;
 	struct AudioDeviceDescriptor *pdm_descrpt;
 	struct AudioDeviceDescriptor *spdif_descrpt;
-	struct AudioDeviceDescriptor *spdifb2hdmi_descrpt;
 	struct AudioDeviceDescriptor *i2s2hdmi_descrpt;
+#endif
 	struct AudioDeviceDescriptor *tvin_descrpt;
 };
 
@@ -213,16 +218,18 @@ void alsa_device_parser_pcm_string(struct alsa_info *p_info, char *InputBuffer)
 					p_info->i2s2_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_I2S))
 					p_info->i2s_descrpt = mAudioDeviceDescriptor;
+				else if (!strcmp(PortName, ALSAPORT_SPDIFB2HDMI))
+					p_info->spdifb2hdmi_descrpt = mAudioDeviceDescriptor;
+#if defined(ODROID)
 				else if (!strcmp(PortName, ALSAPORT_TDM))
 					p_info->tdm_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_PDM))
 					p_info->pdm_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_SPDIF))
 					p_info->spdif_descrpt = mAudioDeviceDescriptor;
-				else if (!strcmp(PortName, ALSAPORT_SPDIFB2HDMI))
-					p_info->spdifb2hdmi_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_I2S2HDMI))
 					p_info->i2s2hdmi_descrpt = mAudioDeviceDescriptor;
+#endif
 				else if (!strcmp(PortName, ALSAPORT_TV))
 					p_info->tvin_descrpt = mAudioDeviceDescriptor;
 			} else
@@ -290,11 +297,15 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 		} else
 			pADD = p_info->i2s_descrpt;
 		break;
-	case PORT_SPDIF:
-		pADD = p_info->spdif_descrpt;
-		break;
 	case PORT_PCM:
 		pADD = p_info->pcm_descrpt;
+		break;
+	case PORT_SPDIFB2HDMI:
+		pADD = p_info->spdifb2hdmi_descrpt;
+		break;
+#if !defined(ODROID)
+	case PORT_SPDIF:
+		pADD = p_info->spdif_descrpt;
 		break;
 	case PROT_TDM:
 		pADD = p_info->tdm_descrpt;
@@ -302,20 +313,18 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 	case PROT_PDM:
 		pADD = p_info->pdm_descrpt;
 		break;
-	case PORT_SPDIFB2HDMI:
-		pADD = p_info->spdifb2hdmi_descrpt;
-		break;
 	case PORT_I2S2HDMI:
 		pADD = p_info->i2s2hdmi_descrpt;
-		break;
-	case PORT_TV:
-		pADD = p_info->tvin_descrpt;
 		break;
 	case PORT_I2S1:
 		pADD = p_info->i2s1_descrpt;
 		break;
 	case PORT_I2S2:
 		pADD = p_info->i2s2_descrpt;
+		break;
+#endif
+	case PORT_TV:
+		pADD = p_info->tvin_descrpt;
 		break;
 	default:
 		pADD = p_info->i2s_descrpt;
