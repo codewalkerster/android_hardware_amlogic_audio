@@ -276,6 +276,8 @@ struct aml_audio_device {
     int mode;
     audio_devices_t in_device;
     audio_devices_t out_device;
+    struct audio_microphone_characteristic_t *mic_array;
+    size_t *mic_count;
     int in_call;
     struct aml_stream_in *active_input;
     struct aml_stream_out *active_output[MAX_STREAM_NUM];
