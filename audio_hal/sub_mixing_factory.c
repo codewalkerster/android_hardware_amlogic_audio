@@ -65,6 +65,9 @@ static int initSubMixngOutput(
     pcm_cfg.period_count = DEFAULT_PLAYBACK_PERIOD_CNT;
     //pcm_cfg.period_count = PLAYBACK_PERIOD_COUNT;
     //pcm_cfg.start_threshold = pcm_cfg.period_size * pcm_cfg.period_count;
+    pcm_cfg.stop_threshold = pcm_cfg.period_size * pcm_cfg.period_count - 128;
+    pcm_cfg.silence_threshold = pcm_cfg.stop_threshold;
+    pcm_cfg.silence_size = 1024;
 
     if (cfg.format == AUDIO_FORMAT_PCM_16_BIT)
         pcm_cfg.format = PCM_FORMAT_S16_LE;
