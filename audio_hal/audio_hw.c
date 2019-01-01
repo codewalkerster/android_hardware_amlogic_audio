@@ -747,6 +747,7 @@ static int start_output_stream_direct (struct aml_stream_out *out)
 
     if (codec_type_is_raw_data(codec_type) && !(out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO)) {
         spdifenc_init(out->pcm, out->hal_internal_format);
+        spdifenc_set_mute(out->offload_mute);
         out->spdif_enc_init_frame_write_sum = out->frame_write_sum;
     }
     out->codec_type = codec_type;
@@ -1508,13 +1509,24 @@ static uint32_t out_get_latency (const struct audio_stream_out *stream)
     return (frames * 1000) / out->config.rate;
 }
 
-static int out_set_volume(struct audio_stream_out *stream, float left, float right)
+#define FLOAT_ZERO 0.000001
+static int out_set_volume (struct audio_stream_out *stream, float left, float right)
 {
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
     int ret = 0;
-    ALOGI("%s,stream = %p,left:%f right:%f ", __FUNCTION__, stream, left, right);
-
+    ALOGI("%s(), stream(%p), left:%f right:%f ", __func__, stream, left, right);
+    if (out->hal_internal_format == AUDIO_FORMAT_E_AC3) {
+        if (out->volume_l < FLOAT_ZERO && left > FLOAT_ZERO) {
+            ALOGI("set offload mute: false");
+            spdifenc_set_mute(false);
+            out->offload_mute = false;
+        } else if (out->volume_l > FLOAT_ZERO && left < FLOAT_ZERO) {
+            ALOGI("set offload mute: true");
+            spdifenc_set_mute(true);
+            out->offload_mute = true;
+        }
+    }
     out->volume_l = left;
     out->volume_r = right;
 
@@ -2653,6 +2665,7 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
         */
         if ((codec_type == TYPE_AC3 || codec_type == TYPE_EAC3)  && (out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO)) {
             spdifenc_init(out->pcm, out->hal_internal_format);
+            spdifenc_set_mute(out->offload_mute);
             out->spdif_enc_init_frame_write_sum = out->frame_write_sum;
         }
         // todo: check timestamp header PTS discontinue for new sync point after seek
@@ -5872,6 +5885,7 @@ ssize_t aml_audio_spdif_output (struct audio_stream_out *stream,
                 } else if (aml_dev->optical_format == AUDIO_FORMAT_E_AC3) {
                     aml_mixer_ctrl_set_int(&aml_dev->alsa_mixer, AML_MIXER_ID_SPDIF_FORMAT, AML_DOLBY_DIGITAL_PLUS);
                 }
+                spdifenc_set_mute(aml_out->offload_mute);
                 ALOGI("%s tinymix AML_MIXER_ID_SPDIF_FORMAT %d\n", __FUNCTION__, AML_DOLBY_DIGITAL);
             }
         }
