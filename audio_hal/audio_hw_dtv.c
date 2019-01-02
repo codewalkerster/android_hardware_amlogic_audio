@@ -131,7 +131,6 @@ struct cmd_list dtv_cmd_list = {
     .cmd_num = 0,
     .used = 1,
 };
-
 static int create_dtv_output_stream_thread(struct aml_audio_patch *patch);
 static int release_dtv_output_stream_thread(struct aml_audio_patch *patch);
 
@@ -1118,30 +1117,106 @@ exit:
     pthread_exit(NULL);
 }
 
-int dtv_in_read(struct aml_audio_device *dev, unsigned char *buf, int bytes)
+void release_dtvin_buffer(struct aml_audio_patch *patch)
+{
+    if (patch->dtvin_buffer_inited == 1) {
+        patch->dtvin_buffer_inited = 0;
+        ring_buffer_release(&(patch->dtvin_ringbuffer));
+    }
+}
+
+void dtv_in_write(struct audio_stream_out *stream, const void* buffer, size_t bytes)
+{
+    struct aml_stream_out *out = (struct aml_stream_out *) stream;
+    struct aml_audio_device *adev = out->dev;
+    struct aml_audio_patch *patch = adev->audio_patch;
+    int abuf_level = 0;
+
+    if (stream == NULL || buffer == NULL || bytes == 0) {
+        ALOGI("[%s] pls check the input parameters \n", __FUNCTION__);
+        return ;
+    }
+    if ((adev->patch_src == SRC_DTV) && (patch->dtvin_buffer_inited == 1)) {
+        abuf_level = get_buffer_write_space(&patch->dtvin_ringbuffer);
+		if (abuf_level <= (int)bytes) {
+            ALOGI("[%s] dtvin ringbuffer is full", __FUNCTION__);
+            return;
+        }
+        ring_buffer_write(&patch->dtvin_ringbuffer, (unsigned char *)buffer, bytes,UNCOVER_WRITE);
+    }
+    //ALOGI("[%s] dtvin write ringbuffer successfully,abuf_level=%d", __FUNCTION__,abuf_level);
+}
+int dtv_in_read(struct audio_stream_in *stream, void* buffer, size_t bytes)
 {
     int ret = 0;
-    if (dev == NULL || buf == NULL || bytes == 0) {
+    unsigned int es_length = 0;
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    struct aml_audio_device *adev = in->dev;
+
+    if (stream == NULL || buffer == NULL || bytes == 0) {
         ALOGI("[%s] pls check the input parameters \n", __FUNCTION__);
     }
 
-    struct aml_audio_patch *patch = dev->audio_patch;
+    struct aml_audio_patch *patch = adev->audio_patch;
+    struct dolby_ddp_dec *ddp_dec = & (adev->ddp);
+    //ALOGI("[%s] patch->aformat=0x%x patch->dtv_decoder_ready=%d bytes:%d\n", __FUNCTION__,patch->aformat,patch->dtv_decoder_ready,bytes);
+
+    if (patch->dtvin_buffer_inited == 1) {
+        int abuf_level = get_buffer_read_space(&patch->dtvin_ringbuffer);
+        if (abuf_level <= (int)bytes) {
+            memset(buffer, 0, sizeof(unsigned char)* bytes);
+            ret = bytes;
+        } else {
+            ret = ring_buffer_read(&patch->dtvin_ringbuffer, (unsigned char *)buffer, bytes);
+            //ALOGI("[%s] abuf_level =%d ret=%d\n", __FUNCTION__,abuf_level,ret);
+        }
+        return bytes;
+    }
+    else
+    {
+        memset(buffer, 0, sizeof(unsigned char)* bytes);
+        ret = bytes;
+        return ret;
+    }
 
     if (patch->aformat == AUDIO_FORMAT_AC3 ||
         patch->aformat == AUDIO_FORMAT_E_AC3) {
+        int data_size = 0;
         if (patch->dtv_decoder_ready == 0) {
-            memset(buf, 0, bytes);
+            dcv_decoder_init_patch(ddp_dec);
+            patch->dtv_decoder_ready = 1;
+        }
+        data_size = get_buffer_read_space(&patch->aml_ringbuffer);
+        ALOGI("[%s] data_size =%d\n", __FUNCTION__,data_size);
+        if (data_size == 0) {
+            memset(buffer, 0,sizeof(unsigned char)* bytes);
+            ret = bytes;
         } else {
-            ret =
-                ring_buffer_read(&patch->aml_ringbuffer, (unsigned char *)buf, bytes);
+            ret =ring_buffer_read(&patch->aml_ringbuffer, (unsigned char *)buffer, bytes);
+            ALOGI("[%s] ddp data_size =%d ret=%d\n", __FUNCTION__, data_size, ret);
+            dcv_decoder_process_patch(ddp_dec, (unsigned char *)buffer, bytes);
+            //memcpy(buffer, (unsigned char *)es_buff, ret);
         }
     } else if (patch->aformat == AUDIO_FORMAT_DTS) {
         if (patch->dtv_decoder_ready == 0) {
         } else {
+
         }
     } else {
+        //ret = ring_buffer_read(&patch->aml_ringbuffer,(unsigned char*)buffer, bytes);
+        int abuf_level = get_buffer_read_space(&patch->aml_ringbuffer);
+        ALOGI("[%s] abuf_level =%d\n", __FUNCTION__,abuf_level);
+        if (abuf_level == 0) {
+            memset(buffer, 0,sizeof(unsigned char)* bytes);
+            ret = bytes;
+        } else {
+            ret =ring_buffer_read(&patch->aml_ringbuffer, (unsigned char *)buffer, bytes);
+            ALOGI("[%s] abuf_level =%d ret=%d\n", __FUNCTION__,abuf_level,ret);
+            //memcpy(buffer, (unsigned char *)es_buff, ret);
+        }
+        process_pts_sync(0, patch, abuf_level);
     }
-    return 0;
+    return ret;
 }
 
 #define AVSYNC_SAMPLE_INTERVAL (50)
@@ -1242,6 +1317,15 @@ int create_dtv_patch(struct audio_hw_device *dev, audio_devices_t input,
     create_dtv_output_stream_thread(patch);
     pthread_mutex_unlock(&dtv_patch_mutex);
     init_cmd_list();
+    if (aml_dev->tuner2mix_patch)
+    {
+        ret = ring_buffer_init(&patch->dtvin_ringbuffer, 4 * 8192 * 2);
+        ALOGI("[%s] aring_buffer_init ret=%d\n", __FUNCTION__,ret);
+        if (ret == 0) {
+            patch->dtvin_buffer_inited = 1;
+        }
+    }
+    patch->dtv_aformat = aml_dev->dtv_aformat;
     ALOGI("--%s", __FUNCTION__);
     return 0;
 err_parse_thread:
@@ -1278,7 +1362,7 @@ int release_dtv_patch(struct aml_audio_device *aml_dev)
 
     pthread_mutex_destroy(&patch->dtv_input_mutex);
     release_dtv_output_stream_thread(patch);
-
+    release_dtvin_buffer(patch);
     ring_buffer_release(&(patch->aml_ringbuffer));
     free(patch);
     aml_dev->audio_patch = NULL;
