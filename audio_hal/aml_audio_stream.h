@@ -142,6 +142,7 @@ static inline alsa_device_t usecase_device_adapter_with_ms12(alsa_device_t useca
 struct aml_audio_patch {
     struct audio_hw_device *dev;
     ring_buffer_t aml_ringbuffer;
+    ring_buffer_t dtvin_ringbuffer;
     pthread_t audio_input_threadID;
     pthread_t audio_output_threadID;
     pthread_t audio_parse_threadID;
@@ -153,6 +154,7 @@ struct aml_audio_patch {
     size_t out_buf_size;
     void *out_tmpbuf;
     size_t out_tmpbuf_size;
+    int dtvin_buffer_inited;
     int input_thread_exit;
     int output_thread_exit;
     int parse_thread_exit;

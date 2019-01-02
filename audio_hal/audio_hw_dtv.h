@@ -38,5 +38,7 @@ enum {
 int create_dtv_patch(struct audio_hw_device *dev, audio_devices_t input, audio_devices_t output __unused);
 int release_dtv_patch(struct aml_audio_device *dev);
 int dtv_patch_add_cmd(int cmd);
-
+int dtv_in_read(struct audio_stream_in *stream, void* buffer, size_t bytes);
+void dtv_in_write(struct audio_stream_out *stream, const void* buffer, size_t bytes);
+void save_latest_dtv_aformat(int afmt);
 #endif

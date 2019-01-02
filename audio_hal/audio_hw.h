@@ -446,6 +446,7 @@ struct aml_audio_device {
     //int cnt_stream_using_mixer;
     int tsync_fd;
     bool rawtopcm_flag;
+    int dtv_aformat;
 };
 
 struct meta_data {
