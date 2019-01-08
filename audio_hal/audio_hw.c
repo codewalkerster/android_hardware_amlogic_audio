@@ -5602,7 +5602,7 @@ int do_output_standby_l(struct audio_stream *stream)
         ALOGI("%s aml_out(%p)standby close", __func__, aml_out);
         pthread_mutex_lock(&adev->alsa_pcm_lock);
         aml_alsa_output_close(out);
-        if (eDolbyDcvLib == adev->dolby_lib_type && adev->ddp.digital_raw == 1) {
+        if (eDolbyDcvLib == adev->dolby_lib_type && (adev->ddp.digital_raw == 1 || adev->dts_hd.digital_raw == 1)) {
             struct pcm *pcm = adev->pcm_handle[DIGITAL_DEVICE];
             if (aml_out->dual_output_flag && pcm) {
                 ALOGI("%s close dual output pcm handle %p", __func__, pcm);
