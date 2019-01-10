@@ -108,10 +108,11 @@ const DDPshort frmsizetab[MAXFSCOD][MAXDDDATARATE] = {
     }
 };
 
-static int (*ddp_decoder_init)(int, int);
-static int (*ddp_decoder_cleanup)();
-static int (*ddp_decoder_process)(char *, int, int *, int, char *, int *, struct pcm_info *, char *, int *);
+static int (*ddp_decoder_init)(int, int,void **);
+static int (*ddp_decoder_cleanup)(void *);
+static int (*ddp_decoder_process)(char *, int, int *, int, char *, int *, struct pcm_info *, char *, int *,void *);
 static void *gDDPDecoderLibHandler = NULL;
+static void *handle = NULL;
 
 static DDPerr ddbs_init(DDPshort * buf, DDPshort bitptr, DDP_BSTRM *p_bstrm)
 {
@@ -320,8 +321,9 @@ static int Get_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChN
 
 static  int unload_ddp_decoder_lib()
 {
-    if (ddp_decoder_cleanup != NULL) {
-        (*ddp_decoder_cleanup)();
+    if (ddp_decoder_cleanup != NULL && handle != NULL) {
+        (*ddp_decoder_cleanup)(handle);
+        handle = NULL;
     }
     ddp_decoder_init = NULL;
     ddp_decoder_process = NULL;
@@ -344,7 +346,7 @@ static int dcv_decoder_init(int digital_raw)
         ALOGV("<%s::%d>--[gDDPDecoderLibHandler]", __FUNCTION__, __LINE__);
     }
 
-    ddp_decoder_init = (int (*)(int, int)) dlsym(gDDPDecoderLibHandler, "ddp_decoder_init");
+    ddp_decoder_init = (int (*)(int, int,void **)) dlsym(gDDPDecoderLibHandler, "ddp_decoder_init");
     if (ddp_decoder_init == NULL) {
         ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
         goto Error;
@@ -352,7 +354,7 @@ static int dcv_decoder_init(int digital_raw)
         ALOGV("<%s::%d>--[ddp_decoder_init:]", __FUNCTION__, __LINE__);
     }
 
-    ddp_decoder_process = (int (*)(char * , int , int *, int , char *, int *, struct pcm_info *, char *, int *))
+    ddp_decoder_process = (int (*)(char * , int , int *, int , char *, int *, struct pcm_info *, char *, int *,void *))
                           dlsym(gDDPDecoderLibHandler, "ddp_decoder_process");
     if (ddp_decoder_process == NULL) {
         ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
@@ -361,7 +363,7 @@ static int dcv_decoder_init(int digital_raw)
         ALOGV("<%s::%d>--[ddp_decoder_process:]", __FUNCTION__, __LINE__);
     }
 
-    ddp_decoder_cleanup = (int (*)()) dlsym(gDDPDecoderLibHandler, "ddp_decoder_cleanup");
+    ddp_decoder_cleanup = (int (*)(void *)) dlsym(gDDPDecoderLibHandler, "ddp_decoder_cleanup");
     if (ddp_decoder_cleanup == NULL) {
         ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
         goto Error;
@@ -370,7 +372,7 @@ static int dcv_decoder_init(int digital_raw)
     }
 
     /*TODO: always decode*/
-    (*ddp_decoder_init)(1, digital_raw);
+    (*ddp_decoder_init)(1, digital_raw,&handle);
     return 0;
 Error:
     unload_ddp_decoder_lib();
@@ -398,7 +400,8 @@ static int dcv_decode_process(unsigned char*input, int input_size, unsigned char
                                  , out_size
                                  , pcm_out_info
                                  , (char *) spdif_buf
-                                 , (int *) raw_size);
+                                 , (int *) raw_size
+                                 ,handle);
     //ALOGI("used_size %d,lpcm out_size %d,raw out size %d",used_size,*out_size,*raw_size);
     return used_size;
 }
@@ -675,8 +678,9 @@ int dcv_decoder_init_patch(struct dolby_ddp_dec *ddp_dec)
 int dcv_decoder_release_patch(struct dolby_ddp_dec *ddp_dec)
 {
     pthread_mutex_lock(&ddp_dec->lock);
-    if (ddp_decoder_cleanup != NULL) {
-        (*ddp_decoder_cleanup)();
+    if (ddp_decoder_cleanup != NULL && handle != NULL) {
+        (*ddp_decoder_cleanup)(handle);
+        handle = NULL;
     }
     if (ddp_dec->status == 1) {
         ddp_dec->status = 0;
