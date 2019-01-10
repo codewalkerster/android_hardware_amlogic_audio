@@ -3846,11 +3846,9 @@ static uint32_t in_get_input_frames_lost (struct audio_stream_in *stream __unuse
     return 0;
 }
 
-static int in_get_active_microphones (const struct audio_stream_in *stream,
-                                     struct audio_microphone_characteristic_t *mic_array,
-                                     size_t *mic_count) {
-    struct aml_stream_in *in = (struct aml_stream_in *)stream;
-    struct aml_audio_device *adev = in->dev;
+int get_microphones (struct aml_audio_device *adev __unused,
+                                struct audio_microphone_characteristic_t *mic_array,
+                                size_t *mic_count) {
     ALOGI("%s", __func__);
     if (mic_count == NULL) {
         return -EINVAL;
@@ -3862,29 +3860,7 @@ static int in_get_active_microphones (const struct audio_stream_in *stream,
     if (*mic_count == 0) {
         return 0;
     }
-    pthread_mutex_lock(&adev->lock);
-    mic_array = adev->mic_array;
-    pthread_mutex_unlock(&adev->lock);
-    return 0;
-}
 
-static int adev_get_microphones (const struct audio_hw_device *dev,
-                                struct audio_microphone_characteristic_t *mic_array,
-                                size_t *mic_count) {
-    struct aml_audio_device *adev = (struct aml_audio_device *)dev;
-    ALOGI("%s mic_count : %d", __func__, *mic_count);
-    if (mic_count == NULL) {
-        return -EINVAL;
-    }
-    if (mic_array == NULL) {
-        return -EINVAL;
-    }
-
-    if (*mic_count == 0) {
-        return 0;
-    }
-
-    pthread_mutex_lock(&adev->lock);
     struct audio_microphone_characteristic_t microphone;
     char* device_id = "builtin_mic_1";
     char* address = AUDIO_BOTTOM_MICROPHONE_ADDRESS;
@@ -3918,10 +3894,32 @@ static int adev_get_microphones (const struct audio_hw_device *dev,
 
     mic_array[0] = microphone;
     *mic_count = 1;
-    adev->mic_array = mic_array;
-    adev->mic_count = mic_count;
-    pthread_mutex_unlock(&adev->lock);
     return 0;
+}
+
+static int in_get_active_microphones (const struct audio_stream_in *stream,
+                                     struct audio_microphone_characteristic_t *mic_array,
+                                     size_t *mic_count) {
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    struct aml_audio_device *adev = in->dev;
+    ALOGI("%s", __func__);
+    pthread_mutex_lock(&in->lock);
+    pthread_mutex_lock(&adev->lock);
+    int ret = get_microphones(adev, mic_array, mic_count);
+    pthread_mutex_unlock(&adev->lock);
+    pthread_mutex_unlock(&in->lock);
+    return ret;
+}
+
+static int adev_get_microphones (const struct audio_hw_device *dev,
+                                struct audio_microphone_characteristic_t *mic_array,
+                                size_t *mic_count) {
+    struct aml_audio_device *adev = (struct aml_audio_device *)dev;
+    ALOGI("%s", __func__);
+    pthread_mutex_lock(&adev->lock);
+    int ret = get_microphones(adev, mic_array, mic_count);
+    pthread_mutex_unlock(&adev->lock);
+    return ret;
 }
 
 // open corresponding stream by flags, formats and others params
