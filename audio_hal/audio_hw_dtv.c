@@ -680,7 +680,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
     struct audio_config stream_config;
     struct timespec ts;
     int write_bytes = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
-    int ret,lookup_count=0;
+    int ret;
 
     ALOGI("++%s live ", __FUNCTION__);
     // FIXME: get actual configs
@@ -787,7 +787,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
 
                     /*ALOGI("demux_pcr %x first_checkinapts %x\n",demux_pcr,first_checkinapts);*/
                     if ((first_checkinapts != 0xffffffff) || (demux_pcr != 0xffffffff)) {
-                        if ((first_checkinapts > demux_pcr) && (lookup_count++<5)) {
+                        if (first_checkinapts > demux_pcr) {
                             unsigned diff = first_checkinapts - demux_pcr;
                             if (diff  < AUDIO_PTS_DISCONTINUE_THRESHOLD) {
                                 /*ALOGI("hold the aduio for cache data\n");*/
@@ -797,7 +797,6 @@ void *audio_dtv_patch_output_threadloop(void *data)
                             }
                         }
                     }
-                    lookup_count=0;
                 }
 
                 // ALOGE("%s(), ring_buffer_read now read %d data", __func__, avail);
