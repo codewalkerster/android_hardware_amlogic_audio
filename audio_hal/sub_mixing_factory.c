@@ -296,6 +296,9 @@ exit:
         else
             out->last_frames_postion = 0;//out->frame_write_sum;
     }
+    if (out->debug_stream) {
+        ALOGD("%s(), frames sum %lld, last frames %lld", __func__, out->frame_write_sum, out->last_frames_postion);
+    }
     return written;
 }
 
@@ -362,7 +365,6 @@ static ssize_t out_write_hwsync_lpcm(struct audio_stream_out *stream, const void
     }
 
     if (written_total > 0) {
-        out->frame_write_sum += (written_total / frame_size);
         ALOGV("--%s(), out(%p)written %d, write_sum after %lld",
                 __func__, out, written_total, out->frame_write_sum);
         if ((size_t)written_total != bytes)
