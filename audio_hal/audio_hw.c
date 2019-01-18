@@ -3584,11 +3584,6 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
      * mutex
      */
     pthread_mutex_lock(&in->lock);
-    if (adev->patch_src == SRC_INVAL)
-    {
-        memset(buffer, 0, bytes);
-        goto exit;
-    }
 
     if (in->standby) {
         ret = start_input_stream(in);
@@ -3839,6 +3834,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
     else if (adev->patch_src == SRC_DTV && adev->tuner2mix_patch == 1)
     {
         ret = dtv_in_read(stream, buffer, bytes);
+        apply_volume(adev->src_gain[adev->active_inport], buffer, sizeof(uint16_t), bytes);
         goto exit;
     }
     else{
