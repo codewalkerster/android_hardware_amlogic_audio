@@ -9074,8 +9074,8 @@ else
         // ATV path goes to dev set_params which could
         // tell atv or dtv source and decide to create or not.
         // One more case is ATV->ATV, should recreate audio patch.
-        if (input_src != ATV || (input_src == ATV && aml_dev->patch_src == SRC_ATV)
-            || (alsa_device_is_auge() && input_src == FRATV && aml_dev->patch_src == SRC_ATV)) {
+        if ((inport != INPORT_TUNER)
+                || ((inport == INPORT_TUNER) && (aml_dev->patch_src == SRC_ATV))) {
             set_audio_source(&aml_dev->alsa_mixer, input_src);
             ret = create_patch(dev,
                                src_config->ext.device.type, outport);
@@ -9084,11 +9084,10 @@ else
                 goto err_patch;
             }
             aml_dev->audio_patching = 1;
-            if (input_src == ATV ||
-                (alsa_device_is_auge() && (input_src == FRATV))) {
+            if (inport == INPORT_TUNER) {
                 aml_dev->patch_src = SRC_ATV;
             }
-        } else if (input_src == ATV && aml_dev->patch_src == SRC_DTV ) {
+        } else if ((inport == INPORT_TUNER) && (aml_dev->patch_src == SRC_DTV)) {
 #ifdef ENABLE_DTV_PATCH
              if ((aml_dev->patch_src == SRC_DTV) && aml_dev->audio_patching) {
                  ALOGI("%s, now release the dtv patch now\n ", __func__);
