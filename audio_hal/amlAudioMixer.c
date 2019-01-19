@@ -76,6 +76,7 @@ struct amlAudioMixer {
     struct timespec tval_last_write;
     void *adev_data;
     struct aml_audio_device *adev;
+    bool continuous_output;
     //int init_ok : 1;
 };
 
@@ -83,6 +84,18 @@ int mixer_set_state(struct amlAudioMixer *audio_mixer, enum mixer_state state)
 {
     audio_mixer->state = state;
     return 0;
+}
+
+int mixer_set_continuous_output(struct amlAudioMixer *audio_mixer,
+        bool continuous_output)
+{
+    audio_mixer->continuous_output = continuous_output;
+    return 0;
+}
+
+bool mixer_is_continuous_enabled(struct amlAudioMixer *audio_mixer)
+{
+    return audio_mixer->continuous_output;
 }
 
 enum mixer_state mixer_get_state(struct amlAudioMixer *audio_mixer)
@@ -546,7 +559,7 @@ static int mixer_inports_read(struct amlAudioMixer *audio_mixer)
                     fade_in = 1;
                     aml_hwsync_set_tsync_resume();
                 } else if (state == STOPPED || state == PAUSED || state == FLUSHED) {
-                    ALOGD("%s(), stopped, paused or flushed", __func__);
+                    ALOGV("%s(), stopped, paused or flushed", __func__);
                     //in_port->data_valid = 1;
                     //memset(in_port->data, 0, in_port->data_len_bytes);
                     continue;
@@ -1308,6 +1321,30 @@ static void *mixer_32b_threadloop(void *data)
     return NULL;
 }
 
+static int mixer_do_continous_output(struct amlAudioMixer *audio_mixer)
+{
+    struct output_port *out_port = audio_mixer->out_ports[MIXER_OUTPUT_PORT_PCM];
+    int16_t *data_mixed = (int16_t *)out_port->data_buf;
+    size_t frames = 4;
+    size_t bytes = frames * out_port->cfg.frame_size;
+
+    memset(data_mixed, 0 , bytes);
+    set_outport_data_avail(out_port, bytes);
+    mixer_output_write(audio_mixer);
+    return 0;
+}
+
+static bool mixer_inports_exist(struct amlAudioMixer *audio_mixer)
+{
+    enum MIXER_INPUT_PORT port_index = 0;
+    for (port_index = 0; port_index < MIXER_INPUT_PORT_NUM; port_index++) {
+        struct input_port *in_port = audio_mixer->in_ports[port_index];
+        if (in_port)
+            return true;
+    }
+    return false;
+}
+
 static void *mixer_16b_threadloop(void *data)
 {
     struct amlAudioMixer *audio_mixer = data;
@@ -1342,6 +1379,10 @@ static void *mixer_16b_threadloop(void *data)
             //usleep(5000);
             ALOGV("%s %d data not enough, next turn", __func__, __LINE__);
             notify_mixer_input_avail(audio_mixer);
+            if (mixer_is_continuous_enabled(audio_mixer) && !mixer_inports_exist(audio_mixer)) {
+                ALOGV("%s %d data not enough, do continue output", __func__, __LINE__);
+                mixer_do_continous_output(audio_mixer);
+            }
             clock_gettime(CLOCK_MONOTONIC, &audio_mixer->tval_last_write);
             continue;
         }

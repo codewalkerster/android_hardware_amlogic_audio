@@ -351,6 +351,7 @@ static ssize_t out_write_hwsync_lpcm(struct audio_stream_out *stream, const void
         out->port_index = get_input_port_index(&out->audioCfg, out->flags);
         ALOGI("%s(), hwsync port index = %d", __func__, out->port_index);
         out->standby = false;
+        mixer_set_continuous_output(sm->mixerData, false);
     }
     if (out->pause_status) {
         ALOGW("%s(), write in pause status!!", __func__);
@@ -709,7 +710,10 @@ static int initSubMixingInputPcm(
         out->stream.get_presentation_position = out_get_presentation_position_port;
     }
     list_init(&out->mdata_list);
-
+    if (hwsync_lpcm) {
+        ALOGI("%s(), lpcm case", __func__);
+        mixer_set_continuous_output(sm->mixerData, true);
+    }
     return 0;
 }
 
@@ -718,11 +722,21 @@ static int deleteSubMixingInputPcm(struct aml_stream_out *out)
     struct aml_audio_device *adev = out->dev;
     struct subMixing *sm = adev->sm;
     struct amlAudioMixer *audio_mixer = sm->mixerData;
+    struct audio_config *config = &out->audioCfg;
+    bool hwsync_lpcm = false;
+    int flags = out->flags;
+    int channel_count = popcount(config->channel_mask);
+
+    hwsync_lpcm = (flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC && config->sample_rate <= 48000 &&
+               audio_is_linear_pcm(config->format) && channel_count <= 2);
 
     ALOGI("%s(), cnt_stream_using_mixer %d",
             __func__, sm->cnt_stream_using_mixer);
     //delete_mixer_input_port(audio_mixer, out->port_index);
-
+    if (hwsync_lpcm) {
+        ALOGI("%s(), lpcm case", __func__);
+        mixer_set_continuous_output(sm->mixerData, false);
+    }
     return 0;
 }
 

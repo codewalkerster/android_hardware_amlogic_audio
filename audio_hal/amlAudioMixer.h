@@ -99,6 +99,9 @@ int mixer_set_padding_size(
         enum MIXER_INPUT_PORT port_index,
         int padding_bytes);
 
+int mixer_set_continuous_output(struct amlAudioMixer *audio_mixer,
+		bool continuous_output);
+
 __END_DECLS
 
 #endif
