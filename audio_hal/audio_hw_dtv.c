@@ -478,9 +478,13 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
 
 static uint32_t out_get_latency(const struct audio_stream_out *stream)
 {
+    audio_format_t afmt = get_output_format((struct audio_stream_out *)stream);
     const struct aml_stream_out *out = (const struct aml_stream_out *)stream;
     snd_pcm_sframes_t frames = out_get_latency_frames(stream);
-    return (frames * 1000) / out->config.rate;
+    if (afmt == AUDIO_FORMAT_E_AC3)
+        return (frames * 1000) / 4 / out->config.rate;
+    else
+        return (frames * 1000) / out->config.rate;
 }
 
 static int dtv_patch_pcm_wirte(unsigned char *pcm_data, int size,
