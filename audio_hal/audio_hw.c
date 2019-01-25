@@ -218,7 +218,7 @@ ssize_t out_write_new(struct audio_stream_out *stream,
                       const void *buffer,
                       size_t bytes);
 static aec_timestamp get_timestamp(void);
-
+static void config_output(struct audio_stream_out *stream);
 static inline bool need_hw_mix(usecase_mask_t masks)
 {
     return (masks > 1);
@@ -646,7 +646,15 @@ static int start_output_stream_direct (struct aml_stream_out *out)
     unsigned int card = CARD_AMLOGIC_BOARD;
     unsigned int port = PORT_SPDIF;
     int ret = 0;
-
+    if (eDolbyDcvLib == adev->dolby_lib_type &&
+        DD == adev->hdmi_format &&
+        out->hal_format == AUDIO_FORMAT_E_AC3) {
+        out->need_convert = true;
+        out->hal_internal_format = AUDIO_FORMAT_AC3;
+        if (out->hal_rate == 192000)
+            out->hal_rate = out->hal_rate / 4;
+        ALOGI("spdif out DD+ need covert to DD ");
+    }
     int codec_type = get_codec_type(out->hal_internal_format);
     if (codec_type == AUDIO_FORMAT_PCM && out->config.rate > 48000 && (out->flags & AUDIO_OUTPUT_FLAG_DIRECT)) {
         ALOGI("start output stream for high sample rate pcm for direct mode\n");
@@ -746,9 +754,21 @@ static int start_output_stream_direct (struct aml_stream_out *out)
     }
 
     if (codec_type_is_raw_data(codec_type) && !(out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO)) {
-        spdifenc_init(out->pcm, out->hal_internal_format);
-        spdifenc_set_mute(out->offload_mute);
-        out->spdif_enc_init_frame_write_sum = out->frame_write_sum;
+        if (out->need_convert) {
+            ALOGI("need_convert init %d ",__LINE__);
+            struct dolby_ddp_dec *ddp_dec = & (adev->ddp);
+            ddp_dec->digital_raw = 1;
+            if (ddp_dec->status != 1) {
+                int status = dcv_decoder_init_patch(ddp_dec);
+                ddp_dec->nIsEc3 = 1;
+                ALOGI("dcv_decoder_init_patch return :%d,is 61937 %d", status, ddp_dec->is_iec61937);
+           }
+
+        } else {
+            spdifenc_init(out->pcm, out->hal_internal_format);
+            spdifenc_set_mute(out->offload_mute);
+            out->spdif_enc_init_frame_write_sum = out->frame_write_sum;
+        }
     }
     out->codec_type = codec_type;
 
@@ -1119,6 +1139,11 @@ static int out_standby_direct (struct audio_stream *stream)
     }
     out->pause_status = false;
     set_codec_type (TYPE_PCM);
+
+    if (out->need_convert) {
+        ALOGI("need_convert release %d ",__LINE__);
+        dcv_decoder_release_patch(&adev->ddp);
+    }
     /* clear the hdmitx channel config to default */
     if (out->multich == 6) {
         sysfs_set_sysfs_str ("/sys/class/amhdmitx/amhdmitx0/aud_output_chs", "0:0");
@@ -2663,10 +2688,20 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
         2) compressed audio data  with IEC61937 wrapped (typically from amlogic amadec source)
         we use the AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO to distiguwish the two cases.
         */
-        if ((codec_type == TYPE_AC3 || codec_type == TYPE_EAC3)  && (out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO)) {
-            spdifenc_init(out->pcm, out->hal_internal_format);
-            spdifenc_set_mute(out->offload_mute);
-            out->spdif_enc_init_frame_write_sum = out->frame_write_sum;
+        if ((codec_type == TYPE_AC3 || codec_type == TYPE_EAC3)  && !(out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO)) {
+             if (out->need_convert) {
+                struct dolby_ddp_dec *ddp_dec = &(adev->ddp);
+                ddp_dec->digital_raw = 1;
+                if (ddp_dec->status != 1) {
+                    int status = dcv_decoder_init_patch(ddp_dec);
+                    ddp_dec->nIsEc3 = 1;
+                    ALOGI("dcv_decoder_init_patch return :%d,is 61937 %d", status, ddp_dec->is_iec61937);
+               }
+            } else {
+                spdifenc_init(out->pcm, out->hal_internal_format);
+                spdifenc_set_mute(out->offload_mute);
+                out->spdif_enc_init_frame_write_sum = out->frame_write_sum;
+            }
         }
         // todo: check timestamp header PTS discontinue for new sync point after seek
         if ((codec_type == TYPE_AC3 || codec_type == TYPE_EAC3)) {
@@ -2812,10 +2847,33 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
             ALOGD("could not open file:/data/tmp/hal_audio_out.pcm");
         }
     }
-    if (codec_type_is_raw_data (out->codec_type) && ! (out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO) ) {
+    if (codec_type_is_raw_data (out->codec_type) && !(out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO) ) {
         //here to do IEC61937 pack
         //ALOGV ("IEC61937 write size %zu,hw_sync_mode %d,flag %x\n", out_frames * frame_size, out->hw_sync_mode, out->flags);
-        if (out->codec_type  > 0) {
+        if (out->need_convert) {
+            int ret = -1;
+            struct dolby_ddp_dec *ddp_dec = & (adev->ddp);
+            int process_bytes = in_frames * frame_size;
+            do {
+                if (ddp_dec->status == 1) {
+                   ret = dcv_decoder_process_patch(ddp_dec, (unsigned char *)buf, process_bytes);
+                   if (ret != 0)
+                     break;
+                   process_bytes = 0;
+                } else {
+                    config_output(stream);
+                }
+                if (ddp_dec->outlen_raw > 0) {
+                    ret = pcm_write (out->pcm, ddp_dec->outbuf_raw, ddp_dec->outlen_raw);
+                }
+                if (ret == 0) {
+                   out->frame_write_sum += ddp_dec->outlen_raw / 4 ;
+                } else {
+                    ALOGI ("pcm_get_error(out->pcm):%s",pcm_get_error (out->pcm) );
+                }
+            } while(ddp_dec->remain_size >= 768);
+
+         } else if (out->codec_type  > 0) {
             // compressed audio DD/DD+
             bytes = spdifenc_write ( (void *) buf, out_frames * frame_size);
             //need return actual size of this burst write
@@ -4116,6 +4174,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->standby = true;
     out->frame_write_sum = 0;
     out->hw_sync_mode = false;
+    out->need_convert = false;
     //aml_audio_hwsync_init(out->hwsync,out);
     /* FIXME: when we support multiple output devices, we will want to
      * do the following:
