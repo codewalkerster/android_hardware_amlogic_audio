@@ -71,11 +71,11 @@ static struct aml_mixer_list gAmlMixerList[] = {
     /* SPDIF IN audio SRC select */
     {AML_MIXER_ID_SPDIFIN_SRC,          "Audio spdifin source"},
     {AML_MIXER_ID_HDMIIN_AUDIO_PACKET,  "HDMIIN Audio Packet"},
-    {AML_MIXER_ID_CHANGE_SPIDIF_PLL,           "SPDIF CLK Fine Setting"},
-    {AML_MIXER_ID_CHANGE_I2S_PLL,           "TDM MCLK Fine Setting"},
+    {AML_MIXER_ID_CHANGE_SPIDIF_PLL,    "SPDIF CLK Fine Setting"},
+    {AML_MIXER_ID_CHANGE_I2S_PLL,       "TDM MCLK Fine Setting"},
     {AML_MIXER_ID_AED_EQ_ENABLE,        "AED EQ enable"},
     {AML_MIXER_ID_AED_MULTI_DRC_ENABLE, "AED Multi-band DRC enable"},
-    {AML_MIXER_ID_AED_FULL_DRC_ENABLE,  "AED Full-band DRC enable"}
+    {AML_MIXER_ID_AED_FULL_DRC_ENABLE,  "AED Full-band DRC enable"},
 };
 
 static char *get_mixer_name_by_id(int mixer_id)
