@@ -65,7 +65,7 @@ extern "C"
 #endif
 /* number of frames per period */
 #define DEFAULT_WFD_PERIOD_SIZE  256
-#define DEFAULT_CAPTURE_PERIOD_SIZE  1024
+/* #define DEFAULT_CAPTURE_PERIOD_SIZE  1024 */
 #define MIXER_XML_PATH "/system/etc/mixer_paths.xml"
 
 /* number of frames per period */

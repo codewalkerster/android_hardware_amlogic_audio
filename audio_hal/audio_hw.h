@@ -50,12 +50,8 @@
  * change DEFAULT_PERIOD_SIZE from 1024 to 512 for passing CTS
  * test case test4_1MeasurePeakRms(android.media.cts.VisualizerTest)
  */
-#if defined(IS_ATOM_PROJECT)
 #define DEFAULT_PLAYBACK_PERIOD_SIZE 512//1024
-#else
-#define DEFAULT_PLAYBACK_PERIOD_SIZE 512
-#endif
-#define DEFAULT_CAPTURE_PERIOD_SIZE  1024
+#define DEFAULT_CAPTURE_PERIOD_SIZE  512//1024
 #define DEFAULT_PLAYBACK_PERIOD_CNT 6
 
 //#define DEFAULT_PERIOD_SIZE 512
@@ -597,7 +593,8 @@ struct aml_stream_in {
     struct aml_audio_device *dev;
     void *input_tmp_buffer;
     size_t input_tmp_buffer_size;
-
+    void *tmp_buffer_8ch;
+    size_t tmp_buffer_8ch_size;
 };
 typedef  int (*do_standby_func)(struct aml_stream_out *out);
 typedef  int (*do_startup_func)(struct aml_stream_out *out);

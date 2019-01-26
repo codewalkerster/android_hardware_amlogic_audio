@@ -57,6 +57,7 @@
 #define ALSAPORT_SPDIFB2HDMI      "alsaPORT-spdifb2hdmi"
 #define ALSAPORT_I2S2HDMI         "alsaPORT-i2s2hdmi"    /* virtual link */
 #define ALSAPORT_TV               "alsaPORT-tv"          /* Now for TV input */
+#define ALSAPORT_LPBK             "alsaPORT-loopback"
 
 struct AudioDeviceDescriptor {
 	char name[NAME_LEN];
@@ -85,6 +86,7 @@ struct alsa_info {
 	struct AudioDeviceDescriptor *spdifb2hdmi_descrpt;
 	struct AudioDeviceDescriptor *i2s2hdmi_descrpt;
 	struct AudioDeviceDescriptor *tvin_descrpt;
+	struct AudioDeviceDescriptor *lpbk_descrpt;
 };
 
 static struct alsa_info *p_aml_alsa_info;
@@ -225,8 +227,12 @@ void alsa_device_parser_pcm_string(struct alsa_info *p_info, char *InputBuffer)
 					p_info->i2s2hdmi_descrpt = mAudioDeviceDescriptor;
 				else if (!strcmp(PortName, ALSAPORT_TV))
 					p_info->tvin_descrpt = mAudioDeviceDescriptor;
+				else if (!strcmp(PortName, ALSAPORT_LPBK))
+					p_info->lpbk_descrpt = mAudioDeviceDescriptor;
+				else
+					free(mAudioDeviceDescriptor);
 			} else
-				ALOGD("\t Unknown alsaPORT, StreamName:%s\n", mStreamName);
+				ALOGD("\tstream no alsaPORT prefix name, StreamName:%s\n", mStreamName);
 		}
 		ALOGD("%s mCardindex:%d, mPcmindex:%d, PortName:%s\n", __FUNCTION__, mAudioDeviceDescriptor->mCardindex, mAudioDeviceDescriptor->mPcmIndex, PortName);
 		Rch = strtok(NULL, ": ");
@@ -316,6 +322,9 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 		break;
 	case PORT_I2S2:
 		pADD = p_info->i2s2_descrpt;
+		break;
+	case PORT_LOOPBACK:
+		pADD = p_info->lpbk_descrpt;
 		break;
 	default:
 		pADD = p_info->i2s_descrpt;

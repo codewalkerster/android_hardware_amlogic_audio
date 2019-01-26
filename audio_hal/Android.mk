@@ -161,6 +161,18 @@ ifeq ($(strip $(TARGET_BOOTLOADER_BOARD_NAME)), atom)
         libgoogle_aec libharman_api
 endif
 
+#For ATV Far Field AEC
+ifeq ($(BOARD_ENABLE_FAR_FIELD_AEC), true)
+    $(info "audio: ATV far field enabled, compile and link aec lib")
+	LOCAL_CFLAGS += -DENABLE_AEC_FUNC
+    LOCAL_SRC_FILES += \
+        audio_aec_process.cpp
+    LOCAL_C_INCLUDES += \
+         $(TOPDIR)vendor/google/google_aec
+    LOCAL_SHARED_LIBRARIES += \
+         libgoogle_aec
+endif
+
     include $(BUILD_SHARED_LIBRARY)
 
 endif # BOARD_ALSA_AUDIO
