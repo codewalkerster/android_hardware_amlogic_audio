@@ -114,7 +114,7 @@ int aml_alsa_output_open(struct audio_stream_out *stream)
 
     // close former and open with configs
     // TODO: check pcm configs and if no changes, do nothing
-    if (pcm && device != DIGITAL_DEVICE) {
+    if (pcm && device != DIGITAL_DEVICE && device != I2S_DEVICE) {
         ALOGI("pcm device already opened,re-use pcm handle %p", pcm);
     } else {
         /*
@@ -122,6 +122,8 @@ int aml_alsa_output_open(struct audio_stream_out *stream)
         from dd->dd+ or dd+ --> dd,we need reopen the device.
         */
         if (pcm) {
+            if (device == I2S_DEVICE)
+                ALOGI("pcm device already opened,close the handle %p to reopen", pcm);
             pcm_close(pcm);
             adev->pcm_handle[device] = NULL;
             aml_out->pcm = NULL;
