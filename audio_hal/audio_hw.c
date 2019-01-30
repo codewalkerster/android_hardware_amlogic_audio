@@ -6540,9 +6540,18 @@ ssize_t hw_write (struct audio_stream_out *stream
 
         if (adev->useSubMix) {
             if (aml_out->usecase == STREAM_PCM_DIRECT && adev->audio_patching) {
-                aml_out->pcm = getSubMixingPCMdev(adev->sm);
-                if (aml_out->pcm == NULL) {
-                    ALOGE("%s() get pcm handle failed", __func__);
+                if (adev->is_STB && (adev->ddp).digital_raw > 0 &&
+                        output_format != AUDIO_FORMAT_PCM_16_BIT && output_format != AUDIO_FORMAT_PCM) {
+                    // TODO: mbox+dvb and bypass case
+                    ret = aml_alsa_output_open(stream);
+                    if (ret) {
+                        ALOGE("%s() open failed", __func__);
+                    }
+                } else {
+                    aml_out->pcm = getSubMixingPCMdev(adev->sm);
+                    if (aml_out->pcm == NULL) {
+                        ALOGE("%s() get pcm handle failed", __func__);
+                    }
                 }
             } else {
                 // TODO: as discussed with lianlian, these code may still need in the future
@@ -6863,29 +6872,64 @@ static void config_output(struct audio_stream_out *stream)
                 break;
             case DD:
                 ddp_dec->digital_raw = 1;
-                aml_out->dual_output_flag = true ;
+                //STB case
+                if (adev->is_STB) {
+                    aml_out->dual_output_flag = 0;
+                } else {
+                    aml_out->dual_output_flag = true ;
+                }
                 adev->dcvlib_bypass_enable = 0;
                 break;
             case AUTO:
-                if (adev->hdmi_descs.ddp_fmt.is_support) {
-                    ddp_dec->digital_raw = 2;
-                    adev->dcvlib_bypass_enable = 1;
-                } else if (adev->hdmi_descs.dd_fmt.is_support) {
-                    if (aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3) {
-                        adev->dcvlib_bypass_enable = 0;
-                        ddp_dec->digital_raw = 1;
-                    } else if (aml_out->hal_internal_format == AUDIO_FORMAT_AC3) {
+                //STB case
+                if (adev->is_STB) {
+                    char *cap = NULL;
+                    cap = (char *) get_hdmi_sink_cap (AUDIO_PARAMETER_STREAM_SUP_FORMATS,0);
+                    if (cap && mystrstr(cap, "AUDIO_FORMAT_E_AC3")) {
+                        ddp_dec->digital_raw = 2;
                         adev->dcvlib_bypass_enable = 1;
-                        ddp_dec->digital_raw = 1;
+                    } else if (cap && mystrstr(cap, "AUDIO_FORMAT_AC3")) {
+                        if (aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3) {
+                            adev->dcvlib_bypass_enable = 0;
+                            ddp_dec->digital_raw = 1;
+                        } else if (aml_out->hal_internal_format == AUDIO_FORMAT_AC3) {
+                            adev->dcvlib_bypass_enable = 1;
+                            ddp_dec->digital_raw = 1;
+                        } else {
+                            adev->dcvlib_bypass_enable = 1;
+                            ddp_dec->digital_raw = 0;
+                        }
                     } else {
-                        adev->dcvlib_bypass_enable = 1;
-                        ddp_dec->digital_raw = 0;
+                        if (aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3 ||
+                            aml_out->hal_internal_format == AUDIO_FORMAT_AC3) {
+                            adev->dcvlib_bypass_enable = 0;
+                           ddp_dec->digital_raw = 1;
+                        }
+                    }
+                    if (cap) {
+                        free(cap);
                     }
                 } else {
-                    if (aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3 ||
-                        aml_out->hal_internal_format == AUDIO_FORMAT_AC3) {
-                        adev->dcvlib_bypass_enable = 0;
-                        ddp_dec->digital_raw = 1;
+                    if (adev->hdmi_descs.ddp_fmt.is_support) {
+                        ddp_dec->digital_raw = 2;
+                        adev->dcvlib_bypass_enable = 1;
+                    } else if (adev->hdmi_descs.dd_fmt.is_support) {
+                        if (aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3) {
+                            adev->dcvlib_bypass_enable = 0;
+                            ddp_dec->digital_raw = 1;
+                        } else if (aml_out->hal_internal_format == AUDIO_FORMAT_AC3) {
+                            adev->dcvlib_bypass_enable = 1;
+                            ddp_dec->digital_raw = 1;
+                        } else {
+                            adev->dcvlib_bypass_enable = 1;
+                            ddp_dec->digital_raw = 0;
+                        }
+                    } else {
+                        if (aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3 ||
+                            aml_out->hal_internal_format == AUDIO_FORMAT_AC3) {
+                            adev->dcvlib_bypass_enable = 0;
+                            ddp_dec->digital_raw = 1;
+                        }
                     }
                 }
                 if (adev->patch_src == SRC_DTV)
@@ -6895,7 +6939,8 @@ static void config_output(struct audio_stream_out *stream)
                 ddp_dec->digital_raw = 0;
                 break;
             }
-            ALOGI("ddp_dec->digital_raw:%d adev->dcvlib_bypass_enable:%d", ddp_dec->digital_raw, adev->dcvlib_bypass_enable);
+            ALOGI("ddp_dec->digital_raw:%d adev->dcvlib_bypass_enable:%d aml_out->dual_output_flag: %d",
+                        ddp_dec->digital_raw, adev->dcvlib_bypass_enable,aml_out->dual_output_flag);
             if (adev->dcvlib_bypass_enable != 1) {
                 if (ddp_dec->status != 1 && (aml_out->hal_internal_format == AUDIO_FORMAT_AC3
                                           || aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3)) {
@@ -6957,7 +7002,12 @@ static void config_output(struct audio_stream_out *stream)
             break;
         case DD:
             dts_dec->digital_raw = 1;
-            aml_out->dual_output_flag = true ;
+            //STB case
+            if (adev->is_STB) {
+                aml_out->dual_output_flag = 0;
+            } else {
+                aml_out->dual_output_flag = true ;
+            }
             adev->dtslib_bypass_enable = 0;
             adev->optical_format = AUDIO_FORMAT_AC3;
             break;
@@ -7527,7 +7577,8 @@ re_write:
                 }
                 //now only TV ARC output is using single output. we are implementing the OTT HDMI output in this case.
                 // TODO  add OUTPUT_HDMI in this case
-                else if (ddp_dec->digital_raw > 0 && adev->active_outport == OUTPORT_HDMI_ARC) {/*single raw output*/
+                // or STB case
+                else if (ddp_dec->digital_raw > 0 && (adev->active_outport == OUTPORT_HDMI_ARC || adev->is_STB)) {/*single raw output*/
                     if (ddp_dec->pcm_out_info.sample_rate > 0)
                         aml_out->config.rate = ddp_dec->pcm_out_info.sample_rate;
                     if (patch)
@@ -9827,6 +9878,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->is_TV = true;
     ALOGI("%s(), TV platform", __func__);
 #else
+    adev->is_STB = property_get_bool("ro.vendor.platform.is.stb", false);
     adev->sink_gain[OUTPORT_SPEAKER] = 1.0;
     adev->sink_gain[OUTPORT_HDMI] = 1.0;
     ALOGI("%s(), OTT platform", __func__);
