@@ -736,7 +736,7 @@ static int start_output_stream_direct (struct aml_stream_out *out)
             for a113 later chip,raw passthr goes to spsdifa or spdifb
             */
             if (format_is_passthrough(out->hal_format)) {
-                port = PORT_SPDIFB2HDMI;
+                port = PORT_SPDIF;
             }
             else
                 port = PORT_I2S;
