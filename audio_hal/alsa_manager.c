@@ -72,14 +72,13 @@ exit:
 
 int aml_alsa_output_open(struct audio_stream_out *stream)
 {
-    ALOGI("\n+%s stream %p", __func__, stream);
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = aml_out->dev;
     struct pcm_config *config = &aml_out->config;
     struct pcm_config config_raw;
     unsigned int device = aml_out->device;
     struct dolby_ms12_desc *ms12 = &(adev->ms12);
-
+    ALOGI("\n+%s stream %p,device %d", __func__, stream,device);
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
         if (adev->ms12.dolby_ms12_enable) {
             config = &(adev->ms12_config);
@@ -150,6 +149,7 @@ int aml_alsa_output_open(struct audio_stream_out *stream)
     adev->pcm_handle[device] = pcm;
     adev->pcm_refs[device]++;
     aml_out->dropped_size = 0;
+    aml_out->device = device;
     ALOGI("-%s, audio out(%p) device(%d) refs(%d) is_normal_pcm %d, handle %p\n\n",
           __func__, aml_out, device, adev->pcm_refs[device], aml_out->is_normal_pcm, pcm);
 
@@ -173,6 +173,7 @@ void aml_alsa_output_close(struct audio_stream_out *stream)
     }  else if (eDolbyDcvLib == adev->dolby_lib_type) {
         if (aml_out->dual_output_flag && adev->ddp.digital_raw == 1) {
             device = I2S_DEVICE;
+            ALOGI("dual output,close i2s device");
         }
     }
 

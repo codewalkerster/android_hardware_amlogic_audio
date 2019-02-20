@@ -5673,9 +5673,10 @@ int do_output_standby_l(struct audio_stream *stream)
     struct aml_audio_device *adev = aml_out->dev;
     struct dolby_ms12_desc *ms12 = &(adev->ms12);
     if (aml_out->usecase >= STREAM_PCM_NORMAL && aml_out->usecase <= STREAM_USECASE_MAX) {
-        ALOGI("%s(%p), stream usecase: %s continuous_audio_mode %d", __func__, aml_out, str_usecases[aml_out->usecase], adev->continuous_audio_mode);
+        ALOGI("%s(%p), stream usecase: %s continuous_audio_mode %d,status %d", __func__,
+            aml_out, str_usecases[aml_out->usecase], adev->continuous_audio_mode,aml_out->status);
     } else {
-        ALOGI("%s(%p), stream usecase %d invalid ", __func__, aml_out, aml_out->usecase);
+        ALOGI("%s(%p), stream usecase %d invalid.status %d", __func__, aml_out, aml_out->usecase,aml_out->status);
     }
 
     /*
