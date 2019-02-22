@@ -800,7 +800,7 @@ static int check_input_parameters(uint32_t sample_rate, audio_format_t format, i
         ALOGE("%s: unsupported (%d) samplerate passed ", __func__, sample_rate);
         return -EINVAL;
     }
-    /*
+
     devices &= ~AUDIO_DEVICE_BIT_IN;
     if ((devices & AUDIO_DEVICE_IN_LINE) ||
         (devices & AUDIO_DEVICE_IN_SPDIF) ||
@@ -815,7 +815,7 @@ static int check_input_parameters(uint32_t sample_rate, audio_format_t format, i
             ALOGD("%s: unspported audio patch input device %x", __FUNCTION__, devices);
             return -EINVAL;
         }
-    }*/
+    }
 
     return 0;
 }
@@ -825,11 +825,11 @@ static size_t get_input_buffer_size(unsigned int period_size, uint32_t sample_ra
     size_t size;
 
     ALOGD("%s(sample_rate=%d, format=%d, channel_count=%d)", __FUNCTION__, sample_rate, format, channel_count);
-    /*
+
     if (check_input_parameters(sample_rate, format, channel_count, AUDIO_DEVICE_NONE) != 0) {
         return 0;
     }
-    */
+
     /* take resampling into account and return the closest majoring
     multiple of 16 frames, as audioflinger expects audio buffers to
     be a multiple of 16 frames */
@@ -5345,6 +5345,9 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
         devices, config->channel_mask, config->sample_rate, config->format);
 
     if (check_input_parameters(config->sample_rate, config->format, channel_count, devices) != 0) {
+        config->sample_rate = 48000;
+        config->format = AUDIO_FORMAT_PCM_16_BIT;
+        config->channel_mask = AUDIO_CHANNEL_IN_STEREO;
         return -EINVAL;
     }
 
@@ -6561,9 +6564,11 @@ ssize_t hw_write (struct audio_stream_out *stream
                 //}
             }
         } else {
-            ret = aml_alsa_output_open(stream);
-            if (ret) {
-                ALOGE("%s() open failed", __func__);
+            if (!adev->tuner2mix_patch) {
+                ret = aml_alsa_output_open(stream);
+                if (ret) {
+                    ALOGE("%s() open failed", __func__);
+                }
             }
         }
 
