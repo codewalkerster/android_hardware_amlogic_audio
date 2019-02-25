@@ -642,6 +642,8 @@ static int start_output_stream_direct (struct aml_stream_out *out)
     unsigned int card = CARD_AMLOGIC_BOARD;
     unsigned int port = PORT_SPDIF;
     int ret = 0;
+
+    adev->debug_flag = aml_audio_get_debug_flag();
     if (eDolbyDcvLib == adev->dolby_lib_type &&
         DD == adev->hdmi_format &&
         out->hal_format == AUDIO_FORMAT_E_AC3) {
@@ -2792,7 +2794,7 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
                         } else {
                             //audio pts smaller than pcr,need skip frame.
                             //we assume one frame duration is 32 ms for DD+(6 blocks X 1536 frames,48K sample rate)
-                            if (out->codec_type == TYPE_EAC3 && outsize > 0) {
+                            if ((out->codec_type == TYPE_EAC3 || out->need_convert) && outsize > 0) {
                                 ALOGI ("audio slow 0x%x,skip frame @pts 0x%"PRIx64",pcr 0x%x,cur apts 0x%x\n",
                                        apts_gap, cur_pts, pcr, apts32);
                                 out->frame_skip_sum  +=   1536;
@@ -2968,7 +2970,7 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
 
 exit:
     total_frame = out->frame_write_sum + out->frame_skip_sum;
-    latency_frames = out_get_latency_frames(stream)/4;
+    latency_frames = out_get_latency_frames(stream);
     latency_frames += HDMI_LATENCY_MS * 48;
     clock_gettime (CLOCK_MONOTONIC, &out->timestamp);
     out->lasttimestamp.tv_sec = out->timestamp.tv_sec;
@@ -2978,7 +2980,9 @@ exit:
     } else {
         out->last_frames_postion = 0;//total_frame;
     }
-    ALOGV("out %p,out->last_frames_postion %"PRId64", latency = %d\n", out, out->last_frames_postion, latency_frames);
+    if (adev->debug_flag)
+        ALOGD("out %p,out->last_frames_postion %"PRId64", latency = %d, skp sum %lld\n",
+            out, out->last_frames_postion, latency_frames, out->frame_skip_sum);
     pthread_mutex_unlock (&out->lock);
     if (ret != 0) {
         usleep (bytes * 1000000 / audio_stream_out_frame_size (stream) /
