@@ -472,9 +472,9 @@ int aml_audio_hwsync_lookup_apts(audio_hwsync_t *p_hwsync, size_t offset, unsign
         ALOGE("%s,apts lookup failed,align %zu,offset %zu", __func__, align, offset);
     } else if (p_hwsync->first_apts_flag) {
         latency_frames = out_get_latency_frames(stream);
-        if (get_output_format(stream) == AUDIO_FORMAT_E_AC3) {
-            latency_frames /= 4;
-        }
+        //if (get_output_format(stream) == AUDIO_FORMAT_E_AC3) {
+        //    latency_frames /= 4;
+        //}
         latency_pts = latency_frames / 48 * 90;
         if (*p_apts > latency_pts) {
             *p_apts -= latency_pts;

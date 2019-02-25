@@ -469,22 +469,34 @@ uint32_t out_get_outport_latency(const struct audio_stream_out *stream)
     return latency_ms;
 }
 
+static bool is_4x_rate_fmt(int codec_type)
+{
+    return (codec_type == TYPE_EAC3) ||
+        (codec_type == TYPE_DTS_HD_MA) ||
+        (codec_type == TYPE_DTS_HD);
+}
+
 uint32_t out_get_latency_frames(const struct audio_stream_out *stream)
 {
     const struct aml_stream_out *out = (const struct aml_stream_out *)stream;
     snd_pcm_sframes_t frames = 0;
     uint32_t whole_latency_frames;
     int ret = 0;
+    int codec_type = get_codec_type(out->hal_internal_format);
+    int mul = 1;
+
+    if (is_4x_rate_fmt(codec_type))
+        mul = 4;
 
     whole_latency_frames = out->config.period_size * out->config.period_count;
     if (!out->pcm || !pcm_is_ready(out->pcm)) {
-        return whole_latency_frames;
+        return whole_latency_frames / mul;
     }
     ret = pcm_ioctl(out->pcm, SNDRV_PCM_IOCTL_DELAY, &frames);
     if (ret < 0) {
-        return whole_latency_frames;
+        return whole_latency_frames / mul;
     }
-    return frames;
+    return frames / mul;
 }
 
 int aml_audio_get_spdif_tuning_latency(void)
