@@ -36,11 +36,13 @@
 
 void aml_hwsync_set_tsync_pause(void)
 {
+    ALOGI("%s(), send pause event", __func__);
     sysfs_set_sysfs_str(TSYNC_EVENT, "AUDIO_PAUSE");
 }
 
 void aml_hwsync_set_tsync_resume(void)
 {
+    ALOGI("%s(), send resuem event", __func__);
     sysfs_set_sysfs_str(TSYNC_EVENT, "AUDIO_RESUME");
 }
 

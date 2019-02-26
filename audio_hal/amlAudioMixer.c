@@ -557,7 +557,9 @@ static int mixer_inports_read(struct amlAudioMixer *audio_mixer)
                     fade_out = 1;
                 } else if (state == RESUMING) {
                     fade_in = 1;
+                    ALOGI("%s(), tsync resume", __func__);
                     aml_hwsync_set_tsync_resume();
+                    set_inport_state(in_port, ACTIVE);
                 } else if (state == STOPPED || state == PAUSED || state == FLUSHED) {
                     ALOGV("%s(), stopped, paused or flushed", __func__);
                     //in_port->data_valid = 1;
