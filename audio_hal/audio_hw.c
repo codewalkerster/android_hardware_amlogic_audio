@@ -7563,8 +7563,9 @@ re_write:
                 } else {
                     config_output(stream);
                 }
-
-                if (ret < 0) {
+                //now auge kernel do not support write i2s first and the write spidf, so we need wait raw data,
+                //to do wait kernel bug resolved.
+                if (ret < 0 || (alsa_device_is_auge() && ddp_dec->outlen_raw == 0 && aml_out->dual_output_flag)) {
                     aml_out->frame_write_sum = aml_out->input_bytes_size  / audio_stream_out_frame_size(stream);
                     aml_out->last_frames_postion = aml_out->frame_write_sum;
                     return bytes;
