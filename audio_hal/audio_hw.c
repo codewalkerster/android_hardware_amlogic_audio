@@ -8027,6 +8027,11 @@ void adev_close_output_stream_new(struct audio_hw_device *dev,
             deleteSubMixingInput(aml_out);
         }
     }
+    if (aml_out->hw_sync_mode) {
+        ALOGI("%s set AUDIO_STOP when close stream\n",__func__);
+        sysfs_set_sysfs_str (TSYNC_EVENT, "AUDIO_STOP");
+    }
+
     adev_close_output_stream(dev, stream);
     adev->dual_decoder_support = false;
     ALOGD("%s: exit", __func__);
