@@ -97,7 +97,8 @@ public:
         : SPDIFEncoder(format),
           pcm_handle(mypcm), mTotalBytes(0),
           mMute(false),// eac3_frame(0),
-          mFormat(format)
+          mFormat(format),
+          mFirstFrameMuted(false)
     {};
     virtual ssize_t writeOutput(const void* buffer, size_t bytes)
     {
@@ -119,6 +120,10 @@ public:
         mTotalBytes += bytes;
         if (mMute) {
             muteFrame(buf, bytes);
+        }
+        if (mFirstFrameMuted == false) {
+            memset(buf, 0, bytes);
+            mFirstFrameMuted = true;
         }
         ret = pcm_write(pcm_handle, buffer, bytes);
         if (ret)
@@ -158,6 +163,7 @@ private:
     bool mMute;
 //    uint64_t eac3_frame;
     audio_format_t mFormat;
+    bool mFirstFrameMuted;
 };
 static MySPDIFEncoder *myencoder = NULL;
 extern "C" int spdifenc_init(struct pcm *mypcm, audio_format_t format)
