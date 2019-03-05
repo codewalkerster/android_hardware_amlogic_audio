@@ -380,7 +380,7 @@ void process_ac3_sync(struct aml_audio_patch *patch, unsigned long pts)
         } else {
             pts_diff = cur_out_pts - pcrpts;
         }
-
+        //ALOGI("process_ac3_sync, diff:%d,pcrpts %d,curpts %d", (int)(pcrpts - cur_out_pts) / 90,(int)pcrpts/90,(int)cur_out_pts/90);
         if (pts_diff < SYSTIME_CORRECTION_THRESHOLD) {
             // now the av is syncd ,so do nothing;
         } else if (pts_diff > SYSTIME_CORRECTION_THRESHOLD &&
@@ -407,13 +407,13 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
     int bytewidth = 2;
     int sysmbol = 48;
     char tempbuf[128];
-    unsigned int pcrpts;
+    unsigned int pcrpts, apts;
     unsigned int calc_len = 0;
-    unsigned long pts = 0;
+    unsigned long pts = 0, lookpts;
     unsigned long cache_pts = 0;
     unsigned long cur_out_pts = 0;
 
-    pts = dtv_patch_get_pts();
+    pts = lookpts = dtv_patch_get_pts();
     if (pts == patch->last_valid_pts) {
         ALOGI("dtv_patch_get_pts pts  -> %lx", pts);
     }
@@ -436,8 +436,16 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
         if (pts != (unsigned long) - 1) {
             calc_len = (unsigned int)rbuf_level;
             cache_pts = (calc_len * 90) / (sysmbol * channel_count * bytewidth);
-            cur_out_pts = pts - cache_pts;
-            cur_out_pts = cur_out_pts - pcm_lancty * 90;
+            if (pts > cache_pts) {
+                cur_out_pts = pts - cache_pts;
+            } else {
+                return;
+            }
+            if (cur_out_pts > pcm_lancty * 90) {
+                cur_out_pts = cur_out_pts - pcm_lancty * 90;
+            } else {
+                return;
+            }
             patch->last_valid_pts = cur_out_pts;
             patch->dtv_pcm_readed = 0;
         } else {
@@ -445,6 +453,7 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
             calc_len = patch->dtv_pcm_readed;
             cache_pts = (calc_len * 90) / (sysmbol * channel_count * bytewidth);
             cur_out_pts = pts + cache_pts;
+            return;
         }
 
         get_sysfs_uint(TSYNC_PCRSCR, &pcrpts);
@@ -454,6 +463,7 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
         } else {
             pts_diff = cur_out_pts - pcrpts;
         }
+        // ALOGI("process_pts_sync, diff:%d,pcrpts %d,curpts %d", (int)(pcrpts - cur_out_pts) / 90, (int)pcrpts / 90, (int)cur_out_pts / 90);
 
         if (pts_diff < SYSTIME_CORRECTION_THRESHOLD) {
             // now the av is syncd ,so do nothing;
@@ -463,13 +473,17 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
             ALOGI("reset the apts to %lx pcrpts %x pts_diff %d \n", cur_out_pts,
                   pcrpts, pts_diff);
             sysfs_set_sysfs_str(TSYNC_APTS, tempbuf);
-        } else {
-            sprintf(tempbuf, "AUDIO_TSTAMP_DISCONTINUITY:0x%lx",
-                    (unsigned long)cur_out_pts);
-            ALOGI("AUDIO_TSTAMP_DISCONTINUITY the apts %lx pcrpts %x pts_diff %d \n",
-                  cur_out_pts, pcrpts, pts_diff);
-            if (sysfs_set_sysfs_str(TSYNC_EVENT, tempbuf) == -1) {
-                ALOGI("unable to open file %s,err: %s", TSYNC_EVENT, strerror(errno));
+        } //else
+        {
+            get_sysfs_uint(TSYNC_APTS, &apts);
+            if (lookpts != (unsigned long) - 1 && abs((int)(cur_out_pts - pcrpts)) > AUDIO_PTS_DISCONTINUE_THRESHOLD) {
+                ALOGI("AUDIO_TSTAMP_DISCONTINUITY,not set sync event, the apts %x, apts %lx pcrpts %x pts_diff %d \n",
+                      apts, cur_out_pts, pcrpts, pts_diff);
+                sprintf(tempbuf, "AUDIO_TSTAMP_DISCONTINUITY:0x%lx",
+                       (unsigned long)cur_out_pts);
+                if (sysfs_set_sysfs_str(TSYNC_EVENT, tempbuf) == -1) {
+                    ALOGI("unable to open file %s,err: %s", TSYNC_EVENT, strerror(errno));
+                }
             }
         }
 #endif
@@ -892,7 +906,48 @@ void *audio_dtv_patch_output_threadloop(void *data)
                 if (avail > (int)patch->out_buf_size) {
                     avail = (int)patch->out_buf_size;
                 }
+                if (!patch->first_apts_lookup_over) {
+                    unsigned int first_checkinapts = 0xffffffff;
+                    unsigned int demux_pcr = 0xffffffff;
+                    int diff = 0;
+                    char buff[32];
+                    int ret = 0;
+                    ret = aml_sysfs_get_str(TSYNC_FIRSTCHECKIN_APTS, buff, sizeof(buff));
+                    if (ret > 0) {
+                        ret = sscanf(buff, "0x%x\n", &first_checkinapts);
+                    }
 
+                    ret = aml_sysfs_get_str(TSYNC_DEMUX_PCR, buff, sizeof(buff));
+                    if (ret > 0) {
+                        ret = sscanf(buff, "0x%x\n", &demux_pcr);
+                    }
+                    ALOGI("demux_pcr %d first_checkinapts %d\n", (int)demux_pcr / 90, (int)first_checkinapts / 90);
+
+                    if (demux_pcr > 300 * 90) {
+                        demux_pcr = demux_pcr - 300 * 90;
+                    } else {
+                        demux_pcr = 0;
+                    }
+
+                    if ((first_checkinapts != 0xffffffff) || (demux_pcr != 0xffffffff)) {
+                        if (first_checkinapts > demux_pcr) {
+                            unsigned diff = first_checkinapts - demux_pcr;
+                            if (diff  < AUDIO_PTS_DISCONTINUE_THRESHOLD) {
+                                pthread_mutex_unlock(&(patch->dtv_output_mutex));
+                                ALOGI("hold the aduio for cache data\n");
+                                usleep(10000);
+                                continue;
+                            }
+                        } else if (first_checkinapts < demux_pcr) {
+                            unsigned diff = demux_pcr - first_checkinapts;
+                            //calc the drop size with pts,48khz 2ch,16bbit , (pts/90000)*48000*2*2;
+                            unsigned drop_size = diff * 48 * 4 / 90;
+                            //aml_dev->dtv_dropsize = drop_size;
+                            ALOGE("[%d]now must drop %d pcm data now\n", __LINE__, drop_size);
+                        }
+                    }
+                    patch->first_apts_lookup_over = 1;
+                }
                 ret = ring_buffer_read(ringbuffer, (unsigned char *)patch->out_buf,
                                        avail);
                 if (ret == 0) {
