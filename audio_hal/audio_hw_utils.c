@@ -412,21 +412,30 @@ int aml_audio_get_arc_latency_offset(int aformat)
     int ret = -1;
     int latency_ms = 0;
     char *prop_name = NULL;
-    if (aformat == AUDIO_FORMAT_AC3) {
-        prop_name = "media.audio.hal.arc_latency.dd";
-        latency_ms = -30;
-    } else if (aformat == AUDIO_FORMAT_E_AC3) {
-        prop_name = "media.audio.hal.arc_latency.ddp";
-        latency_ms = -40;
-    } else {
-        prop_name = "media.audio.hal.arc_latency.pcm";
-        latency_ms = -30;
-    }
+	(void)aformat;
+    prop_name = "media.audio.hal.arc_latency.ddp";
+    latency_ms = -40;
     ret = property_get(prop_name, buf, NULL);
     if (ret > 0) {
         latency_ms = atoi(buf);
     }
     return latency_ms;
+}
+
+int aml_audio_get_hwsync_latency_offset(void)
+{
+	char buf[PROPERTY_VALUE_MAX];
+	int ret = -1;
+	int latency_ms = 0;
+	char *prop_name = NULL;
+
+	prop_name = "media.audio.hal.hwsync_latency.ddp";
+	latency_ms = 30;
+	ret = property_get(prop_name, buf, NULL);
+	if (ret > 0) {
+		latency_ms = atoi(buf);
+	}
+	return latency_ms;
 }
 
 int aml_audio_get_ddp_frame_size()
