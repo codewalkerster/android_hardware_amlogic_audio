@@ -414,7 +414,7 @@ int aml_audio_get_arc_latency_offset(int aformat)
     char *prop_name = NULL;
 	(void)aformat;
     prop_name = "media.audio.hal.arc_latency.ddp";
-    latency_ms = -40;
+    latency_ms = 0;
     ret = property_get(prop_name, buf, NULL);
     if (ret > 0) {
         latency_ms = atoi(buf);
@@ -430,7 +430,7 @@ int aml_audio_get_hwsync_latency_offset(void)
 	char *prop_name = NULL;
 
 	prop_name = "media.audio.hal.hwsync_latency.ddp";
-	latency_ms = 30;
+	latency_ms = 0;
 	ret = property_get(prop_name, buf, NULL);
 	if (ret > 0) {
 		latency_ms = atoi(buf);
