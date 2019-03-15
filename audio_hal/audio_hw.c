@@ -904,10 +904,10 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
             size = EAC3_PERIOD_SIZE;//one iec61937 packet size
         } else {
             /*frame align*/
-            if (adev->continuous_audio_mode) {
+            if (1 /* adev->continuous_audio_mode */) {
                 /*Tunnel sync HEADER is 16 bytes*/
                 if (out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC) {
-                    size = out->ddp_frame_size + 16;
+                    size = out->ddp_frame_size + 20;
                 } else {
                     size = out->ddp_frame_size * 4;
                 }
@@ -948,7 +948,8 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
             // bug_id - 158018, modify size value from PERIOD_SIZE to (PERIOD_SIZE * PLAYBACK_PERIOD_COUNT)
             size = DEFAULT_PLAYBACK_PERIOD_SIZE*2/* * PLAYBACK_PERIOD_COUNT*/;
     }
-    size = ( (size + 15) / 16) * 16;
+    // remove alignment to have an accurate size
+    // size = ( (size + 15) / 16) * 16;
     return size * audio_stream_out_frame_size ( (struct audio_stream_out *) stream);
 }
 
