@@ -2649,12 +2649,16 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
     uint32_t latency_frames = 0;
     uint64_t total_frame = 0;
     int return_bytes = bytes;
+    size_t total_bytes = bytes;
+    size_t bytes_cost = 0;
+    char *read_buf = (char *)buffer;
     audio_hwsync_t *hw_sync = out->hwsync;
     /* acquiring hw device mutex systematically is useful if a low priority thread is waiting
     * on the output stream mutex - e.g. executing select_mode() while holding the hw device
     * mutex
     */
-    ALOGV ("%s(): out %p, bytes %zu, hwsync:%d, last frame_write_sum %"PRIu64,
+    if (adev->debug_flag)
+        ALOGD("%s(): out %p, bytes %zu, hwsync:%d, last frame_write_sum %"PRIu64,
            __func__, out, bytes,
            out->hw_sync_mode, out->frame_write_sum);
 #if 0
@@ -2727,17 +2731,20 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
     }
     void *write_buf = NULL;
     size_t  hwsync_cost_bytes = 0;
+rewrite:
     if (out->hw_sync_mode == 1) {
         uint64_t  cur_pts = 0xffffffff;
         int outsize = 0;
         char tempbuf[128];
-        ALOGV ("before aml_audio_hwsync_find_frame bytes %zu\n", bytes);
-        hwsync_cost_bytes = aml_audio_hwsync_find_frame(out->hwsync, buffer, bytes, &cur_pts, &outsize);
+        if (adev->debug_flag)
+            ALOGD("before aml_audio_hwsync_find_frame bytes %zu\n", total_bytes - bytes_cost);
+        hwsync_cost_bytes = aml_audio_hwsync_find_frame(out->hwsync, (char *)buffer + bytes_cost, total_bytes - bytes_cost, &cur_pts, &outsize);
         if (cur_pts > 0xffffffff) {
             ALOGE ("APTS exeed the max 32bit value");
         }
-        ALOGV ("after aml_audio_hwsync_find_frame bytes remain %zu,cost %zu,outsize %d,pts %"PRId64"ms\n",
-               bytes - hwsync_cost_bytes, hwsync_cost_bytes, outsize, cur_pts / 90);
+        if (adev->debug_flag)
+            ALOGI ("after aml_audio_hwsync_find_frame bytes remain %zu,cost %zu,outsize %d,pts %"PRId64"ms\n",
+               total_bytes - bytes_cost - hwsync_cost_bytes, hwsync_cost_bytes, outsize, cur_pts / 90);
         //TODO,skip 3 frames after flush, to tmp fix seek pts discontinue issue.need dig more
         // to find out why seek ppint pts frame is remained after flush.WTF.
         if (out->skip_frame > 0) {
@@ -3004,8 +3011,18 @@ exit:
         usleep (bytes * 1000000 / audio_stream_out_frame_size (stream) /
                 out_get_sample_rate (&stream->common) );
     }
-    ALOGV("\n");
-    return return_bytes;
+    /* 
+    if the data is not  consumed totally,
+    we need re-send data again
+    */
+    if (return_bytes > 0 && total_bytes > (return_bytes + bytes_cost)) {
+        bytes_cost += return_bytes;
+        goto rewrite;
+    }
+    else if (return_bytes < 0)
+        return return_bytes;
+    else 
+        return total_bytes;
 }
 
 static int out_get_render_position (const struct audio_stream_out *stream,
