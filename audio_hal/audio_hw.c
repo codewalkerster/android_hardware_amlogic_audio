@@ -2672,7 +2672,7 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
     char prop[PROPERTY_VALUE_MAX];
     int codec_type = out->codec_type;
     int samesource_flag = 0;
-    uint32_t latency_frames = 0;
+    int32_t latency_frames = 0;
     uint64_t total_frame = 0;
     int return_bytes = bytes;
     size_t total_bytes = bytes;
@@ -3013,23 +3013,24 @@ rewrite:
 
 exit:
     total_frame = out->frame_write_sum + out->frame_skip_sum;
+    //ALSA hw latency fames
     latency_frames = out_get_latency_frames(stream);
     //latency_frames += HDMI_LATENCY_MS * 48;
-	int tuning_latency = aml_audio_get_arc_latency_offset(adev->sink_format);
-	if ((latency_frames + tuning_latency * 48) < 0) {
-		latency_frames = 0;
-	} else {
-		latency_frames += tuning_latency * 48;
-	}
+    //mantual tunning latency frames
+    int tuning_latency_frame = aml_audio_get_arc_latency_offset(adev->sink_format)*48;
+    int total_latency_frame = 0;
+    total_latency_frame = tuning_latency_frame + latency_frames;
     clock_gettime (CLOCK_MONOTONIC, &out->timestamp);
-    if (total_frame >= latency_frames) {
-        out->last_frames_postion = total_frame - latency_frames;
+    out->lasttimestamp.tv_sec = out->timestamp.tv_sec;
+    out->lasttimestamp.tv_nsec = out->timestamp.tv_nsec;
+    if (total_latency_frame > 0 && total_frame < (uint64_t)total_latency_frame) {
+        out->last_frames_postion = 0;
     } else {
-        out->last_frames_postion = 0;//total_frame;
+        out->last_frames_postion = total_frame - total_latency_frame;//total_frame;
     }
     if (adev->debug_flag)
-        ALOGD("out %p,out->last_frames_postion %"PRId64", latency = %d, skp sum %lld , tune frames %d\n",
-            out, out->last_frames_postion, latency_frames, out->frame_skip_sum, tuning_latency);
+        ALOGD("out %p,out->last_frames_postion %"PRId64", total latency frame = %d, skp sum %lld , tune frames %d,alsa frame %d\n",
+            out, out->last_frames_postion, total_latency_frame, out->frame_skip_sum,tuning_latency_frame,latency_frames);
     pthread_mutex_unlock (&out->lock);
     if (ret != 0) {
         usleep (bytes * 1000000 / audio_stream_out_frame_size (stream) /
