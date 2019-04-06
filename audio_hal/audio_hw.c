@@ -5246,6 +5246,12 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         sprintf(temp_buf, "dolby_ms12_enable=%d", ms12_enable);
         return  strdup(temp_buf);
     }
+    else if (strstr(keys, "HDMI ARC Switch")) {
+        sprintf(temp_buf, "HDMI ARC Switch=%d", adev->bHDMIARCon);
+        ALOGD("temp_buf %s", temp_buf);
+        return strdup(temp_buf);
+    }
+
     return strdup("");
 }
 
