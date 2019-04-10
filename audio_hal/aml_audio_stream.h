@@ -323,5 +323,6 @@ int update_stream_dual_output(struct audio_stream_out *stream);
 bool is_dual_output_stream(struct audio_stream_out *stream);
 
 int get_spdifin_samplerate(struct aml_mixer_handle *mixer_handle);
+unsigned int inport_to_device(enum IN_PORT inport);
 
 #endif /* _AML_AUDIO_STREAM_H_ */
