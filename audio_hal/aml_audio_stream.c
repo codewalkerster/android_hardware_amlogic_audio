@@ -480,3 +480,40 @@ hdmiin_audio_packet_t get_hdmiin_audio_packet(struct aml_mixer_handle *mixer_han
     return (hdmiin_audio_packet_t)audio_packet;
 }
 
+unsigned int inport_to_device(enum IN_PORT inport)
+{
+    unsigned int device = 0;
+    switch (inport) {
+    case INPORT_TUNER:
+        device = AUDIO_DEVICE_IN_TV_TUNER;
+        break;
+    case INPORT_HDMIIN:
+        device = AUDIO_DEVICE_IN_AUX_DIGITAL;
+        break;
+    case INPORT_SPDIF:
+        device = AUDIO_DEVICE_IN_SPDIF;
+        break;
+    case INPORT_LINEIN:
+        device = AUDIO_DEVICE_IN_LINE;
+        break;
+    case INPORT_REMOTE_SUBMIXIN:
+        device = AUDIO_DEVICE_IN_REMOTE_SUBMIX;
+        break;
+    case INPORT_WIRED_HEADSETIN:
+        device = AUDIO_DEVICE_IN_WIRED_HEADSET;
+        break;
+    case INPORT_BUILTIN_MIC:
+        device = AUDIO_DEVICE_IN_BUILTIN_MIC;
+        break;
+    case INPORT_BT_SCO_HEADSET_MIC:
+        device = AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET;
+        break;
+    default:
+        ALOGE("%s(), unsupport %s", __func__, inport2String(inport));
+        device = AUDIO_DEVICE_IN_BUILTIN_MIC;
+        break;
+    }
+
+    return device;
+}
+
