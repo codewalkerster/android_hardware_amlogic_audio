@@ -6437,27 +6437,7 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
             else
                 source_gain = 1.0;
             if (adev->patch_src == SRC_DTV && adev->audio_patch != NULL) {
-                AM_AOUT_OutputMode_t amode = adev->audio_patch->mode;
-                int16_t tmp;
-                int16_t *buf = (int16_t *)effect_tmp_buf;
-                for (unsigned int i= 0; i < bytes / 2; i = i + 2) {
-                    switch (amode) {
-                        case AM_AOUT_OUTPUT_DUAL_LEFT:
-                          buf[i + 1] = buf[i];
-                          break;
-                        case AM_AOUT_OUTPUT_DUAL_RIGHT:
-                          buf[i] = buf[i + 1];
-                          break;
-                        case AM_AOUT_OUTPUT_SWAP:
-                          tmp = buf[i];
-                          buf[i] = buf[i + 1];
-                          buf[i + 1] = tmp;
-                          break;
-                        default :
-                          break;
-
-                    }
-                }
+                aml_audio_switch_output_mode((int16_t *)effect_tmp_buf, bytes, adev->audio_patch->mode);
             }
             /* apply volume for spk/hp, SPDIF/HDMI keep the max volume */
             gain_speaker *= (adev->sink_gain[OUTPORT_SPEAKER] * source_gain);
@@ -6513,6 +6493,11 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
                 gain_speaker = adev->sink_gain[OUTPORT_HDMI];
             else
                 gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
+
+            if (adev->patch_src == SRC_DTV && adev->audio_patch != NULL) {
+                aml_audio_switch_output_mode((int16_t *)buffer, bytes, adev->audio_patch->mode);
+            }
+
             *output_buffer = (void *) buffer;
             *output_buffer_bytes = bytes;
             apply_volume(gain_speaker, *output_buffer, sizeof(uint16_t), bytes);
