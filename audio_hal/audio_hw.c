@@ -6518,7 +6518,11 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
             *output_buffer = aml_out->tmp_buffer_8ch;
             *output_buffer_bytes = 8 * bytes;
         } else {
-            float gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
+            float gain_speaker = 1.0;
+            if (adev->is_STB)
+                gain_speaker = adev->sink_gain[OUTPORT_HDMI];
+            else
+                gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
             *output_buffer = (void *) buffer;
             *output_buffer_bytes = bytes;
             apply_volume(gain_speaker, *output_buffer, sizeof(uint16_t), bytes);
@@ -6936,11 +6940,8 @@ static void config_output(struct audio_stream_out *stream)
                             ddp_dec->digital_raw = 0;
                         }
                     } else {
-                        if (aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3 ||
-                            aml_out->hal_internal_format == AUDIO_FORMAT_AC3) {
-                            adev->dcvlib_bypass_enable = 0;
-                           ddp_dec->digital_raw = 1;
-                        }
+                        adev->dcvlib_bypass_enable = 0;
+                        ddp_dec->digital_raw = 0;
                     }
                     if (cap) {
                         free(cap);
@@ -9638,7 +9639,7 @@ static int adev_set_audio_port_config (struct audio_hw_device *dev, const struct
                         break;
                     case AUDIO_DEVICE_OUT_HDMI:
                         outport = OUTPORT_HDMI;
-                        aml_dev->sink_gain[outport] = 1.0;
+                        aml_dev->sink_gain[outport] = get_volume_by_index(config->gain.values[0]);
                         break;
                     case AUDIO_DEVICE_OUT_SPDIF:
                         outport = OUTPORT_SPDIF;
