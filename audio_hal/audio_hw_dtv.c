@@ -759,6 +759,11 @@ void *audio_dtv_patch_output_threadloop(void *data)
     prctl(PR_SET_NAME, (unsigned long)"audio_output_patch");
 
     while (!patch->output_thread_exit) {
+        if (patch->dtv_decoder_state == AUDIO_DTV_PATCH_DECODER_STATE_PAUSE) {
+            usleep(1000);
+            continue;
+        }
+
         pthread_mutex_lock(&(patch->dtv_output_mutex));
         int period_mul =
             (patch->aformat == AUDIO_FORMAT_E_AC3) ? EAC3_MULTIPLIER : 1;
