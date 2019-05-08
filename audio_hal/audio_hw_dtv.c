@@ -440,6 +440,10 @@ static void dtv_adjust_i2s_output_clock(struct aml_audio_patch* patch, int direc
     int output_clock = 0;
     unsigned int i2s_current_clock = 0;
     i2s_current_clock = aml_mixer_ctrl_get_int(handle, AML_MIXER_ID_CHANGE_I2S_PLL);
+    if (i2s_current_clock > DEFAULT_I2S_OUTPUT_CLOCK * 4 ||
+        i2s_current_clock == 0) {
+        return;
+    }
     if (direct == DIRECT_SPEED) {
         if (compare_clock(i2s_current_clock, patch->dtv_default_i2s_clock)) {
             output_clock = DEFAULT_DTV_OUTPUT_CLOCK + step * 100;
@@ -499,7 +503,10 @@ static void dtv_adjust_spdif_output_clock(struct aml_audio_patch* patch, int dir
     int output_clock, mul = 1, i;
     unsigned int spidif_current_clock = 0;
     spidif_current_clock = aml_mixer_ctrl_get_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL);
-    if (spidif_current_clock > DEFAULT_I2S_OUTPUT_CLOCK) {
+    if (spidif_current_clock > DEFAULT_SPDIF_PLL_DDP_CLOCK * 4 ||
+        spidif_current_clock == 0) {
+        return;
+    } else if (spidif_current_clock > DEFAULT_I2S_OUTPUT_CLOCK) {
         mul = 4;
     } else {
         mul = 1;
@@ -587,10 +594,20 @@ static void dtv_adjust_output_clock(struct aml_audio_patch * patch, int direct, 
     if (!aml_dev) {
         return;
     }
-    if (patch->decoder_offset < 512 * 2 * 10) {
+    if (patch->decoder_offset < 512 * 2 * 10 &&
+        ((patch->aformat == AUDIO_FORMAT_AC3) ||
+         (patch->aformat == AUDIO_FORMAT_E_AC3))) {
+        return;
+    }
+    if (patch->dtv_default_spdif_clock > DEFAULT_I2S_OUTPUT_CLOCK * 4 ||
+        patch->dtv_default_spdif_clock == 0) {
         return;
     }
     if (!aml_dev->bHDMIARCon) {
+        if (patch-> dtv_default_i2s_clock > DEFAULT_SPDIF_PLL_DDP_CLOCK * 4 ||
+            patch-> dtv_default_i2s_clock == 0) {
+            return;
+        }
         dtv_adjust_i2s_output_clock(patch, direct, step);
         dtv_adjust_spdif_output_clock(patch, direct, step / 2);
     } else {
@@ -638,9 +655,17 @@ static int dtv_calc_abuf_level(struct aml_audio_patch *patch, struct aml_stream_
     struct audio_hw_device *dev = patch->dev;
     struct aml_audio_device *aml_dev = (struct aml_audio_device *)dev;
     ring_buffer_t *ringbuffer = &(patch->aml_ringbuffer);
-    int main_avail = 0;
+    int main_avail = 0, min_buf_size;
     main_avail = get_buffer_read_space(ringbuffer);
-    if (main_avail > stream_out->ddp_frame_size) {
+    if ((patch->aformat == AUDIO_FORMAT_AC3) ||
+        (patch->aformat == AUDIO_FORMAT_E_AC3)) {
+        min_buf_size = stream_out->ddp_frame_size;
+    } else if (patch->aformat == AUDIO_FORMAT_DTS) {
+        min_buf_size = 1024;
+    } else {
+        min_buf_size = patch->out_buf_size;
+    }
+    if (main_avail > min_buf_size) {
         return 1;
     }
     return 0;
@@ -693,6 +718,16 @@ static void dtv_set_pcr_latency(struct aml_audio_patch *patch, int mode)
             decoder_set_latency(DECODER_PTS_DEFAULT_LATENCY);
         }
         return;
+    } else if (mode == 2) {
+        if (decoder_get_latency() != DECODER_PTS_DEFAULT_LATENCY / 2) {
+            decoder_set_latency(DECODER_PTS_DEFAULT_LATENCY / 2);
+        }
+        return;
+    } else if (mode == 3) {
+        if (decoder_get_latency() != DECODER_PTS_DEFAULT_LATENCY / 4) {
+            decoder_set_latency(DECODER_PTS_DEFAULT_LATENCY / 4);
+        }
+        return;
     }
     if (eDolbyMS12Lib == aml_dev->dolby_lib_type &&
         aml_dev->bHDMIARCon && aml_dev->hdmi_format != PCM &&
@@ -739,7 +774,7 @@ void process_ac3_sync(struct aml_audio_patch *patch, unsigned long pts, struct a
             pts_diff = cur_out_pts - pcrpts;
         }
         //ALOGI("process_ac3_sync, diff:%d,pcrpts %x,curpts %lx", (int)(pcrpts - cur_out_pts) / 90, pcrpts, cur_out_pts);
-        if (pts_diff < DTV_PTS_CORRECTION_THRESHOLD) {
+        if (pts_diff <= DTV_PTS_CORRECTION_THRESHOLD) {
             // now the av is syncd ,so do nothing;
             dtv_adjust_output_clock(patch, DIRECT_NORMAL, DEFAULT_DTV_ADJUST_CLOCK);
         } else if (pts_diff > DTV_PTS_CORRECTION_THRESHOLD &&
@@ -764,7 +799,7 @@ void process_ac3_sync(struct aml_audio_patch *patch, unsigned long pts, struct a
 }
 
 void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
-                      unsigned int rbuf_level)
+                      unsigned int rbuf_level, struct aml_stream_out *stream_out)
 {
     int channel_count = 2;
     int bytewidth = 2;
@@ -818,22 +853,28 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
             cur_out_pts = pts + cache_pts;
             return;
         }
-
+        if (!patch || !patch->dev || !stream_out) {
+            return;
+        }
         get_sysfs_uint(TSYNC_PCRSCR, &pcrpts);
-
+        pcrpts -= DTV_PTS_CORRECTION_THRESHOLD;
         if (pcrpts > cur_out_pts) {
             pts_diff = pcrpts - cur_out_pts;
         } else {
             pts_diff = cur_out_pts - pcrpts;
         }
         //ALOGI("process_pts_sync, diff:%d,pcrpts %x,curpts %lx", (pts_diff) / 90, pcrpts, cur_out_pts);
-        if (pts_diff < DTV_PTS_CORRECTION_THRESHOLD) {
+        if (pts_diff <= DTV_PTS_CORRECTION_THRESHOLD) {
             dtv_adjust_output_clock(patch, DIRECT_NORMAL, DEFAULT_DTV_ADJUST_CLOCK);
             // now the av is syncd ,so do nothing;
         } else if (pts_diff > DTV_PTS_CORRECTION_THRESHOLD &&
                    pts_diff < AUDIO_PTS_DISCONTINUE_THRESHOLD) {
             if (pcrpts > cur_out_pts) {
-                dtv_adjust_output_clock(patch, DIRECT_SPEED, DEFAULT_DTV_ADJUST_CLOCK);
+                if (dtv_calc_abuf_level(patch, stream_out)) {
+                    dtv_adjust_output_clock(patch, DIRECT_SPEED, DEFAULT_DTV_ADJUST_CLOCK);
+                } else {
+                    dtv_adjust_output_clock(patch, DIRECT_NORMAL, DEFAULT_DTV_ADJUST_CLOCK);
+                }
             } else {
                 dtv_adjust_output_clock(patch, DIRECT_SLOW, DEFAULT_DTV_ADJUST_CLOCK);
             }
@@ -877,7 +918,7 @@ void dtv_avsync_process(struct aml_audio_patch* patch, struct aml_stream_out* st
             if (stream_out != NULL) {
                 unsigned int pcm_lantcy = out_get_latency(&(stream_out->stream));
                 int abuf_level = get_buffer_read_space(ringbuffer);
-                process_pts_sync(pcm_lantcy, patch, abuf_level);
+                process_pts_sync(pcm_lantcy, patch, abuf_level, stream_out);
             }
         }
     }
@@ -1602,7 +1643,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
                     int diff = 0;
                     char buff[32];
                     int ret = 0;
-                    dtv_set_pcr_latency(patch, 0);
+                    dtv_set_pcr_latency(patch, 3);
                     ret = aml_sysfs_get_str(TSYNC_FIRSTCHECKIN_APTS, buff, sizeof(buff));
                     if (ret > 0) {
                         ret = sscanf(buff, "0x%x\n", &first_checkinapts);
@@ -1925,44 +1966,6 @@ int dtv_in_read(struct audio_stream_in *stream, void* buffer, size_t bytes)
         memset(buffer, 0, sizeof(unsigned char)* bytes);
         ret = bytes;
         return ret;
-    }
-
-    if (patch->aformat == AUDIO_FORMAT_AC3 ||
-        patch->aformat == AUDIO_FORMAT_E_AC3) {
-        int data_size = 0;
-        if (patch->dtv_decoder_ready == 0) {
-            dcv_decoder_init_patch(ddp_dec);
-            patch->dtv_decoder_ready = 1;
-        }
-        data_size = get_buffer_read_space(&patch->aml_ringbuffer);
-        ALOGI("[%s] data_size =%d\n", __FUNCTION__, data_size);
-        if (data_size == 0) {
-            memset(buffer, 0, sizeof(unsigned char)* bytes);
-            ret = bytes;
-        } else {
-            ret = ring_buffer_read(&patch->aml_ringbuffer, (unsigned char *)buffer, bytes);
-            ALOGI("[%s] ddp data_size =%d ret=%d\n", __FUNCTION__, data_size, ret);
-            dcv_decoder_process_patch(ddp_dec, (unsigned char *)buffer, bytes);
-            //memcpy(buffer, (unsigned char *)es_buff, ret);
-        }
-    } else if (patch->aformat == AUDIO_FORMAT_DTS) {
-        if (patch->dtv_decoder_ready == 0) {
-        } else {
-
-        }
-    } else {
-        //ret = ring_buffer_read(&patch->aml_ringbuffer,(unsigned char*)buffer, bytes);
-        int abuf_level = get_buffer_read_space(&patch->aml_ringbuffer);
-        ALOGI("[%s] abuf_level =%d\n", __FUNCTION__, abuf_level);
-        if (abuf_level == 0) {
-            memset(buffer, 0, sizeof(unsigned char)* bytes);
-            ret = bytes;
-        } else {
-            ret = ring_buffer_read(&patch->aml_ringbuffer, (unsigned char *)buffer, bytes);
-            ALOGI("[%s] abuf_level =%d ret=%d\n", __FUNCTION__, abuf_level, ret);
-            //memcpy(buffer, (unsigned char *)es_buff, ret);
-        }
-        process_pts_sync(0, patch, abuf_level);
     }
     return ret;
 }
