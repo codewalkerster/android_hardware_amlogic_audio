@@ -3901,80 +3901,18 @@ static uint32_t in_get_input_frames_lost (struct audio_stream_in *stream __unuse
     return 0;
 }
 
-int get_microphones (struct aml_audio_device *adev __unused,
-                                struct audio_microphone_characteristic_t *mic_array,
-                                size_t *mic_count) {
-    ALOGI("%s", __func__);
-    if (mic_count == NULL) {
-        return -EINVAL;
-    }
-    if (mic_array == NULL) {
-        return -EINVAL;
-    }
-
-    if (*mic_count == 0) {
-        return 0;
-    }
-
-    struct audio_microphone_characteristic_t microphone;
-    char* device_id = "builtin_mic_1";
-    char* address = AUDIO_BOTTOM_MICROPHONE_ADDRESS;
-    strcpy(microphone.device_id, device_id);
-    strcpy(microphone.address, address);
-    microphone.device = AUDIO_DEVICE_IN_BUILTIN_MIC;
-    microphone.location = AUDIO_MICROPHONE_LOCATION_MAINBODY;
-    microphone.group = 0;
-    microphone.index_in_the_group = 0;
-    microphone.directionality = AUDIO_MICROPHONE_DIRECTIONALITY_OMNI;
-    microphone.num_frequency_responses = 5;
-    microphone.frequency_responses[0][0] = 97.16f;
-    microphone.frequency_responses[0][1] = 244.06f;
-    microphone.frequency_responses[0][2] = 409.73f;
-    microphone.frequency_responses[0][3] = 771.79f;
-    microphone.frequency_responses[0][4] = 2738.42f;
-    microphone.frequency_responses[1][0] = -0.80f;
-    microphone.frequency_responses[1][1] = -1.40f;
-    microphone.frequency_responses[1][2] = -1.90f;
-    microphone.frequency_responses[1][3] = -0.50f;
-    microphone.frequency_responses[1][4] = -2.50f;
-    microphone.sensitivity = -37.0f;
-    microphone.max_spl = 132.5f;
-    microphone.min_spl = 28.5f;
-    microphone.orientation.x = 0.0f;
-    microphone.orientation.y = -1.0f;
-    microphone.orientation.z = 0.0f;
-    microphone.geometric_location.x = 0.0485f;
-    microphone.geometric_location.y = 0.0f;
-    microphone.geometric_location.z = 0.0038f;
-
-    mic_array[0] = microphone;
-    *mic_count = 1;
+static int in_get_active_microphones (const struct audio_stream_in *stream __unused,
+                                     struct audio_microphone_characteristic_t *mic_array __unused,
+                                     size_t *mic_count __unused) {
     return 0;
 }
 
-static int in_get_active_microphones (const struct audio_stream_in *stream,
-                                     struct audio_microphone_characteristic_t *mic_array,
-                                     size_t *mic_count) {
-    struct aml_stream_in *in = (struct aml_stream_in *)stream;
-    struct aml_audio_device *adev = in->dev;
-    ALOGI("%s", __func__);
-    pthread_mutex_lock(&in->lock);
-    pthread_mutex_lock(&adev->lock);
-    int ret = get_microphones(adev, mic_array, mic_count);
-    pthread_mutex_unlock(&adev->lock);
-    pthread_mutex_unlock(&in->lock);
-    return ret;
-}
-
-static int adev_get_microphones (const struct audio_hw_device *dev,
-                                struct audio_microphone_characteristic_t *mic_array,
+static int adev_get_microphones (const struct audio_hw_device *dev __unused,
+                                struct audio_microphone_characteristic_t *mic_array __unused,
                                 size_t *mic_count) {
-    struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     ALOGI("%s", __func__);
-    pthread_mutex_lock(&adev->lock);
-    int ret = get_microphones(adev, mic_array, mic_count);
-    pthread_mutex_unlock(&adev->lock);
-    return ret;
+    *mic_count = 0;
+    return 0;
 }
 
 // open corresponding stream by flags, formats and others params
