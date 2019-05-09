@@ -129,12 +129,16 @@ char*  get_hdmi_sink_cap(const char *keys,audio_format_t format,struct aml_arc_h
             /* take the 2ch suppported as default */
             size += sprintf(aud_cap, "sup_channels=%s", "AUDIO_CHANNEL_OUT_STEREO");
             if (/*(!alsa_device_is_auge() && mystrstr(infobuf, "PCM, 8 ch")) ||*/
-                (mystrstr(infobuf, "Dobly_Digital+") && format == AUDIO_FORMAT_E_AC3)) {
+                (mystrstr(infobuf, "Dobly_Digital+") && format == AUDIO_FORMAT_E_AC3) ||
+                (mystrstr(infobuf, "DTS-HD") && format == AUDIO_FORMAT_DTS_HD) ||
+                (mystrstr(infobuf, "MAT") && format == AUDIO_FORMAT_DOLBY_TRUEHD) ||
+                format == AUDIO_FORMAT_IEC61937) {
                 size += sprintf(aud_cap + size, "|%s", "AUDIO_CHANNEL_OUT_5POINT1|AUDIO_CHANNEL_OUT_7POINT1");
             } else if (/*(!alsa_device_is_auge() && mystrstr(infobuf, "PCM, 6 ch")) ||*/
                        (mystrstr(infobuf, "AC-3") && format == AUDIO_FORMAT_AC3) ||
                        /* backward compatibility for dd, if TV only supports dd+ */
-                       (mystrstr(infobuf, "Dobly_Digital+") && format == AUDIO_FORMAT_AC3)) {
+                       (mystrstr(infobuf, "Dobly_Digital+") && format == AUDIO_FORMAT_AC3)||
+                       (mystrstr(infobuf, "DTS") && format == AUDIO_FORMAT_DTS)) {
                 size += sprintf(aud_cap + size, "|%s", "AUDIO_CHANNEL_OUT_5POINT1");
             }
         } else if (strstr(keys, AUDIO_PARAMETER_STREAM_SUP_SAMPLING_RATES)) {
