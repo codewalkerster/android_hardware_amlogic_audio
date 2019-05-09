@@ -1025,7 +1025,7 @@ static int mixer_do_mixing_16bit(struct amlAudioMixer *audio_mixer)
     float dirct_vol = 1.0, sys_vol = 1.0;
     int mixed_32 = 0;
     size_t i = 0, mixing_len_bytes = 0;
-    size_t frames = mixing_len_bytes / in_port_drct->cfg.frame_size;
+    size_t frames = 0;
     size_t frames_written = 0;
     float gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
     float gain_outport = adev->sink_gain[adev->active_outport];
@@ -1068,6 +1068,7 @@ static int mixer_do_mixing_16bit(struct amlAudioMixer *audio_mixer)
         return -EINVAL;
     }
 
+    frames = mixing_len_bytes / in_port_drct->cfg.frame_size;
     data_mixed = (int16_t *)out_port->data_buf;
     memset(audio_mixer->tmp_buffer, 0 , audio_mixer->buf_frames * 8);
     if (mixing) {

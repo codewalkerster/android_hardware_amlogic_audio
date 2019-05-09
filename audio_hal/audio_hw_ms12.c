@@ -34,6 +34,8 @@
 #include "alsa_manager.h"
 #include "aml_audio_stream.h"
 #include "dolby_lib_api.h"
+#include "aml_audio_timer.h"
+#include "audio_virtual_buf.h"
 
 #define DOLBY_MS12_OUTPUT_FORMAT_TEST
 
@@ -42,8 +44,23 @@
 
 #define DDP_MAX_BUFFER_SIZE 2560//dolby ms12 input buffer threshold
 
+#define MS12_MAIN_INPUT_BUF_NS (96000000LL)
+/*if we choose 96ms, it will cause audio filnger underrun,
+  if we choose 64ms, it will cause ms12 underrun,
+  so we choose 84ms now
+*/
+#define MS12_SYS_INPUT_BUF_NS  (84000000LL)
+
+
+#define MS12_MAIN_BUF_INCREASE_TIME_MS (0)
+#define MS12_SYS_BUF_INCREASE_TIME_MS (1000)
+
+
+
 #define MS12_OUTPUT_PCM_FILE "/data/audio_out/ms12_pcm.raw"
 #define MS12_OUTPUT_BITSTREAM_FILE "/data/audio_out/ms12_bitstream.raw"
+#define MS12_INPUT_SYS_PCM_FILE "/data/audio_out/ms12_input_sys.pcm"
+#define MS12_INPUT_SYS_MAIN_FILE "/data/audio_out/ms12_input_main.raw"
 
 /*
  *@brief dump ms12 output data
@@ -161,6 +178,7 @@ int get_the_dolby_ms12_prepared(
 
     /*set the continous output flag*/
     set_dolby_ms12_continuous_mode((bool)adev->continuous_audio_mode);
+    dolby_ms12_set_atmos_lock_flag(adev->atoms_lock_flag);
     /* create  the ms12 output stream here */
     /*************************************/
     if (continous_mode(adev)) {
@@ -307,6 +325,12 @@ int dolby_ms12_main_process(
               __FUNCTION__, adev->continuous_audio_mode, dolby_ms12_input_bytes, input_bytes);
     }
 
+    /*I can't find where to init this, so I put it here*/
+    if ((ms12->main_virtual_buf_handle == NULL) && adev->continuous_audio_mode == 1) {
+        /*set the virtual buf size to 96ms*/
+        audio_virtual_buf_open(&ms12->main_virtual_buf_handle, "ms12 main input", MS12_MAIN_INPUT_BUF_NS, MS12_MAIN_INPUT_BUF_NS, MS12_MAIN_BUF_INCREASE_TIME_MS);
+    }
+
     //dtv single decoder, if input data is less than one iec61937 size, and do not contain one complete frame
     //after adding the frame_deficiency, got a complete frame without scan the frame
     //keyword: frame_deficiency
@@ -449,6 +473,7 @@ MAIN_INPUT:
                         //FIXME, if ddp input, the size suppose as CONTINUOUS_OUTPUT_FRAME_SIZE
                         //if pcm input, suppose 2ch/16bits/48kHz
                         int need_sleep_us = 0;
+                        uint64_t input_ns = 0;
                         if ((aml_out->hal_format == AUDIO_FORMAT_AC3) || \
                             (aml_out->hal_format == AUDIO_FORMAT_E_AC3)) {
                             /*
@@ -462,19 +487,18 @@ MAIN_INPUT:
                                 need_sleep_us = ((input_bytes * 32 * 1000) / aml_out->ddp_frame_size);
                             }
                             need_sleep_us = need_sleep_us / 2;
+                            if (need_sleep_us > 0) {
+                                usleep(need_sleep_us);
+                                if (adev->debug_flag >= 2) {
+                                    ALOGI("%s format=%d sleep %d ms dolby_ms12_input_bytes=%d\n", __FUNCTION__, aml_out->hal_format, need_sleep_us / 1000,dolby_ms12_input_bytes);
+                                }
+                            }
                         } else {
                             /*
                             for LPCM audio,we support it is 2 ch 48K audio.
                             */
-                            if (dolby_ms12_input_bytes > 0) {
-                                need_sleep_us = (dolby_ms12_input_bytes * 1000000 / 4 / (ms12->config_sample_rate) * 5 / 6);
-                            }
-                        }
-                        if (need_sleep_us > 0) {
-                            usleep(need_sleep_us);
-                            if (adev->debug_flag >= 2) {
-                                ALOGI("%s sleep %d ms\n", __FUNCTION__, need_sleep_us / 1000);
-                            }
+                            input_ns = (uint64_t)dolby_ms12_input_bytes * 1000000000LL / 4 / ms12->config_sample_rate;
+                            audio_virtual_buf_process(ms12->main_virtual_buf_handle, input_ns);
                         }
                     }
 
@@ -493,7 +517,9 @@ MAIN_INPUT:
                 *use_size = input_bytes;
             }
         }
+        ms12->is_dolby_atmos = dolby_ms12_get_input_atmos_info();
 exit:
+        dump_ms12_output_data((void*)buffer, *use_size, MS12_INPUT_SYS_MAIN_FILE);
         pthread_mutex_unlock(&ms12->main_lock);
         return 0;
     } else {
@@ -538,9 +564,27 @@ int dolby_ms12_system_process(
                 , mixer_default_samplerate);
         if (dolby_ms12_input_bytes > 0) {
             *use_size = dolby_ms12_input_bytes;
+        }else {
+            *use_size = 0;
         }
     }
+    dump_ms12_output_data((void*)buffer, *use_size, MS12_INPUT_SYS_PCM_FILE);
     pthread_mutex_unlock(&ms12->lock);
+
+    if (adev->continuous_audio_mode == 1) {
+        uint64_t input_ns = 0;
+        input_ns = (uint64_t)(*use_size) * 1000000000LL / 4 / mixer_default_samplerate;
+
+        if (ms12->system_virtual_buf_handle == NULL) {
+            //aml_audio_sleep(input_ns/1000);
+            if (input_ns == 0) {
+                input_ns = (uint64_t)(bytes) * 1000000000LL / 4 / mixer_default_samplerate;
+            }
+            audio_virtual_buf_open(&ms12->system_virtual_buf_handle, "ms12 system input", input_ns/2, MS12_SYS_INPUT_BUF_NS, MS12_SYS_BUF_INCREASE_TIME_MS);
+        }
+        audio_virtual_buf_process(ms12->system_virtual_buf_handle, input_ns);
+    }
+
     return 0;
 }
 
@@ -577,6 +621,11 @@ int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12)
     aml_ms12_cleanup(ms12);
     ms12->output_format = AUDIO_FORMAT_INVALID;
     ms12->dolby_ms12_enable = false;
+    ms12->is_dolby_atmos = false;
+    ms12->input_total_ms = 0;
+    ms12->bitsteam_cnt = 0;
+    audio_virtual_buf_close(&ms12->main_virtual_buf_handle);
+    audio_virtual_buf_close(&ms12->system_virtual_buf_handle);
     ALOGI("--%s(), locked", __FUNCTION__);
     pthread_mutex_unlock(&ms12->main_lock);
     pthread_mutex_unlock(&ms12->lock);
@@ -651,31 +700,37 @@ int bitstream_output(void *buffer, void *priv_data, size_t size)
 {
     struct aml_stream_out *aml_out = (struct aml_stream_out *)priv_data;
     struct aml_audio_device *adev = aml_out->dev;
+    struct dolby_ms12_desc *ms12 = &(adev->ms12);
     void *output_buffer = NULL;
     size_t output_buffer_bytes = 0;
     audio_format_t output_format = AUDIO_FORMAT_AC3;
     int ret = 0;
+    uint64_t before_time;
+    uint64_t after_time;
+    ms12->bitsteam_cnt++;
 
     if (adev->debug_flag > 1) {
-        ALOGI("+%s() size %zu,dual_output = %d, optical_format = %d, sink_format = %d", __FUNCTION__, size, aml_out->dual_output_flag, adev->optical_format, adev->sink_format);
+        ALOGI("+%s() size %zu,dual_output = %d, optical_format = %d, sink_format = %d out total=%d main in=%d", __FUNCTION__, size, aml_out->dual_output_flag, adev->optical_format, adev->sink_format, ms12->bitsteam_cnt, ms12->input_total_ms);
     }
 
     /*dump ms12 bitstream output*/
     dump_ms12_output_data(buffer, size, MS12_OUTPUT_BITSTREAM_FILE);
+
+    before_time = aml_audio_get_systime();
 
     if (aml_out->dual_output_flag) {
         output_format = adev->optical_format;
         struct audio_stream_out *stream_out = (struct audio_stream_out *)aml_out;
         ret = aml_audio_spdif_output(stream_out, buffer, size);
     } else {
-        // ms12: netflix not able to output with this branch.zzz
-        // TODO: Fix Me
         output_format = adev->sink_format;
-        ALOGI("+%s() size %zu,dual_output = %d, optical_format = %d, sink_format = %d", __FUNCTION__, size, aml_out->dual_output_flag, adev->optical_format, adev->sink_format);
         if (audio_hal_data_processing((struct audio_stream_out *)aml_out, buffer, size, &output_buffer, &output_buffer_bytes, output_format) == 0) {
             ret = hw_write((struct audio_stream_out *)aml_out, output_buffer, output_buffer_bytes, output_format);
         }
     }
+    after_time = aml_audio_get_systime();
+
+
 
     if (adev->debug_flag > 1) {
         ALOGI("-%s() ret %d", __FUNCTION__, ret);
@@ -716,6 +771,7 @@ static void *dolby_ms12_threadloop(void *data)
     if (continous_mode(adev)) {
         pthread_mutex_lock(&adev->alsa_pcm_lock);
         aml_alsa_output_close((struct audio_stream_out*)aml_out);
+        adev->spdif_encoder_init_flag = false;
         struct pcm *pcm = adev->pcm_handle[DIGITAL_DEVICE];
         if (aml_out->dual_output_flag && pcm) {
             ALOGI("%s close dual output pcm handle %p", __func__, pcm);

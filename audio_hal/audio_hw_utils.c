@@ -203,6 +203,21 @@ int is_txlx_chip()
     return false;
 }
 
+int is_txl_chip()
+{
+    char buf[PROPERTY_VALUE_MAX];
+    int ret = -1;
+
+    ret = property_get("ro.board.platform", buf, NULL);
+    if (ret > 0) {
+        if (strcasecmp(buf, "txl") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
 /*
 convert audio formats to supported audio format
 8 ch goes to 32 bit
@@ -414,7 +429,7 @@ int aml_audio_get_arc_latency_offset(int aformat)
     char *prop_name = NULL;
 	(void)aformat;
     prop_name = "media.audio.hal.arc_latency.ddp";
-    latency_ms = 0;
+    latency_ms = -40;
     ret = property_get(prop_name, buf, NULL);
     if (ret > 0) {
         latency_ms = atoi(buf);

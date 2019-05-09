@@ -15,7 +15,7 @@
  */
 
 
-#define LOG_TAG "aml_audio_port"
+#define LOG_TAG "audio_hw_port"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -491,6 +491,7 @@ static ssize_t output_port_write_alsa(struct output_port *port, void *buffer, in
         } else {
            ALOGE("pcm_write failed ret = %d, pcm_get_error(out->pcm):%s",
                 ret, pcm_get_error(port->pcm_handle));
+           pcm_stop(port->pcm_handle);
            usleep(1000);
         }
         if (written > 0 && getprop_bool("media.audiohal.inport")) {

@@ -16,6 +16,19 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
 
     LOCAL_PATH := $(call my-dir)
 
+include $(CLEAR_VARS)
+LOCAL_MODULE := libnano
+LOCAL_SRC_FILES_arm := ../bt_voice/nano/32/libnano.so
+LOCAL_SRC_FILES_arm64 := ../bt_voice/nano/64/libnano.so
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_OWNER := nanosic
+LOCAL_MODULE_SUFFIX := .so
+LOCAL_MODULE_CLASS := SHARED_LIBRARIES
+LOCAL_PROPRIETARY_MODULE := true
+LOCAL_MODULE_TARGET_ARCH:= arm arm64
+LOCAL_MULTILIB := both
+include $(BUILD_PREBUILT)
+
 # The default audio HAL module, which is a stub, that is loaded if no other
 # device specific modules are present. The exact load order can be seen in
 # libhardware/hardware.c
@@ -55,7 +68,19 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
         hw_avsync_callbacks.c \
         audio_port.c \
         sub_mixing_factory.c \
-        audio_data_process.c
+        audio_data_process.c \
+        ../../../../frameworks/av/media/libaudioprocessing/AudioResampler.cpp.arm \
+        ../../../../frameworks/av/media/libaudioprocessing/AudioResamplerCubic.cpp.arm \
+        ../../../../frameworks/av/media/libaudioprocessing/AudioResamplerSinc.cpp.arm \
+        ../../../../frameworks/av/media/libaudioprocessing/AudioResamplerDyn.cpp.arm \
+        aml_resample_wrap.cpp \
+        audio_simple_resample_api.c \
+        aml_audio_resample_manager.c \
+        audio_dtv_ad.c \
+        audio_android_resample_api.c \
+        aml_audio_timer.c \
+        audio_virtual_buf.c
+
 
     LOCAL_C_INCLUDES += \
         external/tinyalsa/include \
@@ -70,15 +95,30 @@ ifeq ($(strip $(BOARD_ALSA_AUDIO)),tiny)
         $(LOCAL_PATH)/../utils/ini/include \
         $(LOCAL_PATH)/../rcaudio \
         $(LOCAL_PATH)/../../LibAudio/amadec/include \
-        $(LOCAL_PATH)/../bt_voice/kehwin
+        $(LOCAL_PATH)/../bt_voice/kehwin \
+        frameworks/native/include \
+        vendor/amlogic/common/external/dvb/include/am_adp \
+        frameworks/av/include
+
     LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/lib_aml_ng.a
+    LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/Amlogic_EQ_Param_Generator.a
+    LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/Amlogic_DRC_Param_Generator.a
+    LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/Amlogic_EQ_Param_Generator64.a
+    LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/Amlogic_DRC_Param_Generator64.a
     LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/../bt_voice/kehwin/32/btmic.a
     LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/../bt_voice/kehwin/64/btmic.a
 
     LOCAL_SHARED_LIBRARIES := \
         liblog libcutils libtinyalsa \
         libaudioutils libdl libaudioroute libutils \
-        libdroidaudiospdif libamaudioutils libamlaudiorc libamadec
+        libdroidaudiospdif libamaudioutils libamlaudiorc libamadec \
+        libnano
+
+ifeq ($(BOARD_COMPILE_IN_SYSTEM), true)
+    LOCAL_SHARED_LIBRARIES += libam_adp_vendor
+else
+    LOCAL_SHARED_LIBRARIES += libam_adp
+endif
 
 ifeq ($(BOARD_ENABLE_NANO), true)
     LOCAL_SHARED_LIBRARIES += libnano

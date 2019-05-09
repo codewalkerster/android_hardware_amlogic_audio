@@ -157,7 +157,7 @@ static int aml_dev_sample_audio_path_latency(struct aml_audio_device *aml_dev)
 
     if (eDolbyMS12Lib == aml_dev->dolby_lib_type) {
         if (aml_dev->ms12.dolby_ms12_enable == true) {
-            int dolby_main_avail = dolby_ms12_get_main_buffer_avail();
+            int dolby_main_avail = dolby_ms12_get_main_buffer_avail(NULL);
             if (dolby_main_avail > 0) {
                 ms12_ltcy = dolby_main_avail / frame_size / SAMPLE_RATE_MS;
             }

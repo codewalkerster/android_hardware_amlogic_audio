@@ -21,10 +21,40 @@
 #include <pthread.h>
 #include "aml_ringbuffer.h"
 #include "audio_hw.h"
+#include "audio_hw_profile.h"
 
 #define RAW_USECASE_MASK ((1<<STREAM_RAW_DIRECT) | (1<<STREAM_RAW_HWSYNC) | (1<<STREAM_RAW_PATCH))
 
 typedef uint32_t usecase_mask_t;
+
+/* sync with tinymix before TXL */
+enum input_source {
+    SRC_NA = -1,
+    LINEIN  = 0,
+    ATV     = 1,
+    HDMIIN  = 2,
+    SPDIFIN = 3,
+};
+
+/* sync with tinymix after auge */
+enum auge_input_source {
+    TDMIN_A = 0,
+    TDMIN_B = 1,
+    TDMIN_C = 2,
+    SPDIFIN_AUGE = 3,
+    PDMIN = 4,
+    FRATV = 5,
+    TDMIN_LB    = 6,
+    LOOPBACK_A  = 7,
+    FRHDMIRX    = 8,
+    LOOPBACK_B  = 9,
+    SPDIFIN_LB  = 10,
+    EARCRX_DMAC = 11,
+    RESERVED_0  = 12,
+    RESERVED_1  = 13,
+    RESERVED_2  = 14,
+    VAD     = 15,
+};
 
 /*
  *@brief get this value by adev_set_parameters(), command is "hdmi_format"
@@ -37,11 +67,29 @@ enum digital_format {
 
 /**\brief Audio output mode*/
 typedef enum {
-   AM_AOUT_OUTPUT_STEREO,     /**< Stereo output*/
-   AM_AOUT_OUTPUT_DUAL_LEFT,  /**< Left audio output to dual channel*/
-   AM_AOUT_OUTPUT_DUAL_RIGHT, /**< Right audio output to dual channel*/
-   AM_AOUT_OUTPUT_SWAP        /**< Swap left and right channel*/
+    AM_AOUT_OUTPUT_STEREO,     /**< Stereo output*/
+    AM_AOUT_OUTPUT_DUAL_LEFT,  /**< Left audio output to dual channel*/
+    AM_AOUT_OUTPUT_DUAL_RIGHT, /**< Right audio output to dual channel*/
+    AM_AOUT_OUTPUT_SWAP        /**< Swap left and right channel*/
 } AM_AOUT_OutputMode_t;
+
+enum sample_bitwidth {
+    SAMPLE_8BITS =  8,
+    SAMPLE_16BITS = 16,
+    SAMPLE_24BITS = 24,
+    SAMPLE_32BITS = 32,
+};
+
+typedef enum hdmiin_audio_packet {
+    AUDIO_PACKET_NONE,
+    AUDIO_PACKET_AUDS,
+    AUDIO_PACKET_OBA,
+    AUDIO_PACKET_DST,
+    AUDIO_PACKET_HBR,
+    AUDIO_PACKET_OBM,
+    AUDIO_PACKET_MAS
+} hdmiin_audio_packet_t;
+
 static inline bool is_main_write_usecase(stream_usecase_t usecase)
 {
     return usecase > 0;
@@ -120,7 +168,7 @@ static inline alsa_device_t usecase_to_device(stream_usecase_t usecase)
         return DIGITAL_DEVICE;
     default:
         return I2S_DEVICE;
-   }
+    }
 }
 
 static inline alsa_device_t usecase_device_adapter_with_ms12(alsa_device_t usecase_device, audio_format_t output_format)
@@ -139,10 +187,13 @@ static inline alsa_device_t usecase_device_adapter_with_ms12(alsa_device_t useca
     }
 }
 
+typedef void (*dtv_avsync_process_cb)(struct aml_audio_patch* patch,struct aml_stream_out* stream_out);
+
 struct aml_audio_patch {
     struct audio_hw_device *dev;
     ring_buffer_t aml_ringbuffer;
     ring_buffer_t dtvin_ringbuffer;
+    ring_buffer_t assoc_ringbuffer;
     pthread_t audio_input_threadID;
     pthread_t audio_output_threadID;
     pthread_t audio_parse_threadID;
@@ -155,6 +206,7 @@ struct aml_audio_patch {
     void *out_tmpbuf;
     size_t out_tmpbuf_size;
     int dtvin_buffer_inited;
+    int assoc_buffer_inited;
     int input_thread_exit;
     int output_thread_exit;
     int parse_thread_exit;
@@ -168,14 +220,15 @@ struct aml_audio_patch {
     audio_format_t in_format;
 
     audio_devices_t output_src;
+    bool is_dtv_src;
     audio_channel_mask_t out_chanmask;
     int out_sample_rate;
     audio_format_t out_format;
 #if 0
     struct ring_buffer
-    struct thread_read
-    struct thread_write
-    struct audio_mixer;
+        struct thread_read
+            struct thread_write
+                struct audio_mixer;
     void *output_process_buf;
     void *mixed_buf;
 #endif
@@ -205,15 +258,21 @@ struct aml_audio_patch {
     unsigned int first_apts_lookup_over;
     int dtv_symple_rate;
     int dtv_pcm_channel;
+    unsigned int dtv_output_clock;
+    unsigned int dtv_default_i2s_clock;
+    unsigned int dtv_default_spdif_clock;
+    unsigned int spdif_format_set;
+    dtv_avsync_process_cb avsync_callback;
     pthread_mutex_t dtv_output_mutex;
     pthread_mutex_t dtv_input_mutex;
+    pthread_mutex_t assoc_mutex;
     /*end dtv play*/
     // correspond to audio_patch:: audio_patch_handle_t id;
-	// patch unique ID
-	int patch_hdl;
-	struct resample_para dtv_resample;
-	unsigned char *resample_outbuf;
-	AM_AOUT_OutputMode_t   mode;
+    // patch unique ID
+    int patch_hdl;
+    struct resample_para dtv_resample;
+    unsigned char *resample_outbuf;
+    AM_AOUT_OutputMode_t   mode;
 };
 
 struct audio_stream_out;
@@ -238,11 +297,17 @@ bool is_hdmi_in_stable_hw(struct audio_stream_in *stream);
 bool is_hdmi_in_stable_sw(struct audio_stream_in *stream);
 /*@brief check the ATV audio stability by HW register */
 bool is_atv_in_stable_hw(struct audio_stream_in *stream);
-int set_audio_source(struct aml_mixer_handle *mixer_handle, int audio_source);
+int set_audio_source(struct aml_mixer_handle *mixer_handle,
+		enum input_source audio_source, bool is_auge);
+int get_HW_resample(struct aml_mixer_handle *mixer_handle);
 int enable_HW_resample(struct aml_mixer_handle *mixer_handle, int enable);
 bool Stop_watch(struct timespec start_ts, int64_t time);
 bool signal_status_check(audio_devices_t in_device, int *mute_time,
                          struct audio_stream_in *stream);
+int set_spdifin_pao(struct aml_mixer_handle *mixer_handle, int enable);
+int get_hdmiin_samplerate(struct aml_mixer_handle *mixer_handle);
+hdmiin_audio_packet_t get_hdmiin_audio_packet(struct aml_mixer_handle *mixer_handle);
+int get_hdmiin_channel(struct aml_mixer_handle *mixer_handle);
 
 /*
  *@brief clean the tmp_buffer_8ch&audioeffect_tmp_buffer and release audio stream
@@ -250,4 +315,9 @@ bool signal_status_check(audio_devices_t in_device, int *mute_time,
 void  release_audio_stream(struct audio_stream_out *stream);
 /*@brief check the AV audio stability by HW register */
 bool is_av_in_stable_hw(struct audio_stream_in *stream);
+
+int set_stream_dual_output(struct audio_stream_out *stream, bool en);
+int update_stream_dual_output(struct audio_stream_out *stream);
+bool is_dual_output_stream(struct audio_stream_out *stream);
+
 #endif /* _AML_AUDIO_STREAM_H_ */

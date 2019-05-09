@@ -34,7 +34,7 @@ struct aml_hw_mixer {
 
 int aml_hw_mixer_init(struct aml_hw_mixer *mixer);
 void aml_hw_mixer_deinit(struct aml_hw_mixer *mixer);
-//static uint aml_hw_mixer_get_space(struct aml_hw_mixer *mixer);
+uint aml_hw_mixer_get_space(struct aml_hw_mixer *mixer);
 int aml_hw_mixer_get_content(struct aml_hw_mixer *mixer);
 //we assue the cached size is always smaller then buffer size
 //need called by device mutux locked

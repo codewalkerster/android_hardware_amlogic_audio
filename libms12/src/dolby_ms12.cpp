@@ -285,6 +285,21 @@ extern "C" unsigned long long dolby_ms12_get_consumed_payload(void)
     }
 }
 
+/*
+   idx = 0, primary
+   idx = 1, secondary
+   idx = 2, system
+ */
+extern "C" int dolby_ms12_get_gain(int idx)
+{
+    ALOGV("%s()\n", __FUNCTION__);
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance) {
+        return dolby_ms12_instance->DolbyMS12GetGain(idx);
+    } else {
+        return -1;
+    }
+}
 
 extern "C" void dolby_ms12_get_pcm_output_size(unsigned long long *all_output_size, unsigned long long *ms12_generate_zero_size)
 {
@@ -305,12 +320,12 @@ extern "C" void dolby_ms12_get_bitsteam_output_size(unsigned long long *all_outp
 }
 
 
-extern "C" int dolby_ms12_get_main_buffer_avail(void)
+extern "C" int dolby_ms12_get_main_buffer_avail(int * max_size)
 {
     ALOGV("%s()\n", __FUNCTION__);
     android::DolbyMS12* dolby_ms12_instance = getInstance();
     if (dolby_ms12_instance) {
-        return dolby_ms12_instance->DolbyMS12GetMainBufferAvail();
+        return dolby_ms12_instance->DolbyMS12GetMainBufferAvail(max_size);
     } else {
         return -1;
     }
@@ -327,12 +342,24 @@ extern "C" int dolby_ms12_get_associate_buffer_avail(void)
     }
 }
 
-extern "C" int dolby_ms12_get_system_buffer_avail(void)
+extern "C" int dolby_ms12_get_system_buffer_avail(int * max_size)
 {
     ALOGV("%s()\n", __FUNCTION__);
     android::DolbyMS12* dolby_ms12_instance = getInstance();
     if (dolby_ms12_instance) {
-        return dolby_ms12_instance->DolbyMS12GetSystemBufferAvail();
+        return dolby_ms12_instance->DolbyMS12GetSystemBufferAvail(max_size);
+    } else {
+        return -1;
+    }
+}
+
+
+extern "C" int dolby_ms12_get_input_atmos_info()
+{
+    ALOGV("%s()\n", __FUNCTION__);
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance) {
+        return dolby_ms12_instance->DolbyMS12GetInputISDolbyAtmos();
     } else {
         return -1;
     }
