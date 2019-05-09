@@ -549,6 +549,12 @@ void dolby_ms12_set_input_mixer_gain_values_for_ott_sounds_input(MixGain *mixerg
 void dolby_ms12_set_atmos_lock_flag(bool flag);
 
 /**
+ * @brief get active atmos lock flag, when hwsync(tunnel mode) is enable
+ */
+int dolby_ms12_get_atmos_lock_flag(void);
+
+
+/**
  * @brief set active pause flag, when hwsync(tunnel mode) is enable
  */
 void dolby_ms12_set_pause_flag(bool flag);

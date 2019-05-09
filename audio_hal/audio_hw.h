@@ -174,43 +174,63 @@ struct aml_arc_hdmi_desc {
     unsigned int avr_port;
     struct format_desc pcm_fmt;
     struct format_desc dts_fmt;
+    struct format_desc dtshd_fmt;
     struct format_desc dd_fmt;
     struct format_desc ddp_fmt;
 };
 
+struct drc_data {
+    uint32_t band_id;
+    uint32_t attrack_time;
+    uint32_t release_time;
+    float threshold;
+    unsigned int fc;
+    unsigned int estimate_time;
+    float K;
+    unsigned int delays;
+};
+
+struct eq_data {
+    double G;
+    double Q;
+    unsigned int fc;
+    unsigned int type;
+    unsigned int band_id;
+};
+
 enum patch_src_assortion {
-    SRC_DTV,
-    SRC_ATV,
-    SRC_LINEIN,
-    SRC_HDMIIN,
-    SRC_SPDIFIN,
-    SRC_REMOTE_SUBMIXIN,
-    SRC_WIRED_HEADSETIN,
-    SRC_BUILTIN_MIC,
-    SRC_OTHER,
-    SRC_INVAL
+    SRC_DTV                     = 0,
+    SRC_ATV                     = 1,
+    SRC_LINEIN                  = 2,
+    SRC_HDMIIN                  = 3,
+    SRC_SPDIFIN                 = 4,
+    SRC_REMOTE_SUBMIXIN         = 5,
+    SRC_WIRED_HEADSETIN         = 6,
+    SRC_BUILTIN_MIC             = 7,
+    SRC_OTHER                   = 8,
+    SRC_INVAL                   = 9,
 };
 
 enum OUT_PORT {
-    OUTPORT_SPEAKER = 0,
-    OUTPORT_HDMI_ARC,
-    OUTPORT_HDMI,
-    OUTPORT_SPDIF,
-    OUTPORT_AUX_LINE,
-    OUTPORT_HEADPHONE,
-    OUTPORT_REMOTE_SUBMIX,
-    OUTPORT_MAX
+    OUTPORT_SPEAKER             = 0,
+    OUTPORT_HDMI_ARC            = 1,
+    OUTPORT_HDMI                = 2,
+    OUTPORT_SPDIF               = 3,
+    OUTPORT_AUX_LINE            = 4,
+    OUTPORT_HEADPHONE           = 5,
+    OUTPORT_REMOTE_SUBMIX       = 6,
+    OUTPORT_MAX                 = 7,
 };
 
 enum IN_PORT {
-    INPORT_TUNER = 0,
-    INPORT_HDMIIN,
-    INPORT_SPDIF,
-    INPORT_LINEIN,
-    INPORT_REMOTE_SUBMIXIN,
-    INPORT_WIRED_HEADSETIN,
-    INPORT_BUILTIN_MIC,
-    INPORT_MAX
+    INPORT_TUNER                = 0,
+    INPORT_HDMIIN               = 1,
+    INPORT_SPDIF                = 2,
+    INPORT_LINEIN               = 3,
+    INPORT_REMOTE_SUBMIXIN      = 4,
+    INPORT_WIRED_HEADSETIN      = 5,
+    INPORT_BUILTIN_MIC          = 6,
+    INPORT_MAX                  = 7,
 };
 
 struct audio_patch_set {
@@ -317,6 +337,7 @@ struct aml_audio_device {
     bool usecase_changed;
     uint32_t usecase_masks;
     struct aml_stream_out *active_outputs[STREAM_USECASE_MAX];
+    pthread_mutex_t patch_lock;
     struct aml_audio_patch *audio_patch;
     /* indicates atv to mixer patch, no need HAL patching  */
     bool tuner2mix_patch;
@@ -374,6 +395,8 @@ struct aml_audio_device {
     ring_buffer_t spk_tuning_rbuf;
     bool mix_init_flag;
     struct eq_drc_data eq_data;
+    struct drc_data Drc_data;
+    struct eq_data  Eq_data;
     /*used for high pricision A/V from amlogic amadec decoder*/
     unsigned first_apts;
     /*
@@ -384,23 +407,25 @@ struct aml_audio_device {
     size_t frame_trigger_thred;
     struct aml_audio_parser *aml_parser;
     int continuous_audio_mode;
+    bool atoms_lock_flag;
     bool need_remove_conti_mode;
     int debug_flag;
     int dcvlib_bypass_enable;
     int dtslib_bypass_enable;
     float dts_post_gain;
     bool spdif_encoder_init_flag;
-       /*atsc has video in program*/
+    /*atsc has video in program*/
     bool is_has_video;
     struct aml_stream_out *ms12_out;
     struct timespec mute_start_ts;
-	int spdif_fmt_hw;
+    int spdif_fmt_hw;
     bool ms12_ott_enable;
     bool ms12_main1_dolby_dummy;
     /*amlogic soft ware noise gate fot analog TV source*/
     void* aml_ng_handle;
     int aml_ng_enable;
     float aml_ng_level;
+    int source_mute;
     int aml_ng_attrack_time;
     int aml_ng_release_time;
     int system_app_mixing_status;
@@ -448,6 +473,14 @@ struct aml_audio_device {
     int tsync_fd;
     bool rawtopcm_flag;
     int dtv_aformat;
+    unsigned int dtv_i2s_clock;
+    unsigned int dtv_spidif_clock;
+    unsigned int dtv_droppcm_size;
+    int need_reset_ringbuffer;
+    unsigned int tv_mute;
+    int sub_apid;
+    int sub_afmt;
+    int reset_dtv_audio;
 };
 
 struct meta_data {
@@ -509,6 +542,7 @@ struct aml_stream_out {
     unsigned last_dsp_frame;
     audio_hwsync_t *hwsync;
     struct timespec timestamp;
+    struct timespec lasttimestamp;
     stream_usecase_t usecase;
     uint32_t dev_usecase_masks;
     /**
@@ -550,6 +584,8 @@ struct aml_stream_out {
     uint64_t us_used_last_write;
     bool offload_mute;
     bool need_convert;
+    size_t last_playload_used;
+    void * alsa_vir_buf_handle;
 };
 
 typedef ssize_t (*write_func)(struct audio_stream_out *stream, const void *buffer, size_t bytes);
@@ -589,8 +625,11 @@ struct aml_stream_in {
     struct timespec mute_start_ts;
     int mute_flag;
     int mute_log_cntr;
+    int mute_mdelay;
     bool first_buffer_discard;
     struct aml_audio_device *dev;
+    void *input_tmp_buffer;
+    size_t input_tmp_buffer_size;
 
 #if defined(IS_ATOM_PROJECT)
     int ref_count;
@@ -682,7 +721,7 @@ audio_format_t get_output_format(struct audio_stream_out *stream);
 void *audio_patch_output_threadloop(void *data);
 
 ssize_t aml_audio_spdif_output(struct audio_stream_out *stream,
-                void *buffer, size_t bytes);
+                               void *buffer, size_t bytes);
 
 /*
  *@brief audio_hal_data_processing
@@ -695,17 +734,17 @@ ssize_t aml_audio_spdif_output(struct audio_stream_out *stream,
  *    -1, fail
  */
 ssize_t audio_hal_data_processing(struct audio_stream_out *stream
-    , const void *input_buffer
-    , size_t input_buffer_bytes
-    , void **output_buffer
-    , size_t *output_buffer_bytes
-    , audio_format_t output_format);
+                                  , const void *input_buffer
+                                  , size_t input_buffer_bytes
+                                  , void **output_buffer
+                                  , size_t *output_buffer_bytes
+                                  , audio_format_t output_format);
 
 /*
  *@brief hw_write the api to write the data to audio hardware
  */
 ssize_t hw_write(struct audio_stream_out *stream
-    , const void *buffer
+                 , const void *buffer
                  , size_t bytes
                  , audio_format_t output_format);
 
@@ -718,6 +757,7 @@ int out_standby_new(struct audio_stream *stream);
 ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buffer,
                                size_t bytes);
 int dsp_process_output(struct aml_audio_device *adev, void *in_buffer,
-        size_t bytes);
+                       size_t bytes);
+int release_patch_l(struct aml_audio_device *adev);
 
 #endif

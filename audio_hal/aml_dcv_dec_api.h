@@ -42,9 +42,12 @@ struct dolby_ddp_dec {
     struct resample_para aml_resample;
     unsigned char *resample_outbuf;
     ring_buffer_t output_ring_buf;
+    int is_dolby_atmos;
 };
 
 
+int load_ddp_decoder_lib();
+int unload_ddp_decoder_lib();
 
 int dcv_decode_init(struct aml_audio_parser *parser);
 int dcv_decode_release(struct aml_audio_parser *parser);
@@ -53,5 +56,6 @@ int dcv_decode_release(struct aml_audio_parser *parser);
 int dcv_decoder_init_patch(struct dolby_ddp_dec *ddp_dec);
 int dcv_decoder_release_patch(struct dolby_ddp_dec *ddp_dec);
 int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffer, int bytes);
+int dcv_decoder_get_framesize(unsigned char*buffer, int bytes, int* p_head_offset);
 
 #endif

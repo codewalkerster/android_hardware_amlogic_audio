@@ -421,6 +421,11 @@ public:
         ALOGI("%s() set mAtmosLock %d", __FUNCTION__, mAtmosLock);
     }
 
+    virtual int getAtmosLockFlag(void)
+    {
+        return mAtmosLock;
+    }
+
     virtual void setPauseFlag(bool flag)
     {
         mPause = flag;

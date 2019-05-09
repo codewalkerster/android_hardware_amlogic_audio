@@ -30,7 +30,7 @@
 #include "IniParser.h"
 
 #undef  LOG_TAG
-#define LOG_TAG "audio_eq_drc_parser"
+#define LOG_TAG "audio_hw_primary"
 
 #define ITEM_DEBUG
 

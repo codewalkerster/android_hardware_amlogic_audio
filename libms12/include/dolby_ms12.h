@@ -201,7 +201,7 @@ void dolby_ms12_get_bitsteam_output_size(unsigned long long *all_output_size, un
 /*@@
     @brief get main buffer avail
 */
-int dolby_ms12_get_main_buffer_avail(void);
+int dolby_ms12_get_main_buffer_avail(int *max_size);
 
 /*@@
     @brief get associate buffer avail
@@ -211,10 +211,17 @@ int dolby_ms12_get_associate_buffer_avail(void);
 /*@@
     @brief get system buffer avail
 */
-int dolby_ms12_get_system_buffer_avail(void);
+int dolby_ms12_get_system_buffer_avail(int * max_size);
 
 void dolby_ms12_set_main_dummy(int type, int dummy);
 
+int dolby_ms12_get_gain(int idx);
+
+
+/*@@
+    @brief get dolby atmos info
+*/
+int dolby_ms12_get_input_atmos_info();
 
 #ifdef __cplusplus
 }
