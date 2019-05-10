@@ -774,7 +774,7 @@ void process_ac3_sync(struct aml_audio_patch *patch, unsigned long pts, struct a
             pts_diff = cur_out_pts - pcrpts;
         }
         //ALOGI("process_ac3_sync, diff:%d,pcrpts %x,curpts %lx", (int)(pcrpts - cur_out_pts) / 90, pcrpts, cur_out_pts);
-        if (pts_diff <= DTV_PTS_CORRECTION_THRESHOLD) {
+        if (pts_diff <= DTV_PTS_CORRECTION_THRESHOLD || patch->dtv_has_video == 0) {
             // now the av is syncd ,so do nothing;
             dtv_adjust_output_clock(patch, DIRECT_NORMAL, DEFAULT_DTV_ADJUST_CLOCK);
         } else if (pts_diff > DTV_PTS_CORRECTION_THRESHOLD &&
@@ -864,7 +864,7 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
             pts_diff = cur_out_pts - pcrpts;
         }
         //ALOGI("process_pts_sync, diff:%d,pcrpts %x,curpts %lx", (pts_diff) / 90, pcrpts, cur_out_pts);
-        if (pts_diff <= DTV_PTS_CORRECTION_THRESHOLD) {
+        if (pts_diff <= DTV_PTS_CORRECTION_THRESHOLD || patch->dtv_has_video == 0) {
             dtv_adjust_output_clock(patch, DIRECT_NORMAL, DEFAULT_DTV_ADJUST_CLOCK);
             // now the av is syncd ,so do nothing;
         } else if (pts_diff > DTV_PTS_CORRECTION_THRESHOLD &&
@@ -1683,7 +1683,8 @@ void *audio_dtv_patch_output_threadloop(void *data)
                     /*ALOGE("%s(), live ring_buffer read 0 data!", __func__);*/
                     continue;
                 }
-                if (aml_dev->dtv_droppcm_size > (unsigned int)ret) {
+                if (aml_dev->dtv_droppcm_size > (unsigned int)ret &&
+                    patch->dtv_has_video == 1) {
                     unsigned sleep_time = 0;
                     aml_dev->dtv_droppcm_size = aml_dev->dtv_droppcm_size - ret;
 

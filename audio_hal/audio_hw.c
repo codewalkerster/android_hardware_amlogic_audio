@@ -5129,7 +5129,7 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
         goto exit;
     }
 
-    ret = str_parms_get_str(parms, "dtv_has_video", value, sizeof(value));
+    ret = str_parms_get_str(parms, "has_dtv_video", value, sizeof(value));
     if (ret > 0) {
         unsigned int has_video = (unsigned int)atoi(value);
         ALOGI("%s() get the has video parameters %d \n", __func__, has_video);
