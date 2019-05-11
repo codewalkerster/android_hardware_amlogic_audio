@@ -37,6 +37,7 @@
 #define PORT_I2S1          8
 #define PORT_I2S2          9
 #define PORT_LOOPBACK      10
+#define PORT_BUILTINMIC    11
 
 #define PLAYBACK           0
 #define CAPTURE            1

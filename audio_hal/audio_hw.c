@@ -3239,6 +3239,9 @@ static unsigned int select_port_by_device(audio_devices_t in_device)
             inport = PORT_TV;
         else
             inport = PORT_SPDIF;
+    } else if ((in_device & AUDIO_DEVICE_IN_BACK_MIC) ||
+            (in_device & AUDIO_DEVICE_IN_BUILTIN_MIC)) {
+        inport = PORT_BUILTINMIC;
     } else {
         /* fix auge tv input, hdmirx, tunner */
         if (alsa_device_is_auge()
