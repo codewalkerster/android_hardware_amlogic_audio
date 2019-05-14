@@ -6697,7 +6697,7 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
         } else {
             float gain_speaker = 1.0;
             if (adev->is_STB)
-                gain_speaker = adev->sink_gain[OUTPORT_HDMI];
+                gain_speaker = adev->sink_gain[adev->active_outport];
             else
                 gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
 
