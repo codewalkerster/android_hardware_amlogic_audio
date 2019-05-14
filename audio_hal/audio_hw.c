@@ -9801,9 +9801,7 @@ static int adev_release_audio_patch(struct audio_hw_device *dev,
             release_patch(aml_dev);
         }
         aml_dev->audio_patching = 0;
-        if (aml_dev->active_inport != INPORT_TUNER) {
-            aml_dev->patch_src = SRC_INVAL;
-        }
+        aml_dev->patch_src = SRC_INVAL;
         aml_dev->parental_control_av_mute = false;
     }
 
@@ -9819,9 +9817,7 @@ static int adev_release_audio_patch(struct audio_hw_device *dev,
             release_dtv_patch(aml_dev);
         }
 #endif
-        if (aml_dev->active_inport != INPORT_TUNER) {
-            aml_dev->patch_src = SRC_INVAL;
-        }
+        aml_dev->patch_src = SRC_INVAL;
         if (aml_dev->patch_src == SRC_DTV) {
             ALOGI("patch src == DTV now line %d \n", __LINE__);
         }
