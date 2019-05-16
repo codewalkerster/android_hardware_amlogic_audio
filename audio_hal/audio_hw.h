@@ -386,7 +386,7 @@ struct aml_audio_device {
      * buffer pointer whose data output to headphone
      * buffer size equal to efect_buf_size
      */
-    void *hp_output_buf;
+    void *spk_output_buf;
     void *effect_buf;
     size_t effect_buf_size;
     size_t spk_tuning_lvl;
@@ -431,39 +431,6 @@ struct aml_audio_device {
     int system_app_mixing_status;
     int audio_type;
     struct aml_mixer_handle alsa_mixer;
-#if defined(IS_ATOM_PROJECT)
-    struct aml_stream_in *aux_mic_in;
-    int mic_running;
-    int spk_running;
-    ring_buffer_t spk_ring_buf;
-    void *spk_buf;
-    size_t spk_buf_size;
-    size_t spk_write_bytes;
-    size_t extra_write_bytes;
-    void *output_tmp_buf;
-    unsigned int output_tmp_buf_size;
-
-    // spk_buf mgmt
-    atom_stream_type_t atom_stream_type_val;
-    unsigned long long spk_buf_last_write_time;
-    unsigned long long spk_buf_write_count;
-    unsigned long long spk_buf_read_count;
-    unsigned long long spk_buf_very_first_write_time;
-
-    unsigned long long debug_spk_buf_time_last;
-    unsigned long long debug_spk_buf_time_curr;
-
-    bool has_dsp_lib;
-    void *aec_buf;
-    void *dsp_in_buf;
-    size_t dsp_frames;
-    void *pstFir_mic;
-    void *pstFir_spk;
-
-    pthread_mutex_t aec_spk_mic_lock;
-    pthread_mutex_t aec_spk_buf_lock;
-    pthread_mutex_t dsp_processing_lock;
-#endif
     struct subMixing *sm;
     struct aml_audio_mixer *audio_mixer;
     bool is_TV;
@@ -631,18 +598,6 @@ struct aml_stream_in {
     void *input_tmp_buffer;
     size_t input_tmp_buffer_size;
 
-#if defined(IS_ATOM_PROJECT)
-    int ref_count;
-    void *aux_buf;
-    size_t aux_buf_size;
-    size_t aux_buf_write_bytes;
-    void *mic_buf;
-    size_t mic_buf_size;
-    void *tmp_buffer_8ch;
-    size_t tmp_buffer_8ch_size;
-    pthread_mutex_t aux_mic_mutex;
-    pthread_cond_t aux_mic_cond;
-#endif
 };
 typedef  int (*do_standby_func)(struct aml_stream_out *out);
 typedef  int (*do_startup_func)(struct aml_stream_out *out);
