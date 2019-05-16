@@ -193,7 +193,35 @@ static const struct pcm_config pcm_config_bt = {
     .period_count = PLAYBACK_PERIOD_COUNT,
     .format = PCM_FORMAT_S16_LE,
 };
+int start_ease_in(struct aml_audio_device *adev) {
+    /*start ease in the audio*/
+    ease_setting_t ease_setting;
+    adev->audio_ease->data_format.format = AUDIO_FORMAT_PCM_16_BIT;
+    adev->audio_ease->data_format.ch = 8;
+    adev->audio_ease->data_format.sr = 48000;
+    adev->audio_ease->ease_type = EaseInCubic;
+    ease_setting.duration = 200;
+    ease_setting.start_volume = 0.0;
+    ease_setting.target_volume = 1.0;
+    aml_audio_ease_config(adev->audio_ease, &ease_setting);
 
+    return 0;
+}
+
+int start_ease_out(struct aml_audio_device *adev) {
+    /*start ease out the audio*/
+    ease_setting_t ease_setting;
+    ease_setting.duration = 150;
+    ease_setting.start_volume = 1.0;
+    ease_setting.target_volume = 0.0;
+    adev->audio_ease->ease_type = EaseOutCubic;
+    adev->audio_ease->data_format.format = AUDIO_FORMAT_PCM_16_BIT;
+    adev->audio_ease->data_format.ch = 8;
+    adev->audio_ease->data_format.sr = 48000;
+    aml_audio_ease_config(adev->audio_ease, &ease_setting);
+
+    return 0;
+}
 static void select_output_device (struct aml_audio_device *adev);
 static void select_input_device (struct aml_audio_device *adev);
 static void select_devices (struct aml_audio_device *adev);
@@ -3926,6 +3954,9 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
                 ALOGI("%s: unmute audio since audio signal is stable", __func__);
                 in->mute_log_cntr = 0;
                 in->mute_flag = 0;
+                /* fade in start */
+                ALOGI("start fade in");
+                start_ease_in(adev);
             }
         }
 
@@ -6464,6 +6495,55 @@ int dsp_process_output(struct aml_audio_device *adev, void *in_buffer,
 }
 #endif
 
+static void output_mute(struct audio_stream_out *stream, size_t *output_buffer_bytes)
+{
+    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
+    struct aml_audio_device *adev = aml_out->dev;
+
+    /* when aux/spdif/arcin/hdmiin switching, mute 1000ms, then start fade in. */
+    if (adev->patch_src == SRC_LINEIN || adev->patch_src == SRC_SPDIFIN
+            || adev->patch_src == SRC_HDMIIN) {
+        if (adev->active_input != NULL && (!adev->patch_start)) {
+            clock_gettime(CLOCK_MONOTONIC, &adev->mute_start_ts);
+            adev->patch_start = 1;
+            adev->mute_start = true;
+            ALOGI ("%s() detect AUX/SPDIF start mute 1000ms", __func__);
+        }
+        if (aml_out->tmp_buffer_8ch != NULL && adev->mute_start) {
+            if (!Stop_watch(adev->mute_start_ts, 1000)) {
+                adev->mute_start = false;
+                start_ease_in(adev);
+
+                ALOGI ("%s() AUX/SPDIF/ARC unmute, start fade in", __func__);
+            } else {
+                memset(aml_out->tmp_buffer_8ch, 0, (*output_buffer_bytes));
+            }
+        }
+    } else if (adev->patch_src == SRC_DTV) {
+#if 1
+        if (adev->audio_patch != NULL && (!adev->patch_start)) {
+            clock_gettime(CLOCK_MONOTONIC, &adev->mute_start_ts);
+            adev->patch_start = 1;
+            adev->mute_start = true;
+            ALOGI ("%s() detect DTV start mute 200ms", __func__);
+        }
+        if (aml_out->tmp_buffer_8ch != NULL && adev->mute_start) {
+            if (!Stop_watch(adev->mute_start_ts, 200)) {
+            adev->mute_start = false;
+            start_ease_in(adev);
+            ALOGI ("%s() DTV unmute, start fade in", __func__);
+            } else {
+                memset(aml_out->tmp_buffer_8ch, 0, (*output_buffer_bytes));
+            }
+        }
+#else
+        return;
+#endif
+    }
+    /*ease in or ease out*/
+    aml_audio_ease_process(adev->audio_ease, aml_out->tmp_buffer_8ch, *output_buffer_bytes);
+    return;
+}
 #define EQ_GAIN_DEFAULT (0.16)
 ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
                                 const void *buffer,
@@ -6695,6 +6775,7 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
     } else if (adev->patch_src == SRC_DTV && adev->tuner2mix_patch == 1){
         dtv_in_write(stream,buffer, bytes);
     }
+    output_mute(stream,output_buffer_bytes);
 
     return 0;
 }
@@ -9048,6 +9129,12 @@ static int release_patch(struct aml_audio_device *aml_dev)
     pthread_mutex_lock(&aml_dev->patch_lock);
     release_patch_l(aml_dev);
     pthread_mutex_unlock(&aml_dev->patch_lock);
+    if (aml_dev->audio_ease) {
+        ALOGI("%s(), do fade out", __func__);
+        start_ease_out(aml_dev);
+        aml_dev->patch_start = false;
+        usleep(200*1000);
+    }
 
     return 0;
 }
@@ -10449,6 +10536,12 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
               adev->aml_ng_attrack_time, adev->aml_ng_release_time);
     }
 
+    if (aml_audio_ease_init(&adev->audio_ease) < 0) {
+        ALOGE("aml_audio_ease_init faild\n");
+        ret = -EINVAL;
+        goto err_ringbuf;
+    }
+
     // adev->debug_flag is set in hw_write()
     // however, sometimes function didn't goto hw_write() before encounting error.
     // set debug_flag here to see more debug log when debugging.
@@ -10456,6 +10549,8 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     ALOGD("%s: exit", __func__);
     return 0;
 
+err_ringbuf:
+    ring_buffer_release(&adev->spk_tuning_rbuf);
 err_spk_tuning_buf:
     free(adev->spk_output_buf);
 err_effect_buf:

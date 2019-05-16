@@ -44,6 +44,7 @@
 #include "../libms12/include/aml_audio_ms12.h"
 //#include "aml_audio_mixer.h"
 #include "audio_port.h"
+#include "aml_audio_ease.h"
 
 /* number of frames per period */
 /*
@@ -444,6 +445,9 @@ struct aml_audio_device {
     int sub_apid;
     int sub_afmt;
     int reset_dtv_audio;
+    int patch_start;
+    int mute_start;
+    aml_audio_ease_t  *audio_ease;
 };
 
 struct meta_data {
@@ -711,5 +715,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
 int dsp_process_output(struct aml_audio_device *adev, void *in_buffer,
                        size_t bytes);
 int release_patch_l(struct aml_audio_device *adev);
+int start_ease_in(struct aml_audio_device *adev);
+int start_ease_out(struct aml_audio_device *adev);
 
 #endif
