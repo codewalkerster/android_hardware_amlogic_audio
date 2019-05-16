@@ -20,7 +20,7 @@
 #include <math.h>
 
 // Absolute min volume in dB (can be represented in single precision normal float value)
-#define VOLUME_MIN_DB (-758)
+#define VOLUME_MIN_DB (-100)
 
 static inline float DbToAmpl(float decibels)
 {

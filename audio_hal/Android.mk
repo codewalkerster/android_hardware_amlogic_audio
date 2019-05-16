@@ -79,7 +79,8 @@ include $(BUILD_PREBUILT)
         audio_dtv_ad.c \
         audio_android_resample_api.c \
         aml_audio_timer.c \
-        audio_virtual_buf.c
+        audio_virtual_buf.c \
+        aml_audio_ease.c
 
 
     LOCAL_C_INCLUDES += \
