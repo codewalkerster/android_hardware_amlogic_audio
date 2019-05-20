@@ -86,12 +86,15 @@ typedef struct audio_type_parse {
     // used for software detection
     int state;
     int parsed_size;
+    audio_devices_t input_src;
+
 } audio_type_parse_t;
 
 int creat_pthread_for_audio_type_parse(
     pthread_t *audio_type_parse_ThreadID,
                      void **status,
-                     struct aml_mixer_handle *mixer);
+                     struct aml_mixer_handle *mixer,
+                     audio_devices_t input_src);
 void exit_pthread_for_audio_type_parse(
     pthread_t audio_type_parse_ThreadID,
     void **status);

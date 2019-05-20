@@ -302,7 +302,7 @@ bool is_atv_in_stable_hw(struct audio_stream_in *stream);
 int set_audio_source(struct aml_mixer_handle *mixer_handle,
 		enum input_source audio_source, bool is_auge);
 int get_HW_resample(struct aml_mixer_handle *mixer_handle);
-int enable_HW_resample(struct aml_mixer_handle *mixer_handle, int enable);
+int enable_HW_resample(struct aml_mixer_handle *mixer_handle, int enable_sr);
 bool Stop_watch(struct timespec start_ts, int64_t time);
 bool signal_status_check(audio_devices_t in_device, int *mute_time,
                          struct audio_stream_in *stream);
@@ -321,5 +321,7 @@ bool is_av_in_stable_hw(struct audio_stream_in *stream);
 int set_stream_dual_output(struct audio_stream_out *stream, bool en);
 int update_stream_dual_output(struct audio_stream_out *stream);
 bool is_dual_output_stream(struct audio_stream_out *stream);
+
+int get_spdifin_samplerate(struct aml_mixer_handle *mixer_handle);
 
 #endif /* _AML_AUDIO_STREAM_H_ */

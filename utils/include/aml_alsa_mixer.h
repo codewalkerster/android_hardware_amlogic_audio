@@ -70,7 +70,13 @@ typedef enum MIXER_SPDIFIN_AUDIO_TYPE {
 /* Hardware resample enable */
 typedef enum MIXER_HW_RESAMPLE_ENABLE {
     HW_RESAMPLE_DISABLE = 0,
-    HW_RESAMPLE_ENABLE  = 3, /* resample to 48k, sync with kernel */
+    HW_RESAMPLE_32K,
+    HW_RESAMPLE_44K,
+    HW_RESAMPLE_48K,
+    HW_RESAMPLE_88K,
+    HW_RESAMPLE_96K,
+    HW_RESAMPLE_176K,
+    HW_RESAMPLE_192K,
     HW_RESAMPLE_MAX,
 } eMixerHwResample;
 
@@ -126,6 +132,7 @@ typedef enum AML_MIXER_CTRL_ID {
     AML_MIXER_ID_AED_EQ_ENABLE,
     AML_MIXER_ID_AED_MULTI_DRC_ENABLE,
     AML_MIXER_ID_AED_FULL_DRC_ENABLE,
+    AML_MIXER_ID_SPDIF_IN_SAMPLERATE,
     AML_MIXER_ID_MAX,
 } eMixerCtrlID;
 

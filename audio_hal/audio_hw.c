@@ -9053,7 +9053,8 @@ static int create_patch_l(struct audio_hw_device *dev,
 
     if (patch->input_src == AUDIO_DEVICE_IN_HDMI || patch->input_src == AUDIO_DEVICE_IN_SPDIF) {
         //TODO add sample rate and channel information
-        ret = creat_pthread_for_audio_type_parse(&patch->audio_parse_threadID, &patch->audio_parse_para, &aml_dev->alsa_mixer);
+        ret = creat_pthread_for_audio_type_parse(&patch->audio_parse_threadID,
+                &patch->audio_parse_para, &aml_dev->alsa_mixer, patch->input_src);
         if (ret !=  0) {
             ALOGE("%s: create format parse thread failed", __func__);
             goto err_parse_thread;
@@ -9160,12 +9161,13 @@ static int create_patch(struct audio_hw_device *dev,
 
     return ret;
 }
-static int create_parser (struct audio_hw_device *dev)
+static int create_parser (struct audio_hw_device *dev, enum IN_PORT inport)
 {
     struct aml_audio_parser *parser;
     struct aml_audio_device *aml_dev = (struct aml_audio_device *) dev;
     int period_size = 4096;
     int ret = 0;
+    audio_devices_t input_src;
 
     ALOGI ("++%s", __func__);
     parser = calloc (1, sizeof (struct aml_audio_parser) );
@@ -9185,12 +9187,18 @@ static int create_parser (struct audio_hw_device *dev)
         goto err_ring_buf;
     }
 
-    ret = creat_pthread_for_audio_type_parse (&parser->audio_parse_threadID, &parser->audio_parse_para, &aml_dev->alsa_mixer);
+    if (inport == INPORT_HDMIIN)
+        input_src = AUDIO_DEVICE_IN_HDMI;
+    else
+        input_src = AUDIO_DEVICE_IN_SPDIF;
+
+    ret = creat_pthread_for_audio_type_parse (&parser->audio_parse_threadID,
+            &parser->audio_parse_para, &aml_dev->alsa_mixer, input_src);
     if (ret !=  0) {
         ALOGE ("%s,create format parse thread fail!\n",__FUNCTION__);
         goto err_in_thread;
     }
-    ALOGI ("--%s", __FUNCTION__);
+    ALOGI ("--%s input_source %x", __FUNCTION__, input_src);
     return 0;
 err_in_thread:
     ring_buffer_release (& (parser->aml_ringbuffer) );
@@ -9575,8 +9583,8 @@ static int adev_create_audio_patch(struct audio_hw_device *dev,
         aml_dev->active_inport = inport;
         aml_dev->src_gain[inport] = 1.0;
 
-        if (inport == INPORT_HDMIIN) {
-            create_parser(dev);
+        if (inport == INPORT_HDMIIN || inport == INPORT_SPDIF) {
+            create_parser(dev, inport);
         } else if ((inport == INPORT_TUNER) && (aml_dev->patch_src == SRC_DTV)){
             if (aml_dev->audio_patching) {
                 ALOGI("%s,!!!now release the dtv patch now\n ", __func__);
