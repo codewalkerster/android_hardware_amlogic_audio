@@ -76,6 +76,7 @@ static struct aml_mixer_list gAmlMixerList[] = {
     {AML_MIXER_ID_AED_EQ_ENABLE,        "AED EQ enable"},
     {AML_MIXER_ID_AED_MULTI_DRC_ENABLE, "AED Multi-band DRC enable"},
     {AML_MIXER_ID_AED_FULL_DRC_ENABLE,  "AED Full-band DRC enable"},
+    {AML_MIXER_ID_SPDIF_IN_SAMPLERATE,  "SPDIFIN audio samplerate"},
 };
 
 static char *get_mixer_name_by_id(int mixer_id)

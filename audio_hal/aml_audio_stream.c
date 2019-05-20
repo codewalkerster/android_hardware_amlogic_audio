@@ -375,20 +375,12 @@ int set_spdifin_pao(struct aml_mixer_handle *mixer_handle,int enable)
     return aml_mixer_ctrl_set_int(mixer_handle,AML_MIXER_ID_SPDIFIN_PAO, enable);
 }
 
-/*
-refer to misc.c in common/sound/soc/amlogic/common
-static const char *const hdmi_in_samplerate[] = {
-    "N/A",
-    "32000",
-    "44100",
-    "48000",
-    "88200",
-    "96000",
-    "176400",
-    "192000"
-};
+int get_spdifin_samplerate(struct aml_mixer_handle *mixer_handle)
+{
+    int index = aml_mixer_ctrl_get_int(mixer_handle, AML_MIXER_ID_SPDIF_IN_SAMPLERATE);
 
-*/
+    return index;
+}
 
 int get_hdmiin_samplerate(struct aml_mixer_handle *mixer_handle)
 {
@@ -425,12 +417,12 @@ int get_HW_resample(struct aml_mixer_handle *mixer_handle)
     return aml_mixer_ctrl_get_int(mixer_handle, AML_MIXER_ID_HW_RESAMPLE_ENABLE);
 }
 
-int enable_HW_resample(struct aml_mixer_handle *mixer_handle, int enable)
+int enable_HW_resample(struct aml_mixer_handle *mixer_handle, int enable_sr)
 {
-    if (enable == 0)
+    if (enable_sr == 0)
         aml_mixer_ctrl_set_int(mixer_handle, AML_MIXER_ID_HW_RESAMPLE_ENABLE, HW_RESAMPLE_DISABLE);
     else
-        aml_mixer_ctrl_set_int(mixer_handle, AML_MIXER_ID_HW_RESAMPLE_ENABLE, HW_RESAMPLE_ENABLE);
+        aml_mixer_ctrl_set_int(mixer_handle, AML_MIXER_ID_HW_RESAMPLE_ENABLE, enable_sr);
     return 0;
 }
 
