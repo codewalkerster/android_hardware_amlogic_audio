@@ -6838,9 +6838,9 @@ ssize_t hw_write (struct audio_stream_out *stream
                         ALOGE("%s() open failed", __func__);
                     }
                 } else {
-                    aml_out->pcm = getSubMixingPCMdev(adev->sm);
-                    if (aml_out->pcm == NULL) {
-                        ALOGE("%s() get pcm handle failed", __func__);
+                    ret = aml_alsa_output_open(stream);
+                    if (ret) {
+                        ALOGE("%s() open failed", __func__);
                     }
                 }
             } else {
