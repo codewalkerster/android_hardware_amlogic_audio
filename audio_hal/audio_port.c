@@ -461,6 +461,67 @@ size_t get_inport_consumed_size(struct input_port *port)
     return port->consumed_bytes;
 }
 
+static ssize_t output_port_start(struct output_port *port)
+{
+    struct audioCfg cfg = port->cfg;
+    struct pcm_config pcm_cfg;
+    int card = port->cfg.card;
+    int device = port->cfg.device;
+    struct pcm *pcm = NULL;
+
+    memset(&pcm_cfg, 0, sizeof(struct pcm_config));
+    pcm_cfg.channels = cfg.channelCnt;
+    pcm_cfg.rate = cfg.sampleRate;
+    pcm_cfg.period_size = DEFAULT_PLAYBACK_PERIOD_SIZE;
+    pcm_cfg.period_count = DEFAULT_PLAYBACK_PERIOD_CNT;
+    //pcm_cfg.stop_threshold = pcm_cfg.period_size * pcm_cfg.period_count - 128;
+    //pcm_cfg.silence_threshold = pcm_cfg.stop_threshold;
+    //pcm_cfg.silence_size = 1024;
+
+    if (cfg.format == AUDIO_FORMAT_PCM_16_BIT)
+        pcm_cfg.format = PCM_FORMAT_S16_LE;
+    else if (cfg.format == AUDIO_FORMAT_PCM_32_BIT)
+        pcm_cfg.format = PCM_FORMAT_S32_LE;
+    else {
+        ALOGE("%s(), unsupport", __func__);
+        pcm_cfg.format = PCM_FORMAT_S16_LE;
+    }
+    ALOGI("%s(), open ALSA hw:%d,%d", __func__, card, device);
+    pcm = pcm_open(card, device, PCM_OUT | PCM_MONOTONIC, &pcm_cfg);
+    if ((pcm == NULL) || !pcm_is_ready(pcm)) {
+        ALOGE("cannot open pcm_out driver: %s", pcm_get_error(pcm));
+        pcm_close(pcm);
+        return -EINVAL;
+    }
+    port->pcm_handle = pcm;
+    port->port_status = ACTIVE;
+
+    return 0;
+}
+
+static int output_port_standby(struct output_port *port)
+{
+    struct pcm *pcm = port->pcm_handle;
+    if (pcm) {
+        ALOGI("%s()", __func__);
+        pcm_close(pcm);
+        pcm = NULL;
+        port->port_status = STOPPED;
+    }
+    return 0;
+}
+
+int outport_stop_pcm(struct output_port *port)
+{
+    if (port == NULL)
+        return -EINVAL;
+
+    if (port->port_status == ACTIVE && port->pcm_handle) {
+        pcm_stop(port->pcm_handle);
+    }
+    return 0;
+}
+
 static ssize_t output_port_write(struct output_port *port, void *buffer, int bytes)
 {
     int bytes_to_write = bytes;
@@ -522,7 +583,6 @@ int outport_get_latency_frames(struct output_port *port)
 
 struct output_port *new_output_port(
         enum MIXER_OUTPUT_PORT port_index,
-        struct pcm *pcm_handle,
         struct audioCfg cfg,
         size_t buf_frames)
 {
@@ -555,21 +615,20 @@ struct output_port *new_output_port(
         goto err_rbuf_init;
     }
     //ret = pthread_create(&port->out_port_tid, NULL, port_threadloop, port);
-    if (ret < 0)
-        ALOGE("%s() thread run failed.", __func__);
+    //if (ret < 0)
+    //    ALOGE("%s() thread run failed.", __func__);
 
     port->port_index = port_index;
     port->cfg = cfg;
-    //port->format = format;
-    //port->frame_size = frame_size;
-    port->pcm_handle = pcm_handle;
     port->r_buf = ringbuf;
     port->data_buf_frame_cnt = buf_frames;
     port->data_buf_len = rbuf_size;
     port->data_buf = data;
-    //port->read = output_port_read;
+    port->start = output_port_start;
+    port->standby = output_port_standby;
     //port->write = output_port_write;
     port->write = output_port_write_alsa;
+    port->port_status = STOPPED;
 
     return port;
 

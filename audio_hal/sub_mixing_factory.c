@@ -28,11 +28,6 @@ static int out_pause_subMixingPCM(struct audio_stream_out *stream);
 static int out_resume_subMixingPCM(struct audio_stream_out *stream);
 static int out_flush_subMixingPCM(struct audio_stream_out *stream);
 
-struct pcm *getSubMixingPCMdev(struct subMixing *sm)
-{
-    return sm->pcmDev;
-}
-
 static int startMixingThread(struct subMixing *sm)
 {
     return pcm_mixer_thread_run(sm->mixerData);
@@ -48,7 +43,6 @@ static int initSubMixngOutput(
         struct audioCfg cfg,
         struct aml_audio_device *adev)
 {
-    struct pcm_config pcm_cfg;
     struct pcm *pcm = NULL;
     int card = alsa_device_get_card_index();
     int device = alsa_device_update_pcm_index(PORT_I2S, PLAYBACK);
@@ -58,39 +52,13 @@ static int initSubMixngOutput(
         ALOGE("%s(), NULL pointer", __func__);
         return -EINVAL;
     }
-    memset(&pcm_cfg, 0, sizeof(struct pcm_config));
-    pcm_cfg.channels = cfg.channelCnt;
-    pcm_cfg.rate = cfg.sampleRate;
-    pcm_cfg.period_size = DEFAULT_PLAYBACK_PERIOD_SIZE;
-    pcm_cfg.period_count = DEFAULT_PLAYBACK_PERIOD_CNT;
-    //pcm_cfg.period_count = PLAYBACK_PERIOD_COUNT;
-    //pcm_cfg.start_threshold = pcm_cfg.period_size * pcm_cfg.period_count;
-    pcm_cfg.stop_threshold = pcm_cfg.period_size * pcm_cfg.period_count - 128;
-    pcm_cfg.silence_threshold = pcm_cfg.stop_threshold;
-    pcm_cfg.silence_size = 1024;
 
-    if (cfg.format == AUDIO_FORMAT_PCM_16_BIT)
-        pcm_cfg.format = PCM_FORMAT_S16_LE;
-    else if (cfg.format == AUDIO_FORMAT_PCM_32_BIT)
-        pcm_cfg.format = PCM_FORMAT_S32_LE;
-    else {
-        ALOGE("%s(), unsupport", __func__);
-        pcm_cfg.format = PCM_FORMAT_S16_LE;
-    }
     ALOGI("%s(), open ALSA hw:%d,%d", __func__, card, device);
-    sm->pcm_cfg = pcm_cfg;
-    pcm = pcm_open(card, device, PCM_OUT | PCM_MONOTONIC, &pcm_cfg);
-    if ((pcm == NULL) || !pcm_is_ready(pcm)) {
-        ALOGE("cannot open pcm_out driver: %s", pcm_get_error(pcm));
-        pcm_close(pcm);
-        //return -EINVAL;
-    }
-
-    sm->pcmDev = pcm;
-
+    cfg.card = card;
+    cfg.device = device;
     if (sm->type == MIXER_LPCM) {
         struct amlAudioMixer *amixer = NULL;
-        amixer = newAmlAudioMixer(pcm, cfg, adev);
+        amixer = newAmlAudioMixer(cfg, adev);
         if (amixer == NULL) {
             res = -ENOMEM;
             goto err;
@@ -107,7 +75,6 @@ static int initSubMixngOutput(
     }
     return 0;
 err:
-    pcm_close(pcm);
     return res;
 };
 
@@ -120,8 +87,7 @@ static int releaseSubMixingOutput(struct subMixing *sm)
     }
     exitMixingThread(sm);
     freeAmlAudioMixer(sm->mixerData);
-    pcm_close(sm->pcmDev);
-    sm->pcmDev = NULL;
+
     return 0;
 }
 
@@ -613,43 +579,6 @@ static int on_input_avail_cbk(void *data)
     return 0;
 }
 
-static int out_get_presentation_position_subMixingPCM
-        (const struct audio_stream_out *stream, uint64_t *frames, struct timespec *timestamp)
-{
-    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
-    struct aml_audio_device *aml_dev = aml_out->dev;
-    struct subMixing *sm = aml_dev->sm;
-    struct amlAudioMixer *audio_mixer = sm->mixerData;
-    struct pcm *pcmDev = NULL;
-    unsigned int avail;
-    int ret = -1;
-
-    if (!frames || !timestamp) {
-        return -EINVAL;
-    }
-
-    if (sm->type != MIXER_LPCM) {
-        ALOGW("%s(), sub mixing type not (system)pcm, type is %d", __func__, sm->type);
-        return 0;
-    }
-
-    pcmDev = getSubMixingPCMdev(sm);
-    if (pcm_get_htimestamp(pcmDev, &avail, timestamp) == 0) {
-        size_t kernel_buf_size = sm->pcm_cfg.period_size * sm->pcm_cfg.period_count;
-        int64_t signed_frames = aml_out->frame_write_sum - kernel_buf_size + avail;
-        signed_frames -= mixer_latency_frames(audio_mixer);
-        /* It would be unusual for this value to be negative, but check just in case ... */
-        if (signed_frames >= 0) {
-            *frames = signed_frames;
-            ret = 0;
-        }
-        ALOGV("out_get_presentation_position out %p %"PRIu64", sec = %ld, nanosec = %ld\n",
-                aml_out, *frames, timestamp->tv_sec, timestamp->tv_nsec);
-    }
-
-    return ret;
-}
-
 static int out_get_presentation_position_port(
         const struct audio_stream_out *stream,
         uint64_t *frames,
@@ -672,7 +601,7 @@ static int out_get_presentation_position_port(
         if (ret == 0) {
             out->last_frames_postion = *frames;
         } else {
-            ALOGW("%s(), pts not valid yet", __func__);
+            ALOGV("%s(), pts not valid yet", __func__);
         }
     } else {
         *frames = frames_written_hw;
@@ -705,7 +634,6 @@ static int initSubMixingInputPcm(
     out->stream.common.standby = out_standby_subMixingPCM;
     if (flags & AUDIO_OUTPUT_FLAG_PRIMARY) {
         /* using subMixing clac function for system sound */
-        //out->stream.get_presentation_position = out_get_presentation_position_subMixingPCM;
         ALOGI("%s(), primary presentation", __func__);
         out->stream.get_presentation_position = out_get_presentation_position_port;
     }
@@ -1243,6 +1171,8 @@ static ssize_t out_write_subMixingPCM(struct audio_stream_out *stream,
 {
     struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = aml_out->dev;
+    struct subMixing *sm = adev->sm;
+    struct amlAudioMixer *audio_mixer = sm->mixerData;
     ssize_t ret = 0;
     //write_func  write_func_p = NULL;
 
@@ -1265,8 +1195,7 @@ static ssize_t out_write_subMixingPCM(struct audio_stream_out *stream,
     //    write_func_p = aml_out->write;
     //}
     if (adev->rawtopcm_flag) {
-        if (getSubMixingPCMdev(adev->sm))
-            pcm_stop(getSubMixingPCMdev(adev->sm));
+        mixer_stop_outport_pcm(audio_mixer);
         adev->rawtopcm_flag = false;
         ALOGI("rawtopcm_flag disable !!!");
     }

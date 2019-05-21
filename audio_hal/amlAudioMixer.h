@@ -38,7 +38,6 @@ struct amlAudioMixer;
  * return NULL if no enough memory.
  */
 struct amlAudioMixer *newAmlAudioMixer(
-        struct pcm *pcm_handle,
         struct audioCfg cfg,
         struct aml_audio_device *adev);
 
@@ -101,6 +100,8 @@ int mixer_set_padding_size(
 
 int mixer_set_continuous_output(struct amlAudioMixer *audio_mixer,
 		bool continuous_output);
+int mixer_idle_sleep_time_us(struct amlAudioMixer *audio_mixer);
+int mixer_stop_outport_pcm(struct amlAudioMixer *audio_mixer);
 
 __END_DECLS
 
