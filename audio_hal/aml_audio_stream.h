@@ -262,6 +262,8 @@ struct aml_audio_patch {
     unsigned int dtv_default_i2s_clock;
     unsigned int dtv_default_spdif_clock;
     unsigned int spdif_format_set;
+    int spdif_step_clk;
+    int i2s_step_clk;
     dtv_avsync_process_cb avsync_callback;
     pthread_mutex_t dtv_output_mutex;
     pthread_mutex_t dtv_input_mutex;

@@ -75,5 +75,5 @@ int dtv_patch_add_cmd(int cmd);
 int dtv_in_read(struct audio_stream_in *stream, void* buffer, size_t bytes);
 void dtv_in_write(struct audio_stream_out *stream, const void* buffer, size_t bytes);
 void save_latest_dtv_aformat(int afmt);
-int audio_set_spdif_clock(struct aml_audio_device*dev,int type);
+int audio_set_spdif_clock(struct aml_stream_out *stream,int type);
 #endif
