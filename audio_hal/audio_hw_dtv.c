@@ -60,6 +60,7 @@
 #include "audio_hw_ms12.h"
 #include "dolby_lib_api.h"
 #include "audio_dtv_ad.h"
+#include "alsa_device_parser.h"
 
 #define TSYNC_PCRSCR "/sys/class/tsync/pts_pcrscr"
 #define TSYNC_EVENT "/sys/class/tsync/event"
@@ -92,9 +93,9 @@
 #define DEFALUT_DTV_MIN_OUT_CLOCK   (1000*1000-100*1000)
 #define DEFAULT_DTV_MAX_OUT_CLOCK   (1000*1000+100*1000)
 #define DEFAULT_I2S_OUTPUT_CLOCK    (256*48000)
-#define DEFAULT_SPDIF_PLL_PCM_CLOCK    (256*24000)
+#define DEFAULT_CLOCK_MUL    (4)
 #define DEFAULT_SPDIF_PLL_DDP_CLOCK    (256*48000*2)
-#define DEFAULT_SPDIF_ADJUST_TIMES    (10)
+#define DEFAULT_SPDIF_ADJUST_TIMES    (40)
 #define DTV_DECODER_PTS_LOOKUP_PATH "/sys/class/tsync/apts_lookup"
 #define DTV_DECODER_CHECKIN_FIRSTAPTS_PATH "/sys/class/tsync/checkin_firstapts"
 #define DTV_DECODER_TSYNC_MODE      "/sys/class/tsync/mode"
@@ -441,12 +442,12 @@ static void dtv_adjust_i2s_output_clock(struct aml_audio_patch* patch, int direc
     unsigned int i2s_current_clock = 0;
     i2s_current_clock = aml_mixer_ctrl_get_int(handle, AML_MIXER_ID_CHANGE_I2S_PLL);
     if (i2s_current_clock > DEFAULT_I2S_OUTPUT_CLOCK * 4 ||
-        i2s_current_clock == 0) {
+        i2s_current_clock == 0 || step <= 0 || step > DEFAULT_DTV_OUTPUT_CLOCK) {
         return;
     }
     if (direct == DIRECT_SPEED) {
         if (compare_clock(i2s_current_clock, patch->dtv_default_i2s_clock)) {
-            output_clock = DEFAULT_DTV_OUTPUT_CLOCK + step * 100;
+            output_clock = DEFAULT_DTV_OUTPUT_CLOCK + step;
             aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_I2S_PLL, output_clock);
         } else if (i2s_current_clock < patch->dtv_default_i2s_clock) {
             int value = patch->dtv_default_i2s_clock - i2s_current_clock;
@@ -458,13 +459,13 @@ static void dtv_adjust_i2s_output_clock(struct aml_audio_patch* patch, int direc
         }
     } else if (direct == DIRECT_SLOW) {
         if (compare_clock(i2s_current_clock, patch->dtv_default_i2s_clock)) {
-            output_clock = DEFAULT_DTV_OUTPUT_CLOCK - step * 100;
+            output_clock = DEFAULT_DTV_OUTPUT_CLOCK - step;
             aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_I2S_PLL, output_clock);
         } else if (i2s_current_clock > patch->dtv_default_i2s_clock) {
             int value = i2s_current_clock - patch->dtv_default_i2s_clock;
             output_clock = DEFAULT_DTV_OUTPUT_CLOCK - value;
             aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_I2S_PLL, output_clock);
-            output_clock = DEFAULT_DTV_OUTPUT_CLOCK - step * 100;
+            output_clock = DEFAULT_DTV_OUTPUT_CLOCK - step;
             aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_I2S_PLL, output_clock);
         } else {
             //ALOGI("I2S_SLOW,clk %d,default %d",i2s_current_clock,patch->dtv_default_i2s_clock);
@@ -500,31 +501,31 @@ static void dtv_adjust_spdif_output_clock(struct aml_audio_patch* patch, int dir
     struct audio_hw_device *adev = patch->dev;
     struct aml_audio_device *aml_dev = (struct aml_audio_device *) adev;
     struct aml_mixer_handle * handle = &(aml_dev->alsa_mixer);
-    int output_clock, mul = 1, i;
+    int output_clock, i;
     unsigned int spidif_current_clock = 0;
     spidif_current_clock = aml_mixer_ctrl_get_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL);
     if (spidif_current_clock > DEFAULT_SPDIF_PLL_DDP_CLOCK * 4 ||
-        spidif_current_clock == 0) {
+        spidif_current_clock == 0 || step <= 0 || step > DEFAULT_DTV_OUTPUT_CLOCK ||
+        aml_dev->reset_dtv_audio == 1) {
         return;
-    } else if (spidif_current_clock > DEFAULT_I2S_OUTPUT_CLOCK) {
-        mul = 4;
-    } else {
-        mul = 1;
     }
     if (direct == DIRECT_SPEED) {
         if (compare_clock(spidif_current_clock, patch->dtv_default_spdif_clock)) {
-            output_clock = DEFAULT_DTV_OUTPUT_CLOCK + step * 10;
-            for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES * mul; i++) {
+            output_clock = DEFAULT_DTV_OUTPUT_CLOCK + step / DEFAULT_SPDIF_ADJUST_TIMES;
+            for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES; i++) {
                 aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL, output_clock);
             }
             //ALOGI("spidif_clock 1 set %d to %d",spidif_current_clock,aml_mixer_ctrl_get_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL));
         } else if (spidif_current_clock < patch->dtv_default_spdif_clock) {
             int value = patch->dtv_default_spdif_clock - spidif_current_clock;
+            if (value > DEFAULT_DTV_OUTPUT_CLOCK) {
+                return;
+            }
             output_clock = DEFAULT_DTV_OUTPUT_CLOCK + value / DEFAULT_SPDIF_ADJUST_TIMES;
             for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES; i++) {
                 aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL, output_clock);
             }
-            output_clock = DEFAULT_DTV_OUTPUT_CLOCK + step * 10 * mul;
+            output_clock = DEFAULT_DTV_OUTPUT_CLOCK + step / DEFAULT_SPDIF_ADJUST_TIMES;
             for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES; i++) {
                 aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL, output_clock);
             }
@@ -536,18 +537,21 @@ static void dtv_adjust_spdif_output_clock(struct aml_audio_patch* patch, int dir
         }
     } else if (direct == DIRECT_SLOW) {
         if (compare_clock(spidif_current_clock, patch->dtv_default_spdif_clock)) {
-            output_clock = DEFAULT_DTV_OUTPUT_CLOCK - step * 10 * mul;
+            output_clock = DEFAULT_DTV_OUTPUT_CLOCK - step / DEFAULT_SPDIF_ADJUST_TIMES;
             for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES; i++) {
                 aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL, output_clock);
             }
             //ALOGI("spidif_clock 3 set %d to %d",spidif_current_clock,aml_mixer_ctrl_get_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL));
         } else if (spidif_current_clock > patch->dtv_default_spdif_clock) {
             int value = spidif_current_clock - patch->dtv_default_spdif_clock;
+            if (value > DEFAULT_DTV_OUTPUT_CLOCK) {
+                return;
+            }
             output_clock = DEFAULT_DTV_OUTPUT_CLOCK - value / DEFAULT_SPDIF_ADJUST_TIMES;
             for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES; i++) {
                 aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL, output_clock);
             }
-            output_clock = DEFAULT_DTV_OUTPUT_CLOCK - step * 10 * mul;
+            output_clock = DEFAULT_DTV_OUTPUT_CLOCK - step / DEFAULT_SPDIF_ADJUST_TIMES;
             for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES; i++) {
                 aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL, output_clock);
             }
@@ -562,21 +566,21 @@ static void dtv_adjust_spdif_output_clock(struct aml_audio_patch* patch, int dir
         }
         if (spidif_current_clock > patch->dtv_default_spdif_clock) {
             int value = spidif_current_clock - patch->dtv_default_spdif_clock;
-            if (value < 60) {
+            if (value < 60 || value > DEFAULT_DTV_OUTPUT_CLOCK) {
                 return;
             }
-            output_clock = DEFAULT_DTV_OUTPUT_CLOCK - value / DEFAULT_SPDIF_ADJUST_TIMES / mul;
-            for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES * mul; i++) {
+            output_clock = DEFAULT_DTV_OUTPUT_CLOCK - value / DEFAULT_SPDIF_ADJUST_TIMES;
+            for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES; i++) {
                 aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL, output_clock);
             }
             //ALOGI("spidif_clock 5 set %d to %d",spidif_current_clock,aml_mixer_ctrl_get_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL));
         } else if (spidif_current_clock < patch->dtv_default_spdif_clock) {
             int value = patch->dtv_default_spdif_clock - spidif_current_clock;
-            if (value < 60) {
+            if (value < 60 || value > DEFAULT_DTV_OUTPUT_CLOCK) {
                 return;
             }
-            output_clock = DEFAULT_DTV_OUTPUT_CLOCK + value / DEFAULT_SPDIF_ADJUST_TIMES / mul;
-            for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES * mul; i++) {
+            output_clock = DEFAULT_DTV_OUTPUT_CLOCK + value / DEFAULT_SPDIF_ADJUST_TIMES;
+            for (i = 0; i < DEFAULT_SPDIF_ADJUST_TIMES; i++) {
                 aml_mixer_ctrl_set_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL, output_clock);
             }
             //ALOGI("spidif_clock 6 set %d to %d",spidif_current_clock,aml_mixer_ctrl_get_int(handle, AML_MIXER_ID_CHANGE_SPIDIF_PLL));
@@ -591,7 +595,7 @@ static void dtv_adjust_output_clock(struct aml_audio_patch * patch, int direct, 
     struct audio_hw_device *adev = patch->dev;
     struct aml_audio_device *aml_dev = (struct aml_audio_device *) adev;
     //ALOGI("dtv_adjust_output_clock not set,%x,%x",patch->decoder_offset,patch->dtv_pcm_readed);
-    if (!aml_dev) {
+    if (!aml_dev || step <= 0) {
         return;
     }
     if (patch->decoder_offset < 512 * 2 * 10 &&
@@ -603,15 +607,21 @@ static void dtv_adjust_output_clock(struct aml_audio_patch * patch, int direct, 
         patch->dtv_default_spdif_clock == 0) {
         return;
     }
-    if (!aml_dev->bHDMIARCon) {
-        if (patch-> dtv_default_i2s_clock > DEFAULT_SPDIF_PLL_DDP_CLOCK * 4 ||
-            patch-> dtv_default_i2s_clock == 0) {
+    if (patch->spdif_format_set == 0) {
+        if (patch->dtv_default_i2s_clock > DEFAULT_SPDIF_PLL_DDP_CLOCK * 4 ||
+            patch->dtv_default_i2s_clock == 0) {
             return;
         }
-        dtv_adjust_i2s_output_clock(patch, direct, step);
-        dtv_adjust_spdif_output_clock(patch, direct, step / 2);
+        dtv_adjust_i2s_output_clock(patch, direct, patch->i2s_step_clk);
+    } else if (!aml_dev->bHDMIARCon) {
+        if (patch->dtv_default_i2s_clock > DEFAULT_SPDIF_PLL_DDP_CLOCK * 4 ||
+            patch->dtv_default_i2s_clock == 0) {
+            return;
+        }
+        dtv_adjust_i2s_output_clock(patch, direct, patch->i2s_step_clk);
+        dtv_adjust_spdif_output_clock(patch, direct, patch->spdif_step_clk);
     } else {
-        dtv_adjust_spdif_output_clock(patch, direct, step / 10);
+        dtv_adjust_spdif_output_clock(patch, direct, patch->spdif_step_clk / 4);
     }
 }
 
@@ -1971,8 +1981,9 @@ int dtv_in_read(struct audio_stream_in *stream, void* buffer, size_t bytes)
     return ret;
 }
 
-int audio_set_spdif_clock(struct aml_audio_device*dev, int type)
+int audio_set_spdif_clock(struct aml_stream_out *stream, int type)
 {
+    struct aml_audio_device *dev = stream->dev;
     if (!dev || !dev->audio_patch) {
         return 0;
     }
@@ -1982,26 +1993,48 @@ int audio_set_spdif_clock(struct aml_audio_device*dev, int type)
     if (!(dev->usecase_masks > 1)) {
         return 0;
     }
-    ALOGI("[%s] type=%d\n", __FUNCTION__, type);
     if (type == AML_DOLBY_DIGITAL) {
-        dev->audio_patch->dtv_default_spdif_clock = DEFAULT_SPDIF_PLL_PCM_CLOCK;
         dev->audio_patch->spdif_format_set = 1;
     } else if (type == AML_DOLBY_DIGITAL_PLUS) {
-        dev->audio_patch->dtv_default_spdif_clock = DEFAULT_SPDIF_PLL_DDP_CLOCK;
         dev->audio_patch->spdif_format_set = 1;
     } else if (type == AML_DTS) {
-        dev->audio_patch->dtv_default_spdif_clock = DEFAULT_SPDIF_PLL_PCM_CLOCK;
         dev->audio_patch->spdif_format_set = 1;
     } else if (type == AML_DTS_HD) {
-        dev->audio_patch->dtv_default_spdif_clock = DEFAULT_SPDIF_PLL_PCM_CLOCK;
         dev->audio_patch->spdif_format_set = 1;
     } else if (type == AML_STEREO_PCM) {
-        dev->audio_patch->dtv_default_spdif_clock = DEFAULT_SPDIF_PLL_PCM_CLOCK;
-        dev->audio_patch->spdif_format_set = 1;
+        dev->audio_patch->spdif_format_set = 0;
     } else {
-        dev->audio_patch->dtv_default_spdif_clock = DEFAULT_SPDIF_PLL_PCM_CLOCK;
-        dev->audio_patch->spdif_format_set = 1;
+        dev->audio_patch->spdif_format_set = 0;
     }
+    if (alsa_device_is_auge()) {
+        if (dev->audio_patch->spdif_format_set) {
+            if (stream->hal_internal_format == AUDIO_FORMAT_E_AC3 &&
+                dev->bHDMIARCon && !is_dual_output_stream((struct audio_stream_out *)stream)) {
+                dev->audio_patch->dtv_default_spdif_clock =
+                    stream->config.rate * 128 * 4;
+            } else {
+                dev->audio_patch->dtv_default_spdif_clock =
+                    stream->config.rate * 128;
+            }
+        } else {
+            dev->audio_patch->dtv_default_spdif_clock =
+                DEFAULT_I2S_OUTPUT_CLOCK / 2;
+        }
+    } else {
+        if (dev->audio_patch->spdif_format_set) {
+            dev->audio_patch->dtv_default_spdif_clock =
+                stream->config.rate * 128 * 4;
+        } else {
+            dev->audio_patch->dtv_default_spdif_clock =
+                DEFAULT_I2S_OUTPUT_CLOCK;
+        }
+    }
+    dev->audio_patch->spdif_step_clk =
+        dev->audio_patch->dtv_default_spdif_clock / 128;
+    dev->audio_patch->i2s_step_clk =
+        DEFAULT_I2S_OUTPUT_CLOCK / 128;
+    ALOGI("[%s] type=%d,spdif %d,dual %d, arc %d", __FUNCTION__, type, dev->audio_patch->spdif_step_clk,
+        is_dual_output_stream((struct audio_stream_out *)stream), dev->bHDMIARCon);
     dtv_adjust_output_clock(dev->audio_patch, DIRECT_NORMAL, DEFAULT_DTV_ADJUST_CLOCK);
     return 0;
 }
@@ -2134,6 +2167,8 @@ int create_dtv_patch_l(struct audio_hw_device *dev, audio_devices_t input,
     patch->dtv_default_spdif_clock = aml_dev->dtv_spidif_clock;
     patch->spdif_format_set = 0;
     patch->avsync_callback = dtv_avsync_process;
+    patch->spdif_step_clk = 0;
+    patch->i2s_step_clk = 0;
 
     ALOGI("--%s", __FUNCTION__);
     return 0;

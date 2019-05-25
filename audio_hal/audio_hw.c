@@ -6106,10 +6106,10 @@ static void aml_tinymix_set_spdif_format(audio_format_t output_format,struct aml
     int spdif_mute = 0;
     if (output_format == AUDIO_FORMAT_AC3) {
         aml_spdif_format = AML_DOLBY_DIGITAL;
-        audio_set_spdif_clock(aml_dev, AML_DOLBY_DIGITAL);
+        audio_set_spdif_clock(stream, AML_DOLBY_DIGITAL);
     } else if (output_format == AUDIO_FORMAT_E_AC3) {
         aml_spdif_format = AML_DOLBY_DIGITAL_PLUS;
-        audio_set_spdif_clock(aml_dev, AML_DOLBY_DIGITAL_PLUS);
+        audio_set_spdif_clock(stream, AML_DOLBY_DIGITAL_PLUS);
         // for BOX with ms12 continous mode, need DDP output
         if ((eDolbyMS12Lib == aml_dev->dolby_lib_type) && aml_dev->continuous_audio_mode && !aml_dev->is_TV) {
             // do nothing
@@ -6118,10 +6118,10 @@ static void aml_tinymix_set_spdif_format(audio_format_t output_format,struct aml
         }
     } else if (output_format == AUDIO_FORMAT_DTS) {
         aml_spdif_format = AML_DTS;
-        audio_set_spdif_clock(aml_dev, AML_DTS);
+        audio_set_spdif_clock(stream, AML_DTS);
     } else {
         aml_spdif_format = AML_STEREO_PCM;
-        audio_set_spdif_clock(aml_dev, AML_STEREO_PCM);
+        audio_set_spdif_clock(stream, AML_STEREO_PCM);
     }
     aml_mixer_ctrl_set_int(&aml_dev->alsa_mixer, AML_MIXER_ID_SPDIF_FORMAT, aml_spdif_format);
     aml_mixer_ctrl_set_int(&aml_dev->alsa_mixer, AML_MIXER_ID_SPDIF_MUTE, spdif_mute);
