@@ -4196,6 +4196,13 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
                 ret = -EINVAL;
                 goto err;
             }
+            if (adev->audio_type != DTS) {
+                adev->dolby_lib_type = adev->dolby_lib_type_last;
+                if (eDolbyMS12Lib == adev->dolby_lib_type)
+                    adev->ms12.dolby_ms12_enable = true;
+            } else {
+                adev->ms12.dolby_ms12_enable = false;
+            }
             ALOGI("convert format IEC61937 to 0x%x\n", out->hal_internal_format);
             break;
         default:
@@ -4715,6 +4722,7 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
         adev->audio_type = val;
         ALOGI("audio_type: %d\n", adev->audio_type);
         goto exit;
+
     }
     ret = str_parms_get_int(parms, "hdmi_is_passthrough_active", &val);
     if (ret >= 0 ) {
