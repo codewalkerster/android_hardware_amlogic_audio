@@ -6552,19 +6552,19 @@ static void output_mute(struct audio_stream_out *stream, size_t *output_buffer_b
                 memset(aml_out->tmp_buffer_8ch, 0, (*output_buffer_bytes));
             }
         }
-    } else if (adev->patch_src == SRC_DTV) {
+    } else if (adev->patch_src == SRC_DTV || adev->patch_src == SRC_ATV) {
 #if 1
         if (adev->audio_patch != NULL && (!adev->patch_start)) {
             clock_gettime(CLOCK_MONOTONIC, &adev->mute_start_ts);
             adev->patch_start = 1;
             adev->mute_start = true;
-            ALOGI ("%s() detect DTV start mute 200ms", __func__);
+            ALOGI ("%s() detect tv source start mute 200ms", __func__);
         }
         if (aml_out->tmp_buffer_8ch != NULL && adev->mute_start) {
             if (!Stop_watch(adev->mute_start_ts, 200)) {
             adev->mute_start = false;
             start_ease_in(adev);
-            ALOGI ("%s() DTV unmute, start fade in", __func__);
+            ALOGI ("%s() tv source unmute, start fade in", __func__);
             } else {
                 memset(aml_out->tmp_buffer_8ch, 0, (*output_buffer_bytes));
             }
