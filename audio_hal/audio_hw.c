@@ -1127,7 +1127,6 @@ static int do_output_standby_direct (struct aml_stream_out *out)
 {
     int status = 0;
     struct aml_audio_device *adev = out->dev;
-    unsigned int device = out->device;
     ALOGI ("%s,out %p", __FUNCTION__,  out);
 
     if (!out->standby) {
@@ -1135,7 +1134,6 @@ static int do_output_standby_direct (struct aml_stream_out *out)
             free (out->buffer);
             out->buffer = NULL;
         }
-
         out->standby = 1;
         /* cleanup the audio hw fifo */
         if (out->pause_status == true && out->pcm) {
@@ -1146,7 +1144,6 @@ static int do_output_standby_direct (struct aml_stream_out *out)
             pcm_close(out->pcm);
         }
         out->pcm = NULL;
-        adev->pcm_handle[device] = NULL;
     }
     out->pause_status = false;
     set_codec_type (TYPE_PCM);
@@ -1251,7 +1248,12 @@ static int out_flush (struct audio_stream_out *stream)
             goto exit;
         }
     }
-    standy_func (out);
+    /*for tv product ,adev->pcm_handle should be maintained by using do_output_standby_l*/
+    if (adev->is_TV) {
+        do_output_standby_l(&stream->common);
+    } else {
+        standy_func (out);
+    }
     out->frame_write_sum  = 0;
     out->last_frames_postion = 0;
     out->spdif_enc_init_frame_write_sum =  0;
