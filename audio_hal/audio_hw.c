@@ -10033,9 +10033,7 @@ static int adev_close(hw_device_t *device)
     struct aml_audio_device *adev = (struct aml_audio_device *)device;
 
     ALOGD("%s: enter", __func__);
-    if (eDolbyDcvLib == adev->dolby_lib_type) {
-        unload_ddp_decoder_lib();
-    }
+    unload_ddp_decoder_lib();
 #if defined(IS_ATOM_PROJECT)
     if (adev->aec_buf)
         free(adev->aec_buf);
@@ -10484,8 +10482,13 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     if (eDolbyDcvLib == adev->dolby_lib_type) {
         memset(&adev->ddp, 0, sizeof(struct dolby_ddp_dec));
         adev->dcvlib_bypass_enable = 1;
-         if (load_ddp_decoder_lib() == 0)
-            ALOGI("load_ddp_decoder_lib success ");
+    }
+    /*
+    need also load the dcv lib as we need that when device-mixer patch
+    even when MS12 is enabled.
+    */
+    if (load_ddp_decoder_lib() == 0) {
+        ALOGI("load_ddp_decoder_lib success ");
     }
 
 #if ENABLE_NANO_NEW_PATH
