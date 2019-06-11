@@ -198,7 +198,7 @@ int aml_audio_ease_process(aml_audio_ease_t * ease_handle, void * in_data, size_
     int i = 0, j = 0;
     float vol_delta;
 
-    if (ease_handle == NULL || ch == 0 || size == 0 || ease_handle->ease_status == Invalid
+    if (ease_handle == NULL || in_data == NULL || ch == 0 || size == 0 || ease_handle->ease_status == Invalid
             || (format != AUDIO_FORMAT_PCM_16_BIT && format != AUDIO_FORMAT_PCM_32_BIT)) {
          return -1;
     }
