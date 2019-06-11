@@ -331,7 +331,6 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 	case PORT_I2S2:
 		pADD = p_info->i2s2_descrpt;
 		break;
-<<<<<<< HEAD
 	case PORT_LOOPBACK:
 		pADD = p_info->lpbk_descrpt;
 		break;
@@ -341,8 +340,6 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 	case PORT_EARC:
 		pADD = p_info->earc_descrpt;
 #endif
-=======
->>>>>>> b9e8c63... ODROID-N2:Support hdmith audio pass-through
 	case PORT_TV:
 		pADD = p_info->tvin_descrpt;
 		break;
