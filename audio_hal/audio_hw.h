@@ -599,6 +599,9 @@ struct aml_stream_in {
     size_t input_tmp_buffer_size;
     void *tmp_buffer_8ch;
     size_t tmp_buffer_8ch_size;
+    void *delay_buffer;
+    size_t delay_buffer_size;
+    void *tmp_delay_buffer;
 };
 typedef  int (*do_standby_func)(struct aml_stream_out *out);
 typedef  int (*do_startup_func)(struct aml_stream_out *out);
