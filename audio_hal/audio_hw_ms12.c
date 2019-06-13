@@ -129,6 +129,13 @@ int get_the_dolby_ms12_prepared(
     pthread_mutex_lock(&ms12->lock);
     ALOGI("++%s(), locked", __FUNCTION__);
     set_audio_system_format(AUDIO_FORMAT_PCM_16_BIT);
+    /*
+    when HDMITX send pause frame,we treated as INVALID format.
+    for MS12,we treat it as LPCM and mute the frame
+    */
+    if (input_format == AUDIO_FORMAT_INVALID) {
+        input_format = AUDIO_FORMAT_PCM_16_BIT;
+    }
     set_audio_main_format(input_format);
     ALOGI("+%s() dual_decoder_support %d\n", __FUNCTION__, adev->dual_decoder_support);
 
