@@ -3874,6 +3874,9 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
     int in_mute = 0, parental_mute = 0;
     bool stable = true;
 
+    if (bytes == 0)
+        return 0;
+
     /* acquiring hw device mutex systematically is useful if a low priority thread is waiting
      * on the input stream mutex - e.g. executing select_mode() while holding the hw device
      * mutex
@@ -4022,10 +4025,12 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
                 in->first_buffer_discard = true;
             }
             memset(buffer, 0, bytes);
-            int estimated_sched_time_us = 1000;
-            uint64_t time_us = bytes * 1000000 / audio_stream_in_frame_size(stream) /
-                    in_get_sample_rate(&stream->common) - estimated_sched_time_us;
-            usleep(time_us);
+            unsigned int estimated_sched_time_us = 1000;
+            uint64_t frame_duration = bytes * 1000000 / audio_stream_in_frame_size(stream) /
+                    in_get_sample_rate(&stream->common);
+
+            if (frame_duration > estimated_sched_time_us)
+                usleep(frame_duration - estimated_sched_time_us);
             ret = 0;
         } else {
             if (in->resampler) {
@@ -8792,7 +8797,7 @@ void *audio_patch_input_threadloop(void *data)
 
     in = (struct aml_stream_in *)stream_in;
 
-    patch->in_buf_size = read_bytes = in->config.period_size * audio_stream_in_frame_size(&in->stream);
+    patch->in_buf_size = read_bytes = DEFAULT_CAPTURE_PERIOD_SIZE * audio_stream_in_frame_size(&in->stream);
     patch->in_buf = calloc(1, patch->in_buf_size);
     if (!patch->in_buf) {
         adev_close_input_stream(patch->dev, &in->stream);
