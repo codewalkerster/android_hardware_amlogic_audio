@@ -1143,8 +1143,8 @@ ssize_t write_to_sco(struct audio_stream_out *stream,
 
 bool is_sco_port(enum OUT_PORT outport)
 {
-    return (outport & OUTPORT_BT_SCO_HEADSET) ||
-            (outport & OUTPORT_BT_SCO);
+    return (outport == OUTPORT_BT_SCO_HEADSET) ||
+            (outport == OUTPORT_BT_SCO);
 }
 
 ssize_t mixer_aux_buffer_write_sm(struct audio_stream_out *stream, const void *buffer,
