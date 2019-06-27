@@ -5953,7 +5953,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
 #ifdef ENABLE_AEC_FUNC
     // Default 2 ch pdm + 2 ch lb
     if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
-        aec_spk_mic_init(in->config.rate, 2, 2);
+        aec_spk_mic_init(in->requested_rate, 2, 2);
     }
 #endif
 
