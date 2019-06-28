@@ -217,7 +217,7 @@ void alsa_device_parser_pcm_string(struct alsa_info *p_info, char *InputBuffer)
 					p_info->i2s2_descrpt = mAudioDeviceDescriptor;
 				else if (!strncmp(PortName, ALSAPORT_I2S, strlen(ALSAPORT_I2S)))
 					p_info->i2s_descrpt = mAudioDeviceDescriptor;
-				else if (!strncmp(PortName, ALSAPORT_TDM, strlen(ALSAPORT_I2S)))
+				else if (!strncmp(PortName, ALSAPORT_TDM, strlen(ALSAPORT_TDM)))
 					p_info->tdm_descrpt = mAudioDeviceDescriptor;
 				else if (!strncmp(PortName, ALSAPORT_PDM, strlen(ALSAPORT_PDM)))
 					p_info->pdm_descrpt = mAudioDeviceDescriptor;
@@ -261,10 +261,6 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 	struct AudioDeviceDescriptor *pADD = NULL;
 
 	if (!p_info || !p_info->is_auge) {
-		/* fix to spdif port */
-		if (alsaPORT > PORT_PCM)
-			alsaPORT = PORT_SPDIF;
-
 		return alsaPORT;
 	}
 
