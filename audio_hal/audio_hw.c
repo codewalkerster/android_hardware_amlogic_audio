@@ -5871,6 +5871,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     ALOGD("%s: enter: devices(%#x) channel_mask(%#x) rate(%d) format(%#x) source(%d)", __func__,
         devices, config->channel_mask, config->sample_rate, config->format, source);
 
+    devices &= ~AUDIO_DEVICE_BIT_IN;
     if (check_input_parameters(config->sample_rate, config->format, channel_count, devices) != 0) {
         if (devices & AUDIO_DEVICE_IN_ALL_SCO) {
             config->sample_rate = VX_NB_SAMPLING_RATE;
@@ -5896,7 +5897,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     if (!in)
         return -ENOMEM;
 
-	if (remoteDeviceOnline() && (devices ==  AUDIO_DEVICE_IN_BUILTIN_MIC)) {
+	if (remoteDeviceOnline() && (devices & AUDIO_DEVICE_IN_BUILTIN_MIC)) {
         in->stream.common.set_sample_rate = kehwin_in_set_sample_rate;
         in->stream.common.get_sample_rate = kehwin_in_get_sample_rate;
         in->stream.common.get_buffer_size = kehwin_in_get_buffer_size;
@@ -5930,7 +5931,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
         in->stream.get_active_microphones = in_get_active_microphones;
     }
 
-    in->device = devices & ~AUDIO_DEVICE_BIT_IN;
+    in->device = devices;
     in->dev = adev;
     in->standby = 1;
 
@@ -5981,7 +5982,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     ALOGD("%s: exit", __func__);
 
 #if ENABLE_NANO_NEW_PATH
-	if (nano_is_connected() && (devices == AUDIO_DEVICE_IN_BUILTIN_MIC)) {
+	if (nano_is_connected() && (devices & AUDIO_DEVICE_IN_BUILTIN_MIC)) {
         ret = nano_input_open(*stream_in, config);
         if (ret < 0) {
             ALOGD("%s: nano_input_open : %d",__func__,ret);
