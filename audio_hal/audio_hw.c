@@ -3865,6 +3865,38 @@ static void inread_proc_aec(struct audio_stream_in *stream,
 }
 #endif
 
+/* here to fix pcm switch to raw nosie issue ,it is caused by hardware format detection later than output
+so we delay pcm output one frame to work around the issue,but it has a negative effect on av sync when normal
+pcm playback.abouot delay audio 21.3*BT_AND_USB_PERIOD_DELAY_BUF_CNT ms */
+static void processBtAndUsbCardData(struct aml_stream_in *in, struct aml_audio_parser *parser, void *pBuffer, size_t bytes)
+{
+    bool bIsBufNull = false;
+    for (int i=0; i<BT_AND_USB_PERIOD_DELAY_BUF_CNT; i++) {
+        if (NULL == in->pBtUsbPeriodDelayBuf[i]) {
+            bIsBufNull = true;
+        }
+    }
+
+    if (NULL == in->pBtUsbTempDelayBuf || in->delay_buffer_size != bytes || bIsBufNull) {
+        in->pBtUsbTempDelayBuf = realloc(in->pBtUsbTempDelayBuf, bytes);
+        memset(in->pBtUsbTempDelayBuf, 0, bytes);
+        for (int i=0; i<BT_AND_USB_PERIOD_DELAY_BUF_CNT; i++) {
+            in->pBtUsbPeriodDelayBuf[i] = realloc(in->pBtUsbPeriodDelayBuf[i], bytes);
+            memset(in->pBtUsbPeriodDelayBuf[i], 0, bytes);
+        }
+        in->delay_buffer_size = bytes;
+    }
+
+    if (AUDIO_FORMAT_PCM_16_BIT == parser->aformat || AUDIO_FORMAT_PCM_32_BIT == parser->aformat) {
+        memcpy(in->pBtUsbTempDelayBuf, pBuffer, bytes);
+        memcpy(pBuffer, in->pBtUsbPeriodDelayBuf[BT_AND_USB_PERIOD_DELAY_BUF_CNT-1], bytes);
+        for (int i=BT_AND_USB_PERIOD_DELAY_BUF_CNT-1; i>0; i--) {
+            memcpy(in->pBtUsbPeriodDelayBuf[i], in->pBtUsbPeriodDelayBuf[i-1], bytes);
+        }
+        memcpy(in->pBtUsbPeriodDelayBuf[0], in->pBtUsbTempDelayBuf, bytes);
+    }
+}
+
 static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t bytes)
 {
     int ret = 0;
@@ -3909,18 +3941,11 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
 
     /* if audio patch type is hdmi to mixer, check audio format from hdmi*/
     if (adev->patch_src == SRC_HDMIIN && parser != NULL) {
-        if (in->delay_buffer == NULL ||
-            in->tmp_delay_buffer == NULL ||
-            in->delay_buffer_size < bytes) {
-            in->delay_buffer = realloc(in->delay_buffer, bytes);
-            in->tmp_delay_buffer =  realloc(in->tmp_delay_buffer, bytes);
-            in->delay_buffer_size = bytes;
-        }
         audio_format_t cur_aformat = audio_parse_get_audio_type(parser->audio_parse_para);
         if (cur_aformat != parser->aformat) {
             ALOGI("%s: input format changed from %#x to %#x", __func__, parser->aformat, cur_aformat);
-            if (cur_aformat == AUDIO_FORMAT_PCM_16_BIT)  {
-                 memset(in->delay_buffer, 0 ,in->delay_buffer_size);
+            for (int i=0; i<BT_AND_USB_PERIOD_DELAY_BUF_CNT; i++) {
+                 memset(in->pBtUsbPeriodDelayBuf[i], 0, in->delay_buffer_size);
             }
             if (parser->aformat == AUDIO_FORMAT_PCM_16_BIT && //from pcm -> dd/dd+
                 (cur_aformat == AUDIO_FORMAT_AC3 || cur_aformat == AUDIO_FORMAT_E_AC3)) {
@@ -4070,8 +4095,9 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
                         *out_ptr++ = (int32_t)(left >> 2);
                         *out_ptr++ = (int32_t)(right >> 2);
                     }
-                } else
+                } else {
                     ret = aml_alsa_input_read(stream, buffer, bytes);
+                }
 
                 //ALOGI("%s, %d,ret:%d",__func__,__LINE__,ret);
                 if (getprop_bool("media.audiohal.indump")) {
@@ -4117,26 +4143,18 @@ exit:
     }
     pthread_mutex_unlock(&in->lock);
 
+    if (SRC_HDMIIN == adev->patch_src && parser != NULL) {
+        audio_format_t cur_aformat = audio_parse_get_audio_type(parser->audio_parse_para);
+        if ((parser->aformat == AUDIO_FORMAT_PCM_16_BIT && cur_aformat != parser->aformat ) ||
+            (parser->aformat == AUDIO_FORMAT_PCM_32_BIT && cur_aformat != parser->aformat))
+            memset(buffer , 0 , bytes);
+        else
+            processBtAndUsbCardData(in, parser, buffer, bytes);
+    }
+
     if (getprop_bool("media.audiohal.indump")) {
         aml_audio_dump_audio_bitstreams("/data/audio/in_read.raw",
             buffer, bytes);
-    }
-    /* here to fix pcm switch to raw nosie issue ,it is caused by hardware format detection later than output
-    so we delay pcm output one frame to work around the issue,but it has a negative effect on av sync when normal
-    pcm playback.abouot delay audio 25ms*/
-    if (adev->patch_src == SRC_HDMIIN && parser != NULL) {
-           audio_format_t cur_aformat = audio_parse_get_audio_type(parser->audio_parse_para);
-           if (cur_aformat != AUDIO_FORMAT_PCM_16_BIT && cur_aformat != parser->aformat) {
-               memset(buffer , 0, bytes);
-           } else if (parser->aformat == AUDIO_FORMAT_PCM_16_BIT) {
-                int tmp_bytes;
-                tmp_bytes = in->delay_buffer_size;
-                memcpy(in->tmp_delay_buffer,in->delay_buffer,in->delay_buffer_size);
-                in->delay_buffer_size = bytes;
-                memcpy(in->delay_buffer,buffer,in->delay_buffer_size);
-                memcpy(buffer,in->tmp_delay_buffer,tmp_bytes);
-                bytes = tmp_bytes;
-           }
     }
 
     return bytes;
@@ -5941,6 +5959,12 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     in->hal_format = config->format;
     in->mute_mdelay = INPUTSOURCE_MUTE_DELAY_MS;
 
+    for (int i=0; i<BT_AND_USB_PERIOD_DELAY_BUF_CNT; i++) {
+        in->pBtUsbPeriodDelayBuf[i] = NULL;
+    }
+    in->pBtUsbTempDelayBuf = NULL;
+    in->delay_buffer_size = 0;
+
     if (in->device & AUDIO_DEVICE_IN_WIRED_HEADSET) {
         // bluetooth rc voice
         // usecase for bluetooth rc audio hal
@@ -6048,14 +6072,18 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
         free(in->input_tmp_buffer);
         in->input_tmp_buffer = NULL;
     }
-    if (in->delay_buffer) {
-        free(in->delay_buffer);
-        in->delay_buffer = NULL;
+    for (int i=0; i<BT_AND_USB_PERIOD_DELAY_BUF_CNT; i++) {
+        if (in->pBtUsbPeriodDelayBuf[i]) {
+            free(in->pBtUsbPeriodDelayBuf[i]);
+            in->pBtUsbPeriodDelayBuf[i] = NULL;
+        }
     }
-    if (in->tmp_delay_buffer) {
-        free(in->tmp_delay_buffer);
-        in->delay_buffer = NULL;
+
+    if (in->pBtUsbTempDelayBuf) {
+        free(in->pBtUsbTempDelayBuf);
+        in->pBtUsbTempDelayBuf = NULL;
     }
+    in->delay_buffer_size = 0;
 
     if (in->proc_buf) {
         free(in->proc_buf);

@@ -71,6 +71,9 @@
 #define RESAMPLER_BUFFER_FRAMES (DEFAULT_PLAYBACK_PERIOD_SIZE * 6)
 #define RESAMPLER_BUFFER_SIZE (4 * RESAMPLER_BUFFER_FRAMES)
 
+/* bluetootch and usb in read data period delay count, for audio format detection too slow */
+#define BT_AND_USB_PERIOD_DELAY_BUF_CNT (3)
+
 static unsigned int DEFAULT_OUT_SAMPLING_RATE = 48000;
 
 /* sampling rate when using MM low power port */
@@ -618,9 +621,11 @@ struct aml_stream_in {
     size_t input_tmp_buffer_size;
     void *tmp_buffer_8ch;
     size_t tmp_buffer_8ch_size;
-    void *delay_buffer;
-    size_t delay_buffer_size;
-    void *tmp_delay_buffer;
+
+    void        *pBtUsbPeriodDelayBuf[BT_AND_USB_PERIOD_DELAY_BUF_CNT];
+    void        *pBtUsbTempDelayBuf;
+    size_t      delay_buffer_size;
+
     bool bt_sco_active;
 };
 typedef  int (*do_standby_func)(struct aml_stream_out *out);
