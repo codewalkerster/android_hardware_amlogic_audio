@@ -32,6 +32,7 @@
 #include <system/audio.h>
 #include <hardware/audio.h>
 
+#include "audio_hw_profile.h"
 #include "audio_hw_utils.h"
 #include "alsa_device_parser.h"
 #define SOUND_CARDS_PATH "/proc/asound/cards"
@@ -98,7 +99,16 @@ char*  get_hdmi_sink_cap(const char *keys,audio_format_t format)
     }
     memset(aud_cap, 0, 1024);
     memset(infobuf, 0, 1024);
-    fd = open("/sys/class/amhdmitx/amhdmitx0/aud_cap", O_RDONLY);
+    fd = open("/odm/receiver", O_RDONLY);
+    if (fd < 0) {
+        fd = open("/sys/class/amhdmitx/amhdmitx0/aud_cap", O_RDONLY);
+        fake_receiver = false;
+        ALOGD("read from aud_cap");
+    } else {
+        fake_receiver = true;
+        ALOGD("read from receiver");
+    }
+
     if (fd >= 0) {
         int nread = read(fd, infobuf, 1024);
         /* check the format cap */

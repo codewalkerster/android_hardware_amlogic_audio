@@ -23,4 +23,6 @@ int get_external_card(int type);
 char*  get_hdmi_sink_cap(const char *keys,audio_format_t format);
 char*  get_hdmi_arc_cap(unsigned *ad, int maxsize, const char *keys);
 char *strdup_hdmi_arc_cap_default(const char *keys, audio_format_t format);
+
+bool fake_receiver;
 #endif
