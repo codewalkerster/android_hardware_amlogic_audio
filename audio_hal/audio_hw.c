@@ -615,7 +615,10 @@ static int start_output_stream (struct aml_stream_out *out)
         out->config = pcm_config_bt;
     } else if (out->flags & AUDIO_OUTPUT_FLAG_DIRECT && !hwsync_lpcm) {
 #if defined(ODROID)
-	port = PORT_SPDIFB2HDMI;
+        if (fake_receiver)
+            port = PORT_SPDIF;
+        else
+            port = PORT_SPDIFB2HDMI;
 #else
         port = PORT_SPDIF;
 #endif
@@ -824,7 +827,10 @@ static int start_output_stream_direct (struct aml_stream_out *out)
             */
             if (format_is_passthrough(out->hal_format) || codec_type == TYPE_PCM_HIGH_SR) {
 #if defined(ODROID)
-		port = PORT_SPDIFB2HDMI;
+        if (fake_receiver)
+            port = PORT_SPDIF;
+        else
+            port = PORT_SPDIFB2HDMI;
 #else
 		port = PORT_SPDIF;
 #endif
