@@ -117,6 +117,9 @@
 
 #define CARD_AMLOGIC_BOARD 0
 
+/*Google Voice Assistant channel_mask */
+#define BUILT_IN_MIC 12
+
 #undef PLAYBACK_PERIOD_COUNT
 #define PLAYBACK_PERIOD_COUNT 4
 /* number of periods for capture */
@@ -5897,7 +5900,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     if (!in)
         return -ENOMEM;
 
-	if (remoteDeviceOnline() && (devices & AUDIO_DEVICE_IN_BUILTIN_MIC)) {
+    if (remoteDeviceOnline() && (devices & AUDIO_DEVICE_IN_BUILTIN_MIC) && (config->channel_mask != BUILT_IN_MIC)) {
         in->stream.common.set_sample_rate = kehwin_in_set_sample_rate;
         in->stream.common.get_sample_rate = kehwin_in_get_sample_rate;
         in->stream.common.get_buffer_size = kehwin_in_get_buffer_size;
