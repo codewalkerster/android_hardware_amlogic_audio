@@ -400,6 +400,7 @@ static int mixer_output_write(struct amlAudioMixer *audio_mixer)
 {
     enum MIXER_OUTPUT_PORT port_index = 0;
     struct output_port *out_port = audio_mixer->out_ports[port_index];
+    out_port->sound_track_mode = audio_mixer->adev->sound_track_mode;
     if (audio_mixer->standby)
         mixer_output_startup(audio_mixer);
 

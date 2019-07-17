@@ -542,7 +542,9 @@ static ssize_t output_port_write_alsa(struct output_port *port, void *buffer, in
 {
     int bytes_to_write = bytes;
     int ret = 0;
-
+    if (port->sound_track_mode == 3)
+           port->sound_track_mode = AM_AOUT_OUTPUT_LRMIX;
+    aml_audio_switch_output_mode((int16_t *)buffer, bytes, port->sound_track_mode);
     do {
         int written = 0;
         ALOGV("%s(), line %d", __func__, __LINE__);

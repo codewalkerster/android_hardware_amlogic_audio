@@ -707,6 +707,11 @@ void aml_audio_switch_output_mode(int16_t *buf, size_t bytes, AM_AOUT_OutputMode
                 buf[i] = buf[i + 1];
                 buf[i + 1] = tmp;
                 break;
+            case AM_AOUT_OUTPUT_LRMIX:
+                tmp = buf[i] / 2 + buf[i + 1] / 2;
+                buf[i] = tmp;
+                buf[i + 1] = tmp;
+                break;
             default :
                 break;
         }
