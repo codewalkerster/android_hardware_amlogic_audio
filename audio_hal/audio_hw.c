@@ -5386,6 +5386,16 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
         ALOGI("DTV sound mode %d ",mode );
         adev->audio_patch->mode = mode;
     }
+    ret = str_parms_get_str(parms, "sound_track", value, sizeof(value));
+    if (ret > 0) {
+        int mode = atoi(value);
+        if (adev->audio_patch != NULL) {
+            ALOGI("%s()the audio patch is not NULL \n", __func__);
+            goto exit;
+        }
+        ALOGI("video player sound_track mode %d ",mode );
+        adev->sound_track_mode = mode;
+    }
     ret = str_parms_get_str(parms, "fmt", value, sizeof(value));
     if (ret > 0) {
         unsigned int audio_fmt = (unsigned int)atoi(value); // zz
@@ -6855,6 +6865,10 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
 
             if (adev->patch_src == SRC_DTV && adev->audio_patch != NULL) {
                 aml_audio_switch_output_mode((int16_t *)effect_tmp_buf, bytes, adev->audio_patch->mode);
+            } else if ( adev->audio_patch == NULL) {
+               if (adev->sound_track_mode == 3)
+                  adev->sound_track_mode = AM_AOUT_OUTPUT_LRMIX;
+               aml_audio_switch_output_mode((int16_t *)effect_tmp_buf, bytes, adev->sound_track_mode);
             }
 
             /* apply volume for spk/hp, SPDIF/HDMI keep the max volume */
@@ -10707,6 +10721,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     ALOGI("%s() adev->dolby_lib_type = %d", __FUNCTION__, adev->dolby_lib_type);
     adev->patch_src = SRC_INVAL;
     adev->audio_type = LPCM;
+    adev->sound_track_mode = 0;
 
 #if (ENABLE_NANO_PATCH == 1)
 /*[SEN5-autumn.zhao-2018-01-11] add for B06 audio support { */
