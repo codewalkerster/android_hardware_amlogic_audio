@@ -893,16 +893,28 @@ static int check_input_parameters(uint32_t sample_rate, audio_format_t format, i
     return 0;
 }
 
+static int check_mic_parameters(struct mic_in_desc *mic_desc,
+        struct audio_config *config)
+{
+    struct pcm_config *pcm_cfg = &mic_desc->config;
+    uint32_t sample_rate = config->sample_rate;
+    audio_format_t format =config->format;
+    unsigned int channel_count = audio_channel_count_from_in_mask(config->channel_mask);
+
+    ALOGD("%s(sample_rate=%d, format=%d, channel_count=%d)",
+            __func__, sample_rate, format, channel_count);
+    if (sample_rate == pcm_cfg->rate &&
+            format == AUDIO_FORMAT_PCM_16_BIT)
+        return 0;
+
+    return -EINVAL;
+}
+
 static size_t get_input_buffer_size(unsigned int period_size, uint32_t sample_rate, audio_format_t format, int channel_count)
 {
     size_t size;
 
     ALOGD("%s(sample_rate=%d, format=%d, channel_count=%d)", __FUNCTION__, sample_rate, format, channel_count);
-
-    if (check_input_parameters(sample_rate, format, channel_count, AUDIO_DEVICE_NONE) != 0) {
-        return 0;
-    }
-
     /* take resampling into account and return the closest majoring
     multiple of 16 frames, as audioflinger expects audio buffers to
     be a multiple of 16 frames */
@@ -3272,9 +3284,10 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
 }
 
 /** audio_stream_in implementation **/
-static unsigned int select_port_by_device(audio_devices_t in_device)
+static unsigned int select_port_by_device(struct aml_audio_device *adev)
 {
     unsigned int inport = PORT_I2S;
+    audio_devices_t in_device = adev->in_device;
 
     if (in_device & AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET) {
         inport = PORT_PCM;
@@ -3288,7 +3301,22 @@ static unsigned int select_port_by_device(audio_devices_t in_device)
             inport = PORT_SPDIF;
     } else if ((in_device & AUDIO_DEVICE_IN_BACK_MIC) ||
             (in_device & AUDIO_DEVICE_IN_BUILTIN_MIC)) {
-        inport = PORT_BUILTINMIC;
+        if (adev->mic_desc) {
+            struct mic_in_desc *desc = adev->mic_desc;
+
+            switch (desc->mic) {
+            case DEV_MIC_PDM:
+                inport = PROT_PDM;
+                break;
+            case DEV_MIC_TDM:
+                inport = PORT_BUILTINMIC;
+                break;
+            default:
+                inport = PORT_BUILTINMIC;
+                break;
+            }
+        } else
+            inport = PORT_BUILTINMIC;
     } else {
         /* fix auge tv input, hdmirx, tunner */
         if (alsa_device_is_auge()
@@ -3352,7 +3380,7 @@ static int start_input_stream(struct aml_stream_in *in)
     }
 
     card = alsa_device_get_card_index();
-    port = select_port_by_device(adev->in_device);
+    port = select_port_by_device(adev);
     /* check to update alsa device by port */
     alsa_device = alsa_device_update_pcm_index(port, CAPTURE);
     ALOGD("*%s, open alsa_card(%d) alsa_device(%d), in_device:0x%x\n",
@@ -4095,6 +4123,19 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
                         *out_ptr++ = (int32_t)(left >> 2);
                         *out_ptr++ = (int32_t)(right >> 2);
                     }
+                } else if (in->config.channels == 4 ||
+                        (in->config.channels == 2 && channel_count != 2)) {
+                    unsigned int mult = in->config.channels / channel_count;
+                    size_t read_bytes = mult * bytes;
+
+                    if (in->input_tmp_buffer ||
+                        in->input_tmp_buffer_size < read_bytes) {
+                        in->input_tmp_buffer = realloc(in->input_tmp_buffer, read_bytes);
+                        in->input_tmp_buffer_size = read_bytes;
+                    }
+                    aml_alsa_input_read(stream, in->input_tmp_buffer, read_bytes);
+                    adjust_channels(in->input_tmp_buffer, in->config.channels,
+                            buffer, channel_count, 2, read_bytes);
                 } else {
                     ret = aml_alsa_input_read(stream, buffer, bytes);
                 }
@@ -5802,10 +5843,6 @@ static size_t adev_get_input_buffer_size(const struct audio_hw_device *dev __unu
     ALOGD("%s: enter: channel_mask(%#x) rate(%d) format(%#x)", __func__,
         config->channel_mask, config->sample_rate, config->format);
 
-    if (check_input_parameters(config->sample_rate, config->format, channel_count, AUDIO_DEVICE_NONE) != 0) {
-        return -EINVAL;
-    }
-
     size = get_input_buffer_size(config->frame_count, config->sample_rate, config->format, channel_count);
 
     ALOGD("%s: exit: buffer_size = %zu", __func__, size);
@@ -5815,6 +5852,7 @@ static size_t adev_get_input_buffer_size(const struct audio_hw_device *dev __unu
 
 static int choose_stream_pcm_config(struct aml_stream_in *in)
 {
+    struct aml_audio_device *adev = in->dev;
     int channel_count = audio_channel_count_from_in_mask(in->hal_channel_mask);
     int ret = 0;
 
@@ -5823,7 +5861,15 @@ static int choose_stream_pcm_config(struct aml_stream_in *in)
     else
         memcpy(&in->config, &pcm_config_in, sizeof(pcm_config_in));
 
-    in->config.channels = channel_count;
+    if (adev->mic_desc) {
+        struct mic_in_desc *desc = adev->mic_desc;
+
+        in->config.channels = desc->config.channels;
+        in->config.rate = desc->config.rate;
+        in->config.format = desc->config.format;
+    } else
+        in->config.channels = channel_count;
+
     switch (in->hal_format) {
         case AUDIO_FORMAT_PCM_16_BIT:
             in->config.format = PCM_FORMAT_S16_LE;
@@ -5902,6 +5948,19 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
             config->channel_mask = AUDIO_CHANNEL_IN_STEREO;
         }
         return -EINVAL;
+    }
+
+    /* add constrains for MIC which may be used by both loopback and normal record */
+    if (adev->mic_desc && (devices & AUDIO_DEVICE_IN_BUILTIN_MIC ||
+            devices & AUDIO_DEVICE_IN_BACK_MIC)) {
+        struct mic_in_desc *mic_desc = adev->mic_desc;
+
+        ret = check_mic_parameters(mic_desc, config);
+        if (ret < 0) {
+            config->sample_rate = mic_desc->config.rate;
+            config->format = AUDIO_FORMAT_PCM_16_BIT;
+            return ret;
+        }
     }
 
     if (channel_count == 1)
@@ -10280,6 +10339,10 @@ static int adev_close(hw_device_t *device)
     aml_hwsync_close_tsync(adev->tsync_fd);
     pthread_mutex_destroy(&adev->patch_lock);
 
+#ifdef PDM_MIC_CHANNELS
+    if (adev->mic_desc)
+        free(adev->mic_desc);
+#endif
     free(device);
     return 0;
 }
@@ -10538,6 +10601,33 @@ static int adev_get_audio_port(struct audio_hw_device *dev __unused, struct audi
 #define MAX_SPK_EXTRA_LATENCY_MS (100)
 #define DEFAULT_SPK_EXTRA_LATENCY_MS (15)
 
+//#define PDM_MIC_CHANNELS 4
+int init_mic_desc(struct aml_audio_device *adev)
+{
+    struct mic_in_desc *mic_desc = calloc(1, sizeof(struct mic_in_desc));
+    if (!mic_desc)
+        return -ENOMEM;
+
+    /* Config the default MIC-IN device */
+    mic_desc->mic = DEV_MIC_PDM;
+    mic_desc->config.rate = 16000;
+    mic_desc->config.format = PCM_FORMAT_S16_LE;
+
+#if (PDM_MIC_CHANNELS == 4)
+    ALOGI("%s(), 4 channels PDM mic", __func__);
+    mic_desc->config.channels = 4;
+#elif (PDM_MIC_CHANNELS == 2)
+    mic_desc->config.channels = 2;
+    ALOGI("%s(), 2 channels PDM mic", __func__);
+#else
+    ALOGI("%s(), default 2 channels PDM mic", __func__);
+    mic_desc->config.channels = 2;
+#endif
+
+    adev->mic_desc = mic_desc;
+    return 0;
+};
+
 static int adev_open(const hw_module_t* module, const char* name, hw_device_t** device)
 {
     struct aml_audio_device *adev;
@@ -10784,6 +10874,9 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
         goto err_ringbuf;
     }
 
+#ifdef PDM_MIC_CHANNELS
+    init_mic_desc(adev);
+#endif
     // adev->debug_flag is set in hw_write()
     // however, sometimes function didn't goto hw_write() before encounting error.
     // set debug_flag here to see more debug log when debugging.
