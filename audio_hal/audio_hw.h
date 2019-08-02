@@ -297,6 +297,18 @@ struct aml_bt_output {
     size_t resampler_buffer_size_in_frames;
     size_t resampler_in_frames;
 };
+
+enum mic_in_dev {
+    DEV_MIC_PDM = 0,
+    DEV_MIC_TDM,
+    DEV_MIC_CNT
+};
+
+struct mic_in_desc {
+    enum mic_in_dev mic;
+    struct pcm_config config;
+};
+
 #define MAX_STREAM_NUM   5
 #define HDMI_ARC_MAX_FORMAT  20
 struct aml_audio_device {
@@ -470,6 +482,9 @@ struct aml_audio_device {
     int mute_start;
     aml_audio_ease_t  *audio_ease;
     int sound_track_mode;
+
+    /* MIC_IN<->PDM/TDM and default configs */
+    struct mic_in_desc *mic_desc;
 };
 
 struct meta_data {
