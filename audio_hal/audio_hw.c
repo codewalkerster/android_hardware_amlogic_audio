@@ -3302,8 +3302,8 @@ exit:
         out->last_frames_postion = total_frame - total_latency_frame;//total_frame;
     }
     if (adev->debug_flag)
-        ALOGD("out %p,out->last_frames_postion %"PRId64", total latency frame = %d, skp sum %lld , tune frames %d,alsa frame %d\n",
-            out, out->last_frames_postion, total_latency_frame, out->frame_skip_sum,tuning_latency_frame,latency_frames);
+        ALOGD("out %p,out->last_frames_postion %"PRId64", latency = %d, skp sum %"PRId64", tune frames %d\n",
+            out, out->last_frames_postion, latency_frames, out->frame_skip_sum, tuning_latency);
     pthread_mutex_unlock (&out->lock);
     if (ret != 0) {
         usleep (bytes * 1000000 / audio_stream_out_frame_size (stream) /

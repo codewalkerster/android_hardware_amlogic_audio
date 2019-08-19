@@ -13,6 +13,7 @@ Description:
 
 #include <errno.h>
 #include <cutils/log.h>
+#include <inttypes.h>
 #include "hw_avsync_callbacks.h"
 #include "audio_hwsync.h"
 #include "audio_hw.h"
@@ -153,8 +154,9 @@ int on_meta_data_cbk(void *cookie,
                     __func__, adev->tsync_fd, ret);
         }
         if (out->debug_stream)
-            ALOGD("%s(): audio pts %dms, pcr %dms, latency %lldms, pcr leads %dms",
-                __func__, pts32/90, pcr/90, latency/90, (int)(pcr - pts32)/90);
+            ALOGD("%s()audio pts %dms, pcr %dms, latency %"PRId64"ms, diff %dms",
+                __func__, pts32/90, pcr/90, latency/90,
+                (pts32 > pcr) ? (pts32 - pcr)/90 : (pcr - pts32)/90);
         apts_gap = get_pts_gap(pcr, pts32);
         if (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
             sync_status = pcm_check_hwsync_status(apts_gap);
