@@ -294,7 +294,7 @@ exit:
             out->last_frames_postion = 0;//out->frame_write_sum;
     }
     if (out->debug_stream) {
-        ALOGD("%s(), frames sum %lld, last frames %lld", __func__, out->frame_write_sum, out->last_frames_postion);
+        ALOGD("%s(), frames sum %"PRId64", last frames %"PRId64"", __func__, out->frame_write_sum, out->last_frames_postion);
     }
     return written;
 }

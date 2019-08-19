@@ -3010,7 +3010,7 @@ exit:
         out->last_frames_postion = 0;//total_frame;
     }
     if (adev->debug_flag)
-        ALOGD("out %p,out->last_frames_postion %"PRId64", latency = %d, skp sum %lld , tune frames %d\n",
+        ALOGD("out %p,out->last_frames_postion %"PRId64", latency = %d, skp sum %"PRId64", tune frames %d\n",
             out, out->last_frames_postion, latency_frames, out->frame_skip_sum, tuning_latency);
     pthread_mutex_unlock (&out->lock);
     if (ret != 0) {
