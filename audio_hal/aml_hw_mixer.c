@@ -69,7 +69,7 @@ void aml_hw_mixer_reset(struct aml_hw_mixer *mixer)
     pthread_mutex_unlock(&mixer->lock);
 }
 
-static uint aml_hw_mixer_get_space(struct aml_hw_mixer *mixer)
+uint aml_hw_mixer_get_space(struct aml_hw_mixer *mixer)
 {
     unsigned space;
     if (mixer->wp >= mixer->rp)

@@ -48,6 +48,10 @@ struct audio_source_gain_s {
     float av;
 };
 
+struct audio_source_mute {
+    int mute;
+};
+
 struct audio_post_gain_s {
     int support;
     float speaker;

@@ -1,3 +1,11 @@
+/*
+* Copyright (c) 2014 Amlogic, Inc. All rights reserved.
+* *
+This source code is subject to the terms and conditions defined in the
+* file 'LICENSE' which is part of this source code package.
+* *
+Description:
+*/
 
 
 #define LOG_TAG "audio_hw_avsync"
@@ -116,7 +124,7 @@ void hwsync_header_set_pts(struct hw_avsync_header *header, uint64_t pts)
 
 int hwsync_read_header_byte(struct hw_avsync_header *header, uint8_t *byte)
 {
-    if (!header || !byte || header->bytes_read >= HW_AVSYNC_HEADER_SIZE_V2)
+    if (!header || !byte || header->bytes_read >= header->header_size)
         return -EINVAL;
 
     if (header->bytes_read == 0)
@@ -124,7 +132,7 @@ int hwsync_read_header_byte(struct hw_avsync_header *header, uint8_t *byte)
 
     *byte = header->header[header->bytes_read];
     header->bytes_read++;
-    if (header->bytes_read >= HW_AVSYNC_HEADER_SIZE_V2)
+    if (header->bytes_read >= header->header_size)
         header->is_complete = true;
 
     return 0;
@@ -133,15 +141,31 @@ int hwsync_read_header_byte(struct hw_avsync_header *header, uint8_t *byte)
 int hwsync_write_header_byte(struct hw_avsync_header *header, uint8_t byte)
 {
     size_t size = sizeof(HW_AVSYNC_HEADER_V2);
-    if (!header || header->bytes_written >= HW_AVSYNC_HEADER_SIZE_V2) {
+    if (!header || (header->version_num > 0 && header->bytes_written >= header->header_size)) {
         ALOGE("%s(), header null or inval written bytes", __func__);
         return -EINVAL;
     }
-    if ((header->bytes_written < size &&
-            byte == HW_AVSYNC_HEADER_V2[header->bytes_written]) ||
-            header->bytes_written >= size) {
+    ALOGV("header->bytes_written:%d byte:%0x",header->bytes_written,byte);
+    if (header->bytes_written < (HW_SYNC_VERSION_SIZE - 1) &&
+        byte == HW_AVSYNC_HEADER_V2[header->bytes_written]) {
         header->header[header->bytes_written++] = byte;
-        if (header->bytes_written >= HW_AVSYNC_HEADER_SIZE_V2) {
+    } else if (header->bytes_written == (HW_SYNC_VERSION_SIZE - 1)) {
+        header->header[header->bytes_written++] = byte;
+        if (byte == 1) {
+            ALOGV("version_num %d ",byte);
+            header->version_num = byte;
+            header->header_size = HW_AVSYNC_HEADER_SIZE_V1;
+        } else if (byte == 2) {
+            ALOGV("version_num %d ",byte);
+            header->version_num = byte;
+            header->header_size = HW_AVSYNC_HEADER_SIZE_V2;
+        } else {
+            ALOGE("invalid version_num %d ",header->version_num);
+        }
+    } else if (header->bytes_written >= HW_SYNC_VERSION_SIZE ) {
+        header->header[header->bytes_written++] = byte;
+        if (header->bytes_written >= header->header_size &&
+            (header->version_num == 2 || header->version_num == 1)) {
             header->is_complete = true;
             hwsync_header_extract(header);
         }
@@ -177,7 +201,7 @@ int hwsync_header_reset(struct hw_avsync_header *header)
 
 size_t hwsync_header_get_bytes_remaining(struct hw_avsync_header *header)
 {
-    return HW_AVSYNC_HEADER_SIZE_V2 - header->bytes_written;
+    return header->header_size - header->bytes_written;
 }
 
 void extractor_consume_output(struct hw_avsync_header_extractor *header_extractor)

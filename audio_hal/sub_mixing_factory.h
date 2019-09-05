@@ -46,6 +46,8 @@ typedef int (*writeSysBuf_t)(
             void *buffer,
             size_t bytes);
 struct audioCfg {
+    int card;
+    int device;
     uint32_t sampleRate;
     uint32_t channelCnt;
     audio_format_t format;
@@ -68,9 +70,6 @@ struct subMixing {
     void *sysData;
     /* output device related */
     struct audioCfg outputCfg;
-    /* ALSA pcm configs */
-    struct pcm_config pcm_cfg;
-    struct pcm *pcmDev;
     // which mixer is using, ms12 or pcm mixer
     void *mixerData;
     struct aml_audio_device *adev;
@@ -89,6 +88,5 @@ int deleteSubMixingInput(struct aml_stream_out *out);
 int usecase_change_validate_l_sm(struct aml_stream_out *out, bool is_standby);
 int out_standby_subMixingPCM(struct audio_stream *stream);
 int switchNormalStream(struct aml_stream_out *aml_out, bool on);
-struct pcm *getSubMixingPCMdev(struct subMixing *sm);
 
 #endif /* _SUB_MIXING_FACTORY_H_ */

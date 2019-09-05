@@ -1,5 +1,14 @@
+/*
+* Copyright (c) 2014 Amlogic, Inc. All rights reserved.
+* *
+This source code is subject to the terms and conditions defined in the
+* file 'LICENSE' which is part of this source code package.
+* *
+Description:
+*/
 
-#define LOG_TAG "audio_hwsync_cbks"
+
+#define LOG_TAG "audio_hw_hwsync_cbks"
 //#define LOG_NDEBUG 0
 
 #include <errno.h>
@@ -99,10 +108,22 @@ int on_meta_data_cbk(void *cookie,
 
     if (!out->first_pts_set) {
         uint32_t latency = 0;
+        int vframe_ready_cnt = 0;
+        int delay_count = 0;
         hwsync_header_construct(header);
         pts32 -= latency*90;
         ALOGD("%s(), set tsync start pts %d, latency %d, last position %lld",
             __func__, pts32, latency, out->last_frames_postion);
+        while (delay_count < 10) {
+            vframe_ready_cnt = get_sysfs_int("/sys/class/video/vframe_ready_cnt");
+            ALOGV("/sys/class/video/vframe_ready_cnt is %d", vframe_ready_cnt);
+            if (vframe_ready_cnt < 2) {
+                usleep(10000);
+                delay_count++;
+                continue;
+            }
+            break;
+        }
         aml_hwsync_set_tsync_start_pts(pts32);
         out->first_pts_set = true;
         //*delay_ms = 40;
@@ -132,9 +153,8 @@ int on_meta_data_cbk(void *cookie,
                     __func__, adev->tsync_fd, ret);
         }
         if (out->debug_stream)
-            ALOGD("%s()audio pts %dms, pcr %dms, latency %lldms, diff %dms",
-                __func__, pts32/90, pcr/90, latency/90,
-                (pts32 > pcr) ? (pts32 - pcr)/90 : (pcr - pts32)/90);
+            ALOGD("%s(): audio pts %dms, pcr %dms, latency %lldms, pcr leads %dms",
+                __func__, pts32/90, pcr/90, latency/90, (int)(pcr - pts32)/90);
         apts_gap = get_pts_gap(pcr, pts32);
         //sync_status = pcm_check_hwsync_status(apts_gap);
         sync_status = pcm_check_hwsync_status1(pcr, pts32);

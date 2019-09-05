@@ -203,6 +203,21 @@ int is_txlx_chip()
     return false;
 }
 
+int is_txl_chip()
+{
+    char buf[PROPERTY_VALUE_MAX];
+    int ret = -1;
+
+    ret = property_get("ro.board.platform", buf, NULL);
+    if (ret > 0) {
+        if (strcasecmp(buf, "txl") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
 /*
 convert audio formats to supported audio format
 8 ch goes to 32 bit
@@ -414,7 +429,7 @@ int aml_audio_get_arc_latency_offset(int aformat)
     char *prop_name = NULL;
 	(void)aformat;
     prop_name = "media.audio.hal.arc_latency.ddp";
-    latency_ms = 0;
+    latency_ms = -40;
     ret = property_get(prop_name, buf, NULL);
     if (ret > 0) {
         latency_ms = atoi(buf);
@@ -674,3 +689,27 @@ uint32_t tspec_diff_to_us(struct timespec tval_old,
     return (tval_new.tv_sec - tval_old.tv_sec) * 1000000
             + (tval_new.tv_nsec - tval_old.tv_nsec) / 1000;
 }
+
+void aml_audio_switch_output_mode(int16_t *buf, size_t bytes, AM_AOUT_OutputMode_t mode)
+{
+    int16_t tmp;
+
+    for (unsigned int i= 0; i < bytes / 2; i = i + 2) {
+        switch (mode) {
+            case AM_AOUT_OUTPUT_DUAL_LEFT:
+                buf[i + 1] = buf[i];
+                break;
+            case AM_AOUT_OUTPUT_DUAL_RIGHT:
+                buf[i] = buf[i + 1];
+                break;
+            case AM_AOUT_OUTPUT_SWAP:
+                tmp = buf[i];
+                buf[i] = buf[i + 1];
+                buf[i + 1] = tmp;
+                break;
+            default :
+                break;
+        }
+    }
+}
+

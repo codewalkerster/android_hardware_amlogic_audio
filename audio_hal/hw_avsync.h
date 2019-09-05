@@ -20,7 +20,7 @@
 
 #include <stdint.h>
 
-
+#define HW_SYNC_VERSION_SIZE 4
 #define HW_AVSYNC_HEADER_SIZE_V1 16
 #define HW_AVSYNC_HEADER_SIZE_V2 20
 /*  NTS will send frame size 24576 byte(128ms) */
@@ -28,10 +28,12 @@
 
 struct hw_avsync_header {
     uint8_t header[HW_AVSYNC_HEADER_SIZE_V2];
+    uint8_t version_num;
     uint32_t frame_size;
     uint64_t pts;
     size_t bytes_read;
     size_t bytes_written;
+    size_t header_size;
     bool is_complete;
     int (*extract)(struct hw_avsync_header *);
     int (*construct)(struct hw_avsync_header *);

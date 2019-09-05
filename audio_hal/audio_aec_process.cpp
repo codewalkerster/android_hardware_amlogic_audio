@@ -43,6 +43,23 @@ int32_t* aec_spk_mic_process(int32_t *spk_buf, int32_t *mic_buf, int *cleaned_sa
     }
     return (int32_t*)out_buf;
 }
+int16_t* aec_spk_mic_process_int16(int16_t *spk_buf, int16_t *mic_buf, int *cleaned_samples_per_channel)
+{
+    const int16_t *spk_samples = spk_buf;
+    const int16_t *mic_samples = mic_buf;
+    const audio_ears::GoogleAec::AudioBufferInfo &spk_buf_info = *p_spk_buf_info;
+    const audio_ears::GoogleAec::AudioBufferInfo &mic_buf_info = *p_mic_buf_info;
+    const int16_t *out_buf;
+
+    out_buf = pGoogleAec->ProcessInt16InterleavedAudio(spk_samples, spk_buf_info,
+        mic_samples, mic_buf_info, cleaned_samples_per_channel);
+    if (!out_buf) {
+        //ALOGE("%s: AEC process failed, cleaned_samples_per_channel = %d", __func__, *cleaned_samples_per_channel);
+        //pGoogleAec->Reset();
+        return NULL;
+    }
+    return (int16_t*)out_buf;
+}
 
 int aec_spk_mic_init(int sample_rate_hz, int num_loudspeaker_feeds,
             int num_microphone_channels)

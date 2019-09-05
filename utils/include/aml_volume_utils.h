@@ -20,7 +20,7 @@
 #include <math.h>
 
 // Absolute min volume in dB (can be represented in single precision normal float value)
-#define VOLUME_MIN_DB (-758)
+#define VOLUME_MIN_DB (-100)
 
 static inline float DbToAmpl(float decibels)
 {
@@ -41,6 +41,7 @@ static inline float AmplToDb(float amplification)
 float get_volume_by_index(int volume_index);
 int volume2Ms12DBGain(float inVol);
 void apply_volume(float volume, void *buf, int sample_size, int bytes);
+void apply_volume_16to32(float volume, int16_t *in_buf, int32_t *out_buf, int bytes);
 
 #endif
 

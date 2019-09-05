@@ -26,7 +26,7 @@
 #include "aml_volume_utils.h"
 
 #undef  LOG_TAG
-#define LOG_TAG  "audio_eq_drc_compensation"
+#define LOG_TAG  "audio_hw_primary"
 
 #define MODEL_SUM_DEFAULT_PATH "/vendor/etc/tvconfig/model/model_sum.ini"
 #define EQ_DRC_SOC_DEFAULT_PATH "/vendor/etc/tvconfig/audio/AMLOGIC_SOC_DEFAULT.ini"
@@ -533,7 +533,7 @@ int eq_drc_init(struct eq_drc_data *pdata)
     ret = eq_drc_param_init(pdata, 1, 1);
     if (ret < 0) {
         ALOGE("%s: EQ&DRC init failed", __FUNCTION__);
-        goto ERROR;
+        //goto ERROR;
     }
 
     return 0;

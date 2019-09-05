@@ -57,10 +57,13 @@ static void get_ddp_hardware_config_parameters(
 {
     hardware_config->channels = 2;
     hardware_config->format = PCM_FORMAT_S16_LE;
-    hardware_config->rate = rate * 4;
+    //hardware_config->rate = rate * 4;
+    // for android P, p212 platform found that the rate should not muliply by 4
+    hardware_config->rate = rate /* * 4 */;
     hardware_config->period_count = PLAYBACK_PERIOD_COUNT;
-    hardware_config->period_size = PERIOD_SIZE * 4;
-    hardware_config->start_threshold = hardware_config->period_size * hardware_config->period_count;
+    //hardware_config->period_size = PERIOD_SIZE /* * 4 */;
+    hardware_config->period_size = PERIOD_SIZE * 4 * 2;
+    hardware_config->start_threshold = hardware_config->period_size * hardware_config->period_count/2;
     hardware_config->avail_min = 0;
 
     return ;

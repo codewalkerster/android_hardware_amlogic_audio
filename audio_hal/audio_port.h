@@ -143,7 +143,8 @@ struct output_port {
     pthread_mutex_t lock;
     pthread_cond_t cond;
     ssize_t (*write)(struct output_port *port, void *buffer, int bytes);
-    //ssize_t (*read)(struct output_port *port, void *buffer, int bytes);
+    int (*start)(struct output_port *port);
+    int (*standby)(struct output_port *port);
     struct timespec tval_last;
 };
 bool is_inport_valid(enum MIXER_INPUT_PORT index);
@@ -185,7 +186,6 @@ int inport_buffer_level(struct input_port *port);
 
 struct output_port *new_output_port(
         enum MIXER_OUTPUT_PORT port_index,
-        struct pcm *pcm_handle,
         struct audioCfg cfg,
         size_t buf_frames);
 
@@ -194,4 +194,5 @@ int resize_output_port_buffer(struct output_port *port, size_t buf_frames);
 int outport_get_latency_frames(struct output_port *port);
 int set_inport_pts_valid(struct input_port *in_port, bool valid);
 bool is_inport_pts_valid(struct input_port *in_port);
+int outport_stop_pcm(struct output_port *port);
 #endif /* _AUDIO_PORT_H_ */
