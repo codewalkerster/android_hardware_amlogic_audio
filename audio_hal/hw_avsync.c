@@ -15,6 +15,7 @@ Description:
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <cutils/log.h>
 
 
@@ -145,7 +146,7 @@ int hwsync_write_header_byte(struct hw_avsync_header *header, uint8_t byte)
         ALOGE("%s(), header null or inval written bytes", __func__);
         return -EINVAL;
     }
-    ALOGV("header->bytes_written:%d byte:%0x",header->bytes_written,byte);
+    ALOGV("header->bytes_written:%zu byte:%0x",header->bytes_written,byte);
     if (header->bytes_written < (HW_SYNC_VERSION_SIZE - 1) &&
         byte == HW_AVSYNC_HEADER_V2[header->bytes_written]) {
         header->header[header->bytes_written++] = byte;
@@ -170,7 +171,7 @@ int hwsync_write_header_byte(struct hw_avsync_header *header, uint8_t byte)
             hwsync_header_extract(header);
         }
     } else {
-        ALOGE("%s(), invalid data %d, bytes_wrtten %d",
+        ALOGE("%s(), invalid data %d, bytes_wrtten %zu",
                 __func__, byte, header->bytes_written);
         header->bytes_written = 0;
         return -EINVAL;
@@ -213,7 +214,7 @@ void extractor_consume_output(struct hw_avsync_header_extractor *header_extracto
             header_extractor->cbk_cookie,
             header_extractor->data,
             header_extractor->data_size_bytes);
-        ALOGV("%s, header_extractor->data_size_bytes = %d, written =%d", __func__,
+        ALOGV("%s, header_extractor->data_size_bytes = %d, written =%zu", __func__,
                 header_extractor->data_size_bytes, written);
         if (written <= header_extractor->data_size_bytes) {
             header_extractor->sync_frame_written += written;
@@ -226,7 +227,7 @@ void extractor_consume_output(struct hw_avsync_header_extractor *header_extracto
         //header_extractor->sync_frame_written += written;
         //header_extractor->data_size_bytes -= written;
         ALOGV("--%s, data size =%d", __func__, header_extractor->data_size_bytes);
-        ALOGV("--%s, sync_frame_written =%d", __func__, header_extractor->sync_frame_written);
+        ALOGV("--%s, sync_frame_written =%zu", __func__, header_extractor->sync_frame_written);
     }
 }
 
@@ -251,7 +252,7 @@ ssize_t header_extractor_write(struct hw_avsync_header_extractor *header_extract
             ALOGV("--%s() writing header byte val %#x", __func__, *data);
             int ret = hwsync_write_header_byte(sync_header, *data);
             if (ret < 0) {
-                ALOGE("%s(), invalid data!!, bytes_remaining %d", __func__, bytes_remaining);
+                ALOGE("%s(), invalid data!!, bytes_remaining %zu", __func__, bytes_remaining);
                 extractor_reset(header_extractor);
                 bytes_remaining--;
                 data++;
@@ -274,17 +275,17 @@ ssize_t header_extractor_write(struct hw_avsync_header_extractor *header_extract
                 memset(header_extractor->data, 0, HW_AVSYNC_FRAME_SIZE);
                 // accumulate the payload consumed
                 header_extractor->payload_offset += frame_size;
-                ALOGV("%s() filling header complete, framesize = %d, payload offset %lld",
+                ALOGV("%s() filling header complete, framesize = %d, payload offset %"PRIu64"",
                         __func__, frame_size, header_extractor->payload_offset);
             }
             bytes_remaining--;
             data++;
         } else {
-            ALOGV("start dealing body read, bytes_remaing %d, sync_frame_written %d",
+            ALOGV("start dealing body read, bytes_remaing %zu, sync_frame_written %zu",
                     bytes_remaining, header_extractor->sync_frame_written);
             size_t bytes_to_copy = min(bytes_remaining,
                     hwsync_header_get_frame_size(sync_header) - header_extractor->sync_frame_written);
-            ALOGV("%s() writing body_bytes= %d,data_size_bytes= %d",
+            ALOGV("%s() writing body_bytes= %zu,data_size_bytes= %d",
 		    __func__, bytes_to_copy, header_extractor->data_size_bytes);
 
             memcpy(header_extractor->data + header_extractor->data_size_bytes, data, bytes_to_copy);
@@ -298,7 +299,7 @@ ssize_t header_extractor_write(struct hw_avsync_header_extractor *header_extract
                 extractor_consume_output(header_extractor);
                 extractor_reset(header_extractor);
                 header_extractor->sync_frame_written = 0;
-                ALOGV("%s() reading body over, next to reading header, return bytes %d",
+                ALOGV("%s() reading body over, next to reading header, return bytes %zu",
                         __func__, bytes - bytes_remaining);
                 continue;
                 //return bytes - bytes_remaining;

@@ -1092,7 +1092,7 @@ static int dtv_patch_pcm_wirte(unsigned char *pcm_data, int size,
         FILE *fp1 = fopen("/data/audio_dtv.pcm", "a+");
         if (fp1) {
             int flen = fwrite((char *)write_buf, 1, write_size, fp1);
-            ALOGI("%s buffer %p size %zu\n", __FUNCTION__, write_buf, write_size);
+            ALOGI("%s buffer %p size %d\n", __FUNCTION__, write_buf, write_size);
             fclose(fp1);
         }
     }

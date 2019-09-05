@@ -62,7 +62,7 @@ public:
         if (input_size > mWorkBufSize) {
             mWorkBuf = (unsigned char *)realloc(mWorkBuf, input_size);
             if (!mWorkBuf) {
-                ALOGE("malloc %d fail\n",input_size);
+                ALOGE("malloc %zu fail\n",input_size);
             } else {
                 mWorkBufSize = input_size;
             }

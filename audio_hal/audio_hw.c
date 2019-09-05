@@ -2845,7 +2845,7 @@ rewrite:
                     cur_pts -= (out_get_latency(stream) + hwsync_hdmi_latency) * 90;
                     aml_audio_hwsync_set_first_pts(out->hwsync, cur_pts);
                 } else {
-                    ALOGI("%s(), first pts not set, cur_pts %lld, last position %lld",
+                    ALOGI("%s(), first pts not set, cur_pts %"PRIu64", last position %"PRIu64"",
                         __func__, cur_pts, out->last_frames_postion);
                 }
             } else {
@@ -2870,7 +2870,7 @@ rewrite:
                     apts_gap = get_pts_gap (pcr, apts32);
                     sync_status = check_hwsync_status (apts_gap);
 
-                    ALOGV("%s()audio pts %dms, pcr %dms, latency %lldms, diff %dms",
+                    ALOGV("%s()audio pts %dms, pcr %dms, latency %"PRIu64"ms, diff %dms",
                         __func__, apts32/90, pcr/90, latency/90,
                         (apts32 > pcr) ? (apts32 - pcr)/90 : (pcr - apts32)/90);
 
@@ -2978,7 +2978,7 @@ rewrite:
                 out->frame_write_sum = spdifenc_get_total() / 4 + out->spdif_enc_init_frame_write_sum;
             }
             //ALOGV ("out %p, after out->frame_write_sum %"PRId64"\n", out, out->frame_write_sum);
-            ALOGV("---after out->frame_write_sum %"PRId64",spdifenc total %lld\n",
+            ALOGV("---after out->frame_write_sum %"PRId64",spdifenc total %"PRIu64"\n",
                 out->frame_write_sum, spdifenc_get_total() / 16);
         }
         goto exit;
@@ -3083,7 +3083,7 @@ exit:
         out->last_frames_postion = total_frame - total_latency_frame;//total_frame;
     }
     if (adev->debug_flag)
-        ALOGD("out %p,out->last_frames_postion %"PRId64", total latency frame = %d, skp sum %lld , tune frames %d,alsa frame %d\n",
+        ALOGD("out %p,out->last_frames_postion %"PRId64", total latency frame = %d, skp sum %"PRId64" , tune frames %d,alsa frame %d\n",
             out, out->last_frames_postion, total_latency_frame, out->frame_skip_sum,tuning_latency_frame,latency_frames);
     pthread_mutex_unlock (&out->lock);
     if (ret != 0) {
@@ -4109,9 +4109,11 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
 
     /*noise gate is only used in Linein for 16bit audio data*/
     if (adev->active_inport == INPORT_LINEIN && adev->aml_ng_enable == 1) {
+#ifndef __aarch64__
         int ng_status = noise_evaluation(adev->aml_ng_handle, buffer, bytes >> 1);
         /*if (ng_status == NG_MUTE)
             ALOGI("noise gate is working!");*/
+#endif
     }
 
     if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
@@ -7987,7 +7989,7 @@ ssize_t mixer_main_buffer_write (struct audio_stream_out *stream, const void *bu
                  }
             } else if (aml_out->hal_internal_format == AUDIO_FORMAT_DTS){
                 if (adev->debug_flag) {
-                    ALOGD("%s:%d non SPDIF/HDMIIN, DTS output bytes:%d", __func__, __LINE__, bytes);
+                    ALOGD("%s:%d non SPDIF/HDMIIN, DTS output bytes:%zu", __func__, __LINE__, bytes);
                 }
                 aml_audio_spdif_output(stream, (void *)buffer, bytes);
             }
@@ -8262,7 +8264,7 @@ re_write:
 
             } else {
                 if (adev->debug_flag) {
-                    ALOGD("%s:%d mixing non-hw_sync mode, output_format:0x%x, write_bytes:%d", __func__, __LINE__, output_format, write_bytes);
+                    ALOGD("%s:%d mixing non-hw_sync mode, output_format:0x%x, write_bytes:%zu", __func__, __LINE__, output_format, write_bytes);
                 }
                 if (getprop_bool("media.audiohal.mixer")) {
                     aml_audio_dump_audio_bitstreams("/data/audio/beforemix.raw",
@@ -8312,7 +8314,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
     bool hw_mix = need_hw_mix(adev->usecase_masks);
 
     if (adev->debug_flag) {
-        ALOGD("%s:%d size:%d, dolby_lib_type:0x%x, frame_size:%d", __func__, __LINE__, bytes, adev->dolby_lib_type, frame_size);
+        ALOGD("%s:%d size:%zu, dolby_lib_type:0x%x, frame_size:%zu", __func__, __LINE__, bytes, adev->dolby_lib_type, frame_size);
     }
 
 
@@ -8427,7 +8429,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
         uint64_t u64BufferDelayUs = ((AML_HW_MIXER_BUF_SIZE * 1000) / ( frame_size * u32SampleRate)) * 1000;
         uint64_t u64ConstantDelayUs = bytes * 1000000 / (frame_size * u32SampleRate * 3);
 
-        ALOGV("%s:%d sampleRate:%d, bytes_written:%d, frame_size:%d, u32FreeBuffer:%d, delay:%llums", __func__, __LINE__,
+        ALOGV("%s:%d sampleRate:%d, bytes_written:%zu, frame_size:%zu, u32FreeBuffer:%d, delay:%"PRIu64"ms", __func__, __LINE__,
             u32SampleRate, bytes_written, frame_size, u32FreeBuffer, (u64ConstantDelayUs/1000));
         usleep(u64ConstantDelayUs);
 
@@ -8436,7 +8438,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
             // (1/5 * AML_HW_MIXER_BUF_SIZE) / (frame_size * u32SampleRate) * 1000000 us
             uint64_t u64DelayTimeUs = ((AML_HW_MIXER_BUF_SIZE * 1000) / u32SampleRate) * (1000 / (5 * frame_size));
             usleep(u64DelayTimeUs);
-            ALOGI("%s:%d, mixer idle buffer less than 2/5, need usleep:%lldms end ", __func__, __LINE__, u64DelayTimeUs/1000);
+            ALOGI("%s:%d, mixer idle buffer less than 2/5, need usleep:%"PRIu64"ms end ", __func__, __LINE__, u64DelayTimeUs/1000);
         }
 
         if (getprop_bool("media.audiohal.mixer")) {
@@ -8479,7 +8481,7 @@ ssize_t process_buffer_write(struct audio_stream_out *stream,
     void *output_buffer = NULL;
     size_t output_buffer_bytes = 0;
     if (adev->debug_flag) {
-        ALOGD("%s:%d size:%d, hal_internal_format:0x%x", __func__, __LINE__, bytes, aml_out->hal_internal_format);
+        ALOGD("%s:%d size:%zu, hal_internal_format:0x%x", __func__, __LINE__, bytes, aml_out->hal_internal_format);
     }
 
     if (audio_hal_data_processing(stream, buffer, bytes, &output_buffer, &output_buffer_bytes, aml_out->hal_internal_format) == 0) {
@@ -8843,7 +8845,7 @@ void *audio_patch_input_threadloop(void *data)
 
         // buffer size diff from allocation size, need to resize.
         if (patch->in_buf_size < (size_t)read_bytes * period_mul) {
-            ALOGI("%s: !!realloc in buf size from %zu to %zu", __func__, patch->in_buf_size, read_bytes * period_mul);
+            ALOGI("%s: !!realloc in buf size from %zu to %zu", __func__, patch->in_buf_size, (size_t)read_bytes * period_mul);
             patch->in_buf = realloc(patch->in_buf, read_bytes * period_mul);
             patch->in_buf_size = read_bytes * period_mul;
         }
@@ -9056,7 +9058,7 @@ void *audio_patch_output_threadloop(void *data)
 
         // buffer size diff from allocation size, need to resize.
         if (patch->out_buf_size < (size_t)write_bytes * period_mul) {
-            ALOGI("%s: !!realloc out buf size from %zu to %zu", __func__, patch->out_buf_size, write_bytes * period_mul);
+            ALOGI("%s: !!realloc out buf size from %zu to %zu", __func__, patch->out_buf_size, (size_t)write_bytes * period_mul);
             patch->out_buf = realloc(patch->out_buf, write_bytes * period_mul);
             patch->out_buf_size = write_bytes * period_mul;
         }
@@ -10230,8 +10232,10 @@ static int adev_close(hw_device_t *device)
         free(adev->spk_output_buf);
     }
     if (adev->aml_ng_handle) {
+#ifndef __aarch64__
         release_noise_gate(adev->aml_ng_handle);
         adev->aml_ng_handle = NULL;
+#endif
     }
     ring_buffer_release(&(adev->spk_tuning_rbuf));
     if (adev->ar) {
@@ -10735,11 +10739,13 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     }
 
     if (adev && adev->aml_ng_enable) {
+#ifndef __aarch64__
         adev->aml_ng_handle = init_noise_gate(adev->aml_ng_level,
                                  adev->aml_ng_attrack_time, adev->aml_ng_release_time);
         ALOGI("%s: init amlogic noise gate: level: %fdB, attrack_time = %dms, release_time = %dms",
               __func__, adev->aml_ng_level,
               adev->aml_ng_attrack_time, adev->aml_ng_release_time);
+#endif
     }
 
     if (aml_audio_ease_init(&adev->audio_ease) < 0) {

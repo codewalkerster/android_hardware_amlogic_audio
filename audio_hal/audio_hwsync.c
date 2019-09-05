@@ -214,7 +214,7 @@ int aml_audio_hwsync_find_frame(audio_hwsync_t *p_hwsync,
                 p_hwsync->version_num = p_hwsync->hw_sync_header[3];
                 if (p_hwsync->version_num == 1 || p_hwsync->version_num == 2) {
                 } else  {
-                    ALOGI("invalid hwsync version num %zu",p_hwsync->version_num);
+                    ALOGI("invalid hwsync version num %d",p_hwsync->version_num);
                 }
             }
             if ((p_hwsync->version_num  == 1 && p_hwsync->hw_sync_header_cnt == HW_AVSYNC_HEADER_SIZE_V1 ) ||
