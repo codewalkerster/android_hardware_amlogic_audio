@@ -13,6 +13,7 @@ Description:
 
 #include <errno.h>
 #include <cutils/log.h>
+#include <inttypes.h>
 #include "hw_avsync_callbacks.h"
 #include "audio_hwsync.h"
 #include "audio_hw.h"
@@ -90,13 +91,13 @@ int on_meta_data_cbk(void *cookie,
     header->frame_size = mdata_list->mdata.frame_size;
     header->pts = mdata_list->mdata.pts;
     if (out->debug_stream) {
-        ALOGV("%s(), offset %lld, checkout payload offset %lld",
+        ALOGV("%s(), offset %"PRIu64", checkout payload offset %"PRIu64"",
                     __func__, offset, mdata_list->mdata.payload_offset);
-        ALOGV("%s(), frame_size %d, pts %lldms",
+        ALOGV("%s(), frame_size %d, pts %"PRIu64"",
                     __func__, header->frame_size, header->pts/1000000);
     }
     if (offset != mdata_list->mdata.payload_offset) {
-        ALOGV("%s(), offset %lld not equal payload offset %lld, try next time",
+        ALOGV("%s(), offset %"PRIu64" not equal payload offset %"PRIu64", try next time",
                     __func__, offset, mdata_list->mdata.payload_offset);
         ret = -EAGAIN;
         goto err_lock;
@@ -112,7 +113,7 @@ int on_meta_data_cbk(void *cookie,
         int delay_count = 0;
         hwsync_header_construct(header);
         pts32 -= latency*90;
-        ALOGD("%s(), set tsync start pts %d, latency %d, last position %lld",
+        ALOGD("%s(), set tsync start pts %d, latency %d, last position %"PRIu64"",
             __func__, pts32, latency, out->last_frames_postion);
         while (delay_count < 10) {
             vframe_ready_cnt = get_sysfs_int("/sys/class/video/vframe_ready_cnt");
@@ -153,7 +154,7 @@ int on_meta_data_cbk(void *cookie,
                     __func__, adev->tsync_fd, ret);
         }
         if (out->debug_stream)
-            ALOGD("%s(): audio pts %dms, pcr %dms, latency %lldms, pcr leads %dms",
+            ALOGD("%s(): audio pts %dms, pcr %dms, latency %"PRId64"ms, pcr leads %dms",
                 __func__, pts32/90, pcr/90, latency/90, (int)(pcr - pts32)/90);
         apts_gap = get_pts_gap(pcr, pts32);
         //sync_status = pcm_check_hwsync_status(apts_gap);

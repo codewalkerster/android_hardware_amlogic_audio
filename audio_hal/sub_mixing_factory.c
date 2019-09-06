@@ -114,13 +114,13 @@ static ssize_t aml_out_write_to_mixer(struct audio_stream_out *stream, const voi
 
     do {
         ssize_t written = 0;
-        ALOGV("%s(), stream usecase: %s, written_total %d, bytes %d",
+        ALOGV("%s(), stream usecase: %s, written_total %zu, bytes %zu",
             __func__,  usecase_to_str(out->usecase), written_total, bytes);
 
         written = mixer_write_inport(audio_mixer,
                 out->port_index, data, bytes - written_total);
         if (written < 0) {
-            ALOGE("%s(), write failed, errno = %d", __func__, written);
+            ALOGE("%s(), write failed, errno = %zd", __func__, written);
             return written;
         }
 
@@ -134,7 +134,7 @@ static ssize_t aml_out_write_to_mixer(struct audio_stream_out *stream, const voi
             //out->last_frames_postion += written / frame_size - latency_frames;
             //pthread_mutex_unlock(&out->lock);
         }
-        ALOGV("%s(), portindex(%d) written(%d), written_total(%d), bytes(%d)",
+        ALOGV("%s(), portindex(%d) written(%zd), written_total(%zu), bytes(%zu)",
             __func__, out->port_index, written, written_total, bytes);
 
         if (written_total >= bytes) {
@@ -179,7 +179,7 @@ static int consume_meta_data(void *cookie,
     mdata_list->mdata.payload_offset = offset;
 
     if (out->debug_stream) {
-        ALOGD("%s(), frame_size %d, pts %lldms, payload offset %lld",
+        ALOGD("%s(), frame_size %d, pts %"PRId64", payload offset %"PRIu64"",
                 __func__, frame_size, pts/1000000, offset);
     }
     if (get_mixer_hwsync_frame_size(audio_mixer) != frame_size) {
@@ -207,7 +207,7 @@ static int consume_output_data(void *cookie, const void* buffer, size_t bytes)
     int64_t throttle_timeus = 0;
     int frame_size = 4;
 
-    ALOGV("++%s(), bytes = %d", __func__, bytes);
+    ALOGV("++%s(), bytes = %zu", __func__, bytes);
     if (out->pause_status) {
         ALOGE("%s(), write in pause status", __func__);
     }
@@ -216,7 +216,7 @@ static int consume_output_data(void *cookie, const void* buffer, size_t bytes)
     apply_volume(out->volume_l, in_buf_16, sizeof(uint16_t), bytes);
     written = aml_out_write_to_mixer(stream, buffer, bytes);
     if (written < 0) {
-        ALOGE("%s(), written failed, %d", __func__, written);
+        ALOGE("%s(), written failed, %zd", __func__, written);
         goto exit;
     }
 
@@ -239,17 +239,17 @@ static int consume_output_data(void *cookie, const void* buffer, size_t bytes)
     //    out->last_frames_postion = out->frame_write_sum - latency_frames;
     //else
     //    out->last_frames_postion = out->frame_write_sum;
-    ALOGV("++%s(), written = %d", __func__, written);
+    ALOGV("++%s(), written = %zd", __func__, written);
     if (getprop_bool("media.audiohal.hwsync")) {
         aml_audio_dump_audio_bitstreams("/data/audio/consumeout.raw", buffer, written);
     }
     if (0) {
-        ALOGD("%s(), last_frames_postion(%lld) latency_frames(%lld)",
+        ALOGD("%s(), last_frames_postion(%"PRIu64") latency_frames(%"PRIu64")",
             __func__, out->last_frames_postion, latency_frames);
     }
     throttle_timeus = target_us - us_since_last_write;
     if (throttle_timeus > 0 && throttle_timeus < 200000) {
-        ALOGV("throttle time %lld us", throttle_timeus);
+        ALOGV("throttle time %"PRIu64" us", throttle_timeus);
         if (throttle_timeus > 1000)
             usleep(throttle_timeus - 1000);
     }
@@ -272,7 +272,7 @@ exit:
             out->last_frames_postion = 0;//out->frame_write_sum;
     }
     if (out->debug_stream) {
-        ALOGD("%s(), frames sum %lld, last frames %lld", __func__, out->frame_write_sum, out->last_frames_postion);
+        ALOGD("%s(), frames sum %"PRId64", last frames %"PRId64"", __func__, out->frame_write_sum, out->last_frames_postion);
     }
     return written;
 }
@@ -333,7 +333,7 @@ static ssize_t out_write_hwsync_lpcm(struct audio_stream_out *stream, const void
         out->pause_status = false;
     }
     written_total = header_extractor_write(out->hwsync_extractor, buffer, bytes);
-    ALOGV("%s() bytes %d, out->last_frames_postion %lld frame_sum %lld",
+    ALOGV("%s() bytes %zu, out->last_frames_postion %"PRIu64" frame_sum %"PRIu64"",
             __func__, bytes, out->last_frames_postion, out->frame_write_sum);
 
     if (getprop_bool("media.audiohal.hwsync")) {
@@ -341,10 +341,10 @@ static ssize_t out_write_hwsync_lpcm(struct audio_stream_out *stream, const void
     }
 
     if (written_total > 0) {
-        ALOGV("--%s(), out(%p)written %d, write_sum after %lld",
+        ALOGV("--%s(), out(%p)written %d, write_sum after %"PRIu64"",
                 __func__, out, written_total, out->frame_write_sum);
         if ((size_t)written_total != bytes)
-            ALOGE("--%s(), written %d, but bytes = %d", __func__, written_total, bytes);
+            ALOGE("--%s(), written %d, but bytes = %zu", __func__, written_total, bytes);
         return written_total;
     } else {
         ALOGE("--%s(), written %d, but return bytes", __func__, written_total);
@@ -397,7 +397,7 @@ static ssize_t out_write_system(struct audio_stream_out *stream, const void *buf
         clock_gettime(CLOCK_MONOTONIC, &new_tval);
         if (tval.tv_sec > new_tval.tv_sec)
             ALOGE("%s(), FATAL ERROR", __func__);
-        ALOGV("++%s() bytes %d, out->port_index %d", __func__, bytes, out->port_index);
+        ALOGV("++%s() bytes %zu, out->port_index %d", __func__, bytes, out->port_index);
         //ALOGD(" %lld us, %lld", new_tval.tv_sec, tval.tv_sec);
 
         us_since_last_write = (new_tval.tv_sec - out->timestamp.tv_sec) * 1000000 +
@@ -408,32 +408,32 @@ static ssize_t out_write_system(struct audio_stream_out *stream, const void *buf
                 (new_tval.tv_nsec - tval.tv_nsec) / 1000;
         int target_us = bytes * 1000 / frame_size / 48;
 
-        ALOGV("time spent on write %lld us, written %d", us_since_last_write, written);
+        ALOGV("time spent on write %"PRIu64" us, written %zd", us_since_last_write, written);
         ALOGV("used_this_write %d us, target %d us", used_this_write, target_us);
         throttle_timeus = target_us - us_since_last_write;
         if (throttle_timeus > 0 && throttle_timeus < 200000) {
-            ALOGV("throttle time %lld us", throttle_timeus);
+            ALOGV("throttle time %"PRId64" us", throttle_timeus);
             if (throttle_timeus > 1800) {
                 //usleep(throttle_timeus - 1800);
-                ALOGV("actual throttle %lld us, since last %lld us",
+                ALOGV("actual throttle %"PRId64" us, since last %"PRIu64" us",
                         throttle_timeus, us_since_last_write);
             } else {
-                ALOGV("%lld us, but un-throttle", throttle_timeus);
+                ALOGV("%"PRId64" us, but un-throttle", throttle_timeus);
             }
         } else if (throttle_timeus != 0) {
             // first time write, sleep
             //usleep(target_us - 100);
-            ALOGV("invalid throttle time %lld us, us since last %lld us", throttle_timeus, us_since_last_write);
+            ALOGV("invalid throttle time %"PRId64" us, us since last %"PRIu64" us", throttle_timeus, us_since_last_write);
             ALOGV("\n\n");
         }
     } else {
-        ALOGE("%s(), write fail, err = %d", __func__, written);
+        ALOGE("%s(), write fail, err = %zd", __func__, written);
     }
 
     // TODO: means first write, need check this by method
     if (us_since_last_write > 500000) {
         usleep(bytes * 1000 / 48 / frame_size);
-        ALOGV("%s(), invalid duration %llu us", __func__, us_since_last_write);
+        ALOGV("%s(), invalid duration %"PRIu64" us", __func__, us_since_last_write);
         //ALOGE("last   write %ld s,  %ld ms", out->timestamp.tv_sec, out->timestamp.tv_nsec/1000000);
         //ALOGE("before write %ld s,  %ld ms", tval.tv_sec, tval.tv_nsec/1000000);
         //ALOGE("after  write %ld s,  %ld ms", new_tval.tv_sec, new_tval.tv_nsec/1000000);
@@ -453,7 +453,7 @@ exit:
             out->last_frames_postion = out->frame_write_sum;
 
         if (0) {
-            ALOGI("last position %lld, latency_frames %d", out->last_frames_postion, latency_frames);
+            ALOGI("last position %"PRIu64", latency_frames %d", out->last_frames_postion, latency_frames);
         }
     }
 
@@ -505,7 +505,7 @@ static ssize_t out_write_direct_pcm(struct audio_stream_out *stream, const void 
         clock_gettime(CLOCK_MONOTONIC, &new_tval);
         if (tval.tv_sec > new_tval.tv_sec)
             ALOGE("%s(), FATAL ERROR", __func__);
-        ALOGV("++%s() bytes %d, out->port_index %d", __func__, bytes, out->port_index);
+        ALOGV("++%s() bytes %zu, out->port_index %d", __func__, bytes, out->port_index);
         //ALOGD(" %lld us, %lld", new_tval.tv_sec, tval.tv_sec);
 
         us_since_last_write = (new_tval.tv_sec - out->timestamp.tv_sec) * 1000000 +
@@ -516,32 +516,32 @@ static ssize_t out_write_direct_pcm(struct audio_stream_out *stream, const void 
                 (new_tval.tv_nsec - tval.tv_nsec) / 1000;
         int target_us = bytes * 1000 / frame_size / 48;
 
-        ALOGV("time spent on write %lld us, written %d", us_since_last_write, written);
+        ALOGV("time spent on write %"PRIu64" us, written %zd", us_since_last_write, written);
         ALOGV("used_this_write %d us, target %d us", used_this_write, target_us);
         throttle_timeus = target_us - us_since_last_write;
         if (throttle_timeus > 0 && throttle_timeus < 200000) {
-            ALOGV("throttle time %lld us", throttle_timeus);
+            ALOGV("throttle time %"PRId64" us", throttle_timeus);
             if (throttle_timeus > 1800) {
                 usleep(throttle_timeus - 1800);
-                ALOGV("actual throttle %lld us, since last %lld us",
+                ALOGV("actual throttle %"PRId64" us, since last %"PRIu64" us",
                         throttle_timeus, us_since_last_write);
             } else {
-                ALOGV("%lld us, but un-throttle", throttle_timeus);
+                ALOGV("%"PRId64" us, but un-throttle", throttle_timeus);
             }
         } else if (throttle_timeus != 0) {
             // first time write, sleep
             //usleep(target_us - 100);
-            ALOGV("invalid throttle time %lld us, us since last %lld us", throttle_timeus, us_since_last_write);
+            ALOGV("invalid throttle time %"PRId64" us, us since last %"PRIu64" us", throttle_timeus, us_since_last_write);
             ALOGV("\n\n");
         }
     } else {
-        ALOGE("%s(), write fail, err = %d", __func__, written);
+        ALOGE("%s(), write fail, err = %zd", __func__, written);
     }
 
     // TODO: means first write, need check this by method
     if (us_since_last_write > 500000) {
         usleep(bytes * 1000 / 48 / frame_size);
-        ALOGV("%s(), invalid duration %llu us", __func__, us_since_last_write);
+        ALOGV("%s(), invalid duration %"PRIu64" us", __func__, us_since_last_write);
         //ALOGE("last   write %ld s,  %ld ms", out->timestamp.tv_sec, out->timestamp.tv_nsec/1000000);
         //ALOGE("before write %ld s,  %ld ms", tval.tv_sec, tval.tv_nsec/1000000);
         //ALOGE("after  write %ld s,  %ld ms", new_tval.tv_sec, new_tval.tv_nsec/1000000);
@@ -561,7 +561,7 @@ exit:
             out->last_frames_postion = out->frame_write_sum;
 
         if (0) {
-            ALOGI("last position %lld, latency_frames %d", out->last_frames_postion, latency_frames);
+            ALOGI("last position %"PRIu64", latency_frames %d", out->last_frames_postion, latency_frames);
         }
     }
 
@@ -976,7 +976,7 @@ ssize_t mixer_main_buffer_write_sm (struct audio_stream_out *stream, const void 
         ALOGV("direct %s", __func__);
         write_bytes = out_write_direct_pcm(stream, buffer, bytes);
         if (write_bytes < 0) {
-            ALOGE("%s(), write failed, err = %d", __func__, write_bytes);
+            ALOGE("%s(), write failed, err = %zd", __func__, write_bytes);
         }
         //write_buf = (void *)buffer;
         //write_bytes = bytes;
@@ -1215,7 +1215,7 @@ ssize_t mixer_aux_buffer_write_sm(struct audio_stream_out *stream, const void *b
 
     bytes_written = aml_out_write_to_mixer(stream, buffer, bytes);
     if (bytes_written < 0) {
-        ALOGE("%s(), write failed, err = %d", __func__, bytes_written);
+        ALOGE("%s(), write failed, err = %zd", __func__, bytes_written);
     }
 #ifdef DEBUG_TIME
     clock_gettime(CLOCK_MONOTONIC, &tval_end);
@@ -1251,7 +1251,7 @@ exit:
     aml_out->lasttimestamp.tv_nsec = aml_out->timestamp.tv_nsec;
 
     aml_out->last_frames_postion = aml_out->frame_write_sum;
-    ALOGV("%s(), frame write sum %lld", __func__, aml_out->frame_write_sum);
+    ALOGV("%s(), frame write sum %"PRIu64"", __func__, aml_out->frame_write_sum);
     return bytes;
 }
 

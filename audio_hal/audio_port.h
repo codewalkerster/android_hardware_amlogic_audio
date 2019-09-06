@@ -143,7 +143,7 @@ struct output_port {
     pthread_mutex_t lock;
     pthread_cond_t cond;
     ssize_t (*write)(struct output_port *port, void *buffer, int bytes);
-    int (*start)(struct output_port *port);
+    ssize_t (*start)(struct output_port *port);
     int (*standby)(struct output_port *port);
     struct timespec tval_last;
 };
