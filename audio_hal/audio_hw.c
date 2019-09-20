@@ -291,6 +291,8 @@ static RECORDING_DEVICE recording_device = RECORDING_DEVICE_OTHER;
 
 static bool is_bypass_dolbyms12(struct audio_stream_out *stream);
 
+static bool is_high_rate_pcm(struct audio_stream_out *stream);
+
 static inline short CLIP (int r)
 {
     return (r >  0x7fff) ? 0x7fff :
@@ -813,7 +815,7 @@ static int start_output_stream_direct (struct aml_stream_out *out)
             /*
             for a113 later chip,raw passthr goes to spsdifa or spdifb
             */
-            if (format_is_passthrough(out->hal_format)) {
+            if (format_is_passthrough(out->hal_format) || codec_type == TYPE_PCM_HIGH_SR) {
                 port = PORT_SPDIF;
             }
             else
@@ -7465,9 +7467,18 @@ static bool is_bypass_dolbyms12(struct audio_stream_out *stream)
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = aml_out->dev;
 
-    return ((adev->disable_pcm_mixing == true) && (adev->dual_decoder_support == false) && \
-            (adev->continuous_audio_mode == false) && (get_output_format(stream) == AUDIO_FORMAT_E_AC3));
+    return (((adev->disable_pcm_mixing == true) && (adev->dual_decoder_support == false) && \
+            (adev->continuous_audio_mode == false) && (get_output_format(stream) == AUDIO_FORMAT_E_AC3))
+            || is_high_rate_pcm(stream));
 }
+
+static bool is_high_rate_pcm(struct audio_stream_out *stream) {
+    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
+
+    return (audio_is_linear_pcm(aml_out->hal_internal_format) &&
+           (aml_out->hal_rate > 48000));
+}
+
 
 ssize_t hw_write (struct audio_stream_out *stream
                   , const void *buffer
@@ -7842,7 +7853,7 @@ static void config_output(struct audio_stream_out *stream)
             ALOGI("dca_decoder_release_patch release");
         }
 
-        if (eDolbyMS12Lib == adev->dolby_lib_type) {
+        if (eDolbyMS12Lib == adev->dolby_lib_type && !is_bypass_dolbyms12(stream)) {
             pthread_mutex_lock(&adev->lock);
             get_dolby_ms12_cleanup(&adev->ms12);
             pthread_mutex_lock(&adev->alsa_pcm_lock);
@@ -9318,9 +9329,17 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
         // tv source keeps the original way.
         // Next step is to make all compitable.
         if (aml_out->usecase == STREAM_PCM_NORMAL || aml_out->usecase == STREAM_PCM_HWSYNC) {
-            ret = initSubMixingInput(aml_out, config);
-            if (ret < 0) {
-                ALOGE("initSub mixing input failed");
+            /*for 96000, we need bypass submix, this is for DTS certification*/
+            if (config->sample_rate == 96000 || config->sample_rate == 88200) {
+                aml_out->bypass_submix = true;
+                aml_out->stream.write = out_write_direct;
+                aml_out->stream.common.standby = out_standby_direct;
+            } else {
+                ret = initSubMixingInput(aml_out, config);
+                aml_out->bypass_submix = false;
+                if (ret < 0) {
+                    ALOGE("initSub mixing input failed");
+                }
             }
         } else {
             ALOGI("%s(), direct usecase: %s", __func__, usecase_to_str(aml_out->usecase));
@@ -9362,7 +9381,9 @@ void adev_close_output_stream_new(struct audio_hw_device *dev,
     adev->active_outputs[aml_out->usecase] = NULL;
     if (adev->useSubMix) {
         if (aml_out->is_normal_pcm || aml_out->usecase == STREAM_PCM_HWSYNC) {
-            deleteSubMixingInput(aml_out);
+            if (!aml_out->bypass_submix) {
+                deleteSubMixingInput(aml_out);
+            }
         }
     }
     if (aml_out->hw_sync_mode) {
