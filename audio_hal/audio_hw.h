@@ -639,6 +639,7 @@ struct aml_stream_out {
     void * alsa_vir_buf_handle;
     aml_audio_resample_t *resample_handle;
     int need_drop_size;
+    bool bypass_submix;
 };
 
 typedef ssize_t (*write_func)(struct audio_stream_out *stream, const void *buffer, size_t bytes);
