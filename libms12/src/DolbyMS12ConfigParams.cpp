@@ -544,7 +544,7 @@ int DolbyMS12ConfigParams::SetFunctionalSwitches(char **ConfigParams, int *row_i
         (*row_index)++;
     }
 
-    if (mDRCModesOfDownmixedOutput == 1) {
+    {
         sprintf(ConfigParams[*row_index], "%s", "-drc");
         (*row_index)++;
         sprintf(ConfigParams[*row_index], "%d", mDRCModesOfDownmixedOutput);
@@ -787,7 +787,7 @@ int DolbyMS12ConfigParams::SetFunctionalSwitchesRuntime(char **ConfigParams, int
         (*row_index)++;
     }
 
-    if (mDRCModesOfDownmixedOutput == 1) {
+    {
         sprintf(ConfigParams[*row_index], "%s", "-drc");
         (*row_index)++;
         sprintf(ConfigParams[*row_index], "%d", mDRCModesOfDownmixedOutput);
@@ -1076,8 +1076,16 @@ int DolbyMS12ConfigParams::SetOTTProcessingGraphSwitches(char **ConfigParams, in
         sprintf(ConfigParams[*row_index], "%s", "-ott");
         (*row_index)++;
 
-        if (mAtmosLock == true) {
-            sprintf(ConfigParams[*row_index], "%s", "-atmos_lock");
+        // no matter mAtmosLock == true or mAtmosLock == false
+        // we all need to set -atmos_locking flag
+        // otherwise atmos_locking function can not perform correctly.
+        //if (mAtmosLock == true)
+        {
+            // MS1.3.2 use "atmos_locking" instead of "atmos_lock"
+            // if we use "atmos_lock" we will get following error log from ms12:
+            // "ERROR: Encoder Atmos locking parameter invalid (-atmos_locking: 0 <auto> or 1 <5.1.2 Atmos>)"
+            //sprintf(ConfigParams[*row_index], "%s", "-atmos_lock");
+            sprintf(ConfigParams[*row_index], "%s", "-atmos_locking");
             (*row_index)++;
             sprintf(ConfigParams[*row_index], "%d", mAtmosLock);
             (*row_index)++;
@@ -1100,8 +1108,17 @@ int DolbyMS12ConfigParams::SetOTTProcessingGraphSwitchesRuntime(char **ConfigPar
 {
     ALOGV("+%s() line %d\n", __FUNCTION__, __LINE__);
     if (mActivateOTTSignal == true) {
-        if (mAtmosLock == true) {
-            sprintf(ConfigParams[*row_index], "%s", "-atmos_lock");
+
+        // no matter mAtmosLock == true or mAtmosLock == false
+        // we all need to set -atmos_locking flag
+        // otherwise atmos_locking function can not perform correctly.
+        //if (mAtmosLock == true)
+        {
+            // MS1.3.2 use "atmos_locking" instead of "atmos_lock"
+            // if we use "atmos_lock" we will get following error log from ms12:
+            // "ERROR: Encoder Atmos locking parameter invalid (-atmos_locking: 0 <auto> or 1 <5.1.2 Atmos>)"
+            //sprintf(ConfigParams[*row_index], "%s", "-atmos_lock");
+            sprintf(ConfigParams[*row_index], "%s", "-atmos_locking");
             (*row_index)++;
             sprintf(ConfigParams[*row_index], "%d", mAtmosLock);
             (*row_index)++;

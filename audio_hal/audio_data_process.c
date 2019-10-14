@@ -1,3 +1,11 @@
+/*
+* Copyright (c) 2014 Amlogic, Inc. All rights reserved.
+* *
+This source code is subject to the terms and conditions defined in the
+* file 'LICENSE' which is part of this source code package.
+* *
+Description:
+*/
 
 
 #define LOG_TAG "audio_data_process"
@@ -99,8 +107,7 @@ int do_mixing_2ch(void *data_mixed,
 int extend_channel_2_8(void *data_out, void *data_in,
         size_t frames, int ch_cnt_out, int ch_cnt_in)
 {
-    (void *)ch_cnt_out;
-    (void *)ch_cnt_in;
+    if (ch_cnt_out == 0 && ch_cnt_in == 0) {}
     int32_t *in = (int32_t *)data_in;
     int32_t *out = (int32_t *)data_out;
     int32_t Lval = 0, Rval = 0;
@@ -120,8 +127,7 @@ int extend_channel_2_8(void *data_out, void *data_in,
 int extend_channel_5_8(void *data_out, void *data_in,
         size_t frames, int ch_cnt_out, int ch_cnt_in)
 {
-    (void *)ch_cnt_out;
-    (void *)ch_cnt_in;
+    if (ch_cnt_out == 0 && ch_cnt_in == 0) {}
     int32_t *out = data_out;
     int32_t *in = data_in;
     uint i = 0;

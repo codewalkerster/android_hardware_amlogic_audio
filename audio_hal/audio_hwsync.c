@@ -16,7 +16,7 @@
 
 
 
-#define LOG_TAG "audio_hwsync"
+#define LOG_TAG "audio_hw_hwsync"
 //#define LOG_NDEBUG 0
 #include <errno.h>
 #include <pthread.h>
@@ -157,6 +157,7 @@ void aml_audio_hwsync_init(audio_hwsync_t *p_hwsync, struct aml_stream_out  *out
     p_hwsync->first_apts_flag = false;
     p_hwsync->hw_sync_state = HW_SYNC_STATE_HEADER;
     p_hwsync->hw_sync_header_cnt = 0;
+    p_hwsync->version_num = 0;
     memset(p_hwsync->pts_tab, 0, sizeof(apts_tab_t)*HWSYNC_APTS_NUM);
     pthread_mutex_init(&p_hwsync->lock, NULL);
     p_hwsync->payload_offset = 0;
@@ -202,16 +203,24 @@ int aml_audio_hwsync_find_frame(audio_hwsync_t *p_hwsync,
             //ALOGI("Add to header buffer [%d], 0x%x", p_hwsync->hw_sync_header_cnt, *p);
             p_hwsync->hw_sync_header[p_hwsync->hw_sync_header_cnt++] = *p++;
             remain--;
-            if (p_hwsync->hw_sync_header_cnt == HW_SYNC_HEADER_CNT) {
-                uint64_t pts;
+            if (p_hwsync->hw_sync_header_cnt == HW_SYNC_VERSION_SIZE ) {
                 if (!hwsync_header_valid(&p_hwsync->hw_sync_header[0])) {
                     //ALOGE("!!!!!!hwsync header out of sync! Resync.should not happen????");
                     p_hwsync->hw_sync_state = HW_SYNC_STATE_HEADER;
-                    memcpy(p_hwsync->hw_sync_header, p_hwsync->hw_sync_header + 1, HW_SYNC_HEADER_CNT - 1);
+                    memcpy(p_hwsync->hw_sync_header, p_hwsync->hw_sync_header + 1, HW_SYNC_VERSION_SIZE - 1);
                     p_hwsync->hw_sync_header_cnt--;
                     continue;
                 }
-                if ((in_bytes - remain) > HW_SYNC_HEADER_CNT) {
+                p_hwsync->version_num = p_hwsync->hw_sync_header[3];
+                if (p_hwsync->version_num == 1 || p_hwsync->version_num == 2) {
+                } else  {
+                    ALOGI("invalid hwsync version num %d",p_hwsync->version_num);
+                }
+            }
+            if ((p_hwsync->version_num  == 1 && p_hwsync->hw_sync_header_cnt == HW_AVSYNC_HEADER_SIZE_V1 ) ||
+                (p_hwsync->version_num  == 2 && p_hwsync->hw_sync_header_cnt == HW_AVSYNC_HEADER_SIZE_V2 )) {
+                uint64_t pts;
+                if ((in_bytes - remain) > p_hwsync->hw_sync_header_cnt) {
                     ALOGI("got the frame sync header cost %zu", in_bytes - remain);
                 }
                 p_hwsync->hw_sync_state = HW_SYNC_STATE_BODY;
@@ -234,6 +243,7 @@ int aml_audio_hwsync_find_frame(audio_hwsync_t *p_hwsync,
                 *cur_pts = pts;
                 pts_found = 1;
                 //ALOGI("get header body_cnt = %d, pts = %lld", out->hw_sync_body_cnt, pts);
+
             }
             continue;
         } else if (p_hwsync->hw_sync_state == HW_SYNC_STATE_BODY) {
@@ -281,6 +291,8 @@ int aml_audio_hwsync_set_first_pts(audio_hwsync_t *p_hwsync, uint64_t pts)
 {
     uint32_t pts32;
     char tempbuf[128];
+    int vframe_ready_cnt = 0;
+    int delay_count = 0;
 
     if (p_hwsync == NULL) {
         return -1;
@@ -294,6 +306,16 @@ int aml_audio_hwsync_set_first_pts(audio_hwsync_t *p_hwsync, uint64_t pts)
     pts32 = (uint32_t)pts;
     p_hwsync->first_apts_flag = true;
     p_hwsync->first_apts = pts;
+    while (delay_count < 10) {
+        vframe_ready_cnt = get_sysfs_int("/sys/class/video/vframe_ready_cnt");
+        ALOGV("/sys/class/video/vframe_ready_cnt is %d", vframe_ready_cnt);
+        if (vframe_ready_cnt < 2) {
+            usleep(10000);
+            delay_count++;
+            continue;
+        }
+        break;
+    }
 
     if (aml_hwsync_set_tsync_start_pts(pts32) < 0)
         return -EINVAL;

@@ -34,7 +34,11 @@
 #define HW_SYNC_STATE_HEADER 0
 #define HW_SYNC_STATE_BODY   1
 #define HW_SYNC_STATE_RESYNC 2
-#define HW_SYNC_HEADER_CNT 20
+#define HW_SYNC_VERSION_SIZE 4
+
+#define HW_AVSYNC_HEADER_SIZE_V1 16
+#define HW_AVSYNC_HEADER_SIZE_V2 20
+
 
 //TODO: After precisely calc the pts, change it back to 1s
 #define APTS_DISCONTINUE_THRESHOLD          (90000/10*11)
@@ -57,7 +61,7 @@ typedef struct apts_tab {
 } apts_tab_t;
 
 typedef struct  audio_hwsync {
-    uint8_t hw_sync_header[HW_SYNC_HEADER_CNT];
+    uint8_t hw_sync_header[HW_AVSYNC_HEADER_SIZE_V2];
     size_t hw_sync_header_cnt;
     int hw_sync_state;
     uint32_t hw_sync_body_cnt;
@@ -73,14 +77,15 @@ typedef struct  audio_hwsync {
     size_t payload_offset;
     struct aml_stream_out  *aout;
     int tsync_fd;
+    int version_num;
 } audio_hwsync_t;
 static inline bool hwsync_header_valid(uint8_t *header)
 {
     return (header[0] == 0x55) &&
            (header[1] == 0x55) &&
            (header[2] == 0x00) &&
-           //(header[3] == 0x01 || header[3] == 0x02);
-           (header[3] == 0x02);
+           (header[3] == 0x01 || header[3] == 0x02);
+           //(header[3] == 0x02);
 }
 
 static inline uint64_t hwsync_header_get_pts(uint8_t *header)

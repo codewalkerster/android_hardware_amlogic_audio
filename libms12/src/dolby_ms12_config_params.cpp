@@ -812,6 +812,18 @@ extern "C" void dolby_ms12_set_atmos_lock_flag(bool flag)
     }
 }
 
+
+extern "C" int dolby_ms12_get_atmos_lock_flag(void)
+{
+    ALOGV("%s()\n", __FUNCTION__);
+    android::DolbyMS12ConfigParams *config_param = getInstance();
+    if (config_param) {
+        return config_param->getAtmosLockFlag();
+    } else {
+        return false;
+    }
+}
+
 extern "C" void dolby_ms12_set_pause_flag(bool flag)
 {
     ALOGV("%s()\n", __FUNCTION__);

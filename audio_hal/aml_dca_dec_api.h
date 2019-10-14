@@ -19,9 +19,10 @@
 
 #include <hardware/audio.h>
 #include "aml_ringbuffer.h"
-#include "aml_audio_resampler.h"
 #include "aml_audio_parser.h"
 #include "aml_audio_types_def.h"
+#include "aml_audio_resample_manager.h"
+
 
 
 
@@ -36,7 +37,12 @@ struct dca_dts_dec {
     int is_dtscd;
     int digital_raw;
     //int (*get_parameters) (void *, int *, int *, int *);
-    int (*decoder_process)(unsigned char*, int, unsigned char *, int *, char *, int *);
+    int (*decoder_process)(unsigned char*, int, unsigned char *, int *, char *, int *,struct pcm_info *);
+    pthread_mutex_t lock;
+    struct pcm_info pcm_out_info;
+    aml_audio_resample_t *resample_handle;
+    ring_buffer_t output_ring_buf;
+
 };
 
 int dca_decode_init(struct aml_audio_parser *parser);
