@@ -523,6 +523,12 @@ struct aml_audio_device {
     hal need by-pass hw acess until the apk release flag
     */
     unsigned int direct_mode;
+    /*three variable used for when audio discontinue and underrun,
+      whether mute output*/
+    int discontinue_mute_flag;
+    int audio_discontinue;
+    int no_underrun_count;
+    int no_underrun_max;
 };
 
 struct meta_data {
