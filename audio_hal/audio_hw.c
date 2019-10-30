@@ -10287,6 +10287,7 @@ static int adev_create_audio_patch(struct audio_hw_device *dev,
     enum IN_PORT inport = INPORT_HDMIIN;
     unsigned int i = 0;
     int ret = -1;
+    aml_dev->no_underrun_max = property_get_int32("media.audio_hal.nounderrunmax", 8);
     ALOGI("++%s, src_config->ext.device.type(0x%x)", __FUNCTION__,src_config->ext.device.type);
     if (bypass_primary_patch(src_config)) {
         ALOGD("bluetooth voice search is in use, bypass adev_create_audio_patch()!!\n");

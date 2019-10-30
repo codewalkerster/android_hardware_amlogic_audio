@@ -467,6 +467,30 @@ write:
         }
     }
 
+    {
+        /*[SE][BUG][SWPL-14813][chengshun.wang] detect audio discontinue and alsa underrun,
+         * mute sound avoid noise,such as stream replay.
+         */
+        struct snd_pcm_status status;
+        pcm_ioctl(aml_out->pcm, SNDRV_PCM_IOCTL_STATUS, &status);
+        if (status.state == PCM_STATE_XRUN) {
+            ALOGD("alsa underrun");
+            if (adev->audio_discontinue) {
+                adev->discontinue_mute_flag = 1;
+                adev->no_underrun_count = 0;
+                ALOGD("output_write, audio discontinue, underrun, begin mute\n");
+            }
+        } else if (adev->discontinue_mute_flag == 1 &&
+            adev->no_underrun_count++ >= adev->no_underrun_max) {
+            ALOGD("output_write, no underrun, not mute, audio_discontinue=%d,count=%d\n",
+                adev->audio_discontinue, adev->no_underrun_count);
+            adev->discontinue_mute_flag = 0;
+            adev->no_underrun_count = 0;
+        }
+        if (adev->patch_src == SRC_DTV && adev->discontinue_mute_flag) {
+            memset(buffer, 0x0, bytes);
+        }
+    }
     if (getprop_bool("media.audiohal.outdump")) {
         aml_audio_dump_audio_bitstreams("/data/audio/pcm_write.raw",
             buffer, bytes);

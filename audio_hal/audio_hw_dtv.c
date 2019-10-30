@@ -66,6 +66,8 @@
 #define TSYNC_EVENT "/sys/class/tsync/event"
 #define TSYNC_APTS "/sys/class/tsync/pts_audio"
 #define TSYNC_VPTS "/sys/class/tsync/pts_video"
+#define TSYNC_DEMUX_APTS "/sys/class/stb/audio_pts"
+#define TSYNC_DEMUX_VPTS "/sys/class/stb/video_pts"
 
 #define TSYNC_FIRST_VPTS "/sys/class/tsync/firstvpts"
 #define TSYNC_AUDIO_MODE "/sys/class/tsync_pcr/tsync_audio_mode"
@@ -535,12 +537,16 @@ int dtv_patch_cmd_is_empty(void)
     pthread_mutex_unlock(&dtv_cmd_mutex);
     return 0;
 }
-static int dtv_patch_buffer_space(void *args)
+
+static int dtv_patch_buffer_info(void *args, BUFFER_INFO_E info_flag)
 {
     int left = 0;
     struct aml_audio_patch *patch = (struct aml_audio_patch *)args;
     ring_buffer_t *ringbuffer = &(patch->aml_ringbuffer);
-    left = get_buffer_write_space(ringbuffer);
+    if (info_flag == BUFFER_SPACE)
+        left = get_buffer_write_space(ringbuffer);
+    else if (info_flag == BUFFER_LEVEL)
+        left = get_buffer_read_space(ringbuffer);
     return left;
 }
 
@@ -1200,7 +1206,7 @@ static void dtv_audio_gap_monitor(struct aml_audio_patch *patch)
         }
         if (first_checkinapts) {
             patch->dtv_audio_tune = AUDIO_BREAK;
-            //ALOGI("audio discontinue, audio_break");
+            ALOGI("audio discontinue, audio_break");
         }
     }
 }
@@ -1297,6 +1303,7 @@ static void dtv_do_drop_insert_ac3(struct aml_audio_patch *patch,
         }
         t2 = t1 / 32;
         ALOGI("dtv_do_insert:++inset lookup %d,diff %d ms\n", patch->dtv_apts_lookup, t1);
+        clock_gettime(CLOCK_MONOTONIC, &before_write);
         t1 = 0;
         while (t1 == 0 && t2 > 0 && patch->output_thread_exit == 0) {
 
@@ -1479,15 +1486,27 @@ static void do_pll2_by_pts(unsigned int pcrpts, struct aml_audio_patch *patch,
     char buff[32] = {0};
 
     if (get_tsync_pcr_debug()) {
-
-        ret = aml_sysfs_get_str(TSYNC_VPTS, buff, sizeof(buff));
-        if (ret > 0) {
-            ret = sscanf(buff, "0x%x\n", &cur_vpts);
+        char buff[32];
+        unsigned int cur_vpts = 0;
+        unsigned int demux_vpts = 0;
+        unsigned int demux_apts = 0;
+        int ret1 = aml_sysfs_get_str(TSYNC_VPTS, buff, sizeof(buff));
+        if (ret1 > 0) {
+            ret1 = sscanf(buff, "0x%x\n", &cur_vpts);
+        }
+        ret1 = aml_sysfs_get_str(TSYNC_DEMUX_APTS, buff, sizeof(buff));
+        if (ret1 > 0) {
+            ret1 = sscanf(buff, "%u\n", &demux_apts);
+        }
+        ret1 = aml_sysfs_get_str(TSYNC_DEMUX_VPTS, buff, sizeof(buff));
+        if (ret1 > 0) {
+            ret1 = sscanf(buff, "%u\n", &demux_vpts);
         }
 
-        ALOGI("process_ac3_sync, diff:%d, pcrpts %x, apts %x, vpts %x, av_diff:%d, size %d, latency %d,mode %d",
-              (int)(pcrpts - apts) / 90, pcrpts, apts, cur_vpts, (int)(apts - cur_vpts)/90,                 get_buffer_read_space(&(patch->aml_ringbuffer)),
-              (int)decoder_get_latency() / 90, patch->dtv_pcr_mode);
+        ALOGI("process_ac3_sync, diff:%d,apts %x(%x,cache:%dms), vpts %x(%x,cache:%dms), pcrpts %x, av-diff:%d, size %d, latency %d, mode %d, pll_state=%d\n",
+              (int)(pcrpts - apts) / 90, apts, demux_apts, (int)(demux_apts - apts) / 90,cur_vpts, demux_vpts, (int)(demux_vpts - cur_vpts) / 90, pcrpts, (int)(apts - cur_vpts)/90,
+              get_buffer_read_space(&(patch->aml_ringbuffer)), (int)decoder_get_latency() / 90, patch->dtv_pcr_mode, patch->pll_state);
+
     }
     last_apts = patch->last_apts;
     last_pcrpts = patch->last_pcrpts;
@@ -1767,6 +1786,7 @@ void dtv_avsync_process(struct aml_audio_patch* patch, struct aml_stream_out* st
         return;
     }
     patch->dtv_pcr_mode = get_dtv_sync_mode();
+    aml_dev->audio_discontinue = get_audio_discontinue(patch);
 
     audio_output_delay = aml_getprop_int(PROPERTY_LOCAL_PASSTHROUGH_LATENCY);
     if (patch->last_audio_delay != audio_output_delay) {
@@ -2668,7 +2688,7 @@ static void *audio_dtv_patch_process_threadloop(void *data)
         case AUDIO_DTV_PATCH_DECODER_STATE_INIT: {
             ALOGI("++%s live now  open the audio decoder now !\n", __FUNCTION__);
             dtv_patch_input_open(&adec_handle, dtv_patch_pcm_wirte,
-                                 dtv_patch_buffer_space,
+                                 dtv_patch_buffer_info,
                                  dtv_patch_audio_info, patch);
             patch->dtv_decoder_state = AUDIO_DTV_PATCH_DECODER_STATE_START;
         }
