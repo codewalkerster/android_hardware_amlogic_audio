@@ -29,6 +29,10 @@
 #include "aml_malloc_debug.h"
 #include "audio_hw_utils.h"
 #include "audio_hwsync.h"
+#if defined(ODROIDN2) || defined(ODROIDC4)
+#include <aml_android_utils.h>
+#include "alsa_device_parser.h"
+#endif
 
 #define BUFF_CNT                    (4)
 #define SYS_BUFF_CNT                (4)
@@ -496,6 +500,13 @@ static ssize_t output_port_start(struct output_port *port)
         ALOGE("%s(), unsupport", __func__);
         pcm_cfg.format = PCM_FORMAT_S16_LE;
     }
+
+#if defined(ODROIDN2) || defined(ODROIDC4)
+    if (card == 0) {
+        device = aml_getprop_int("media.audio_hal.device");
+        device = alsa_device_update_pcm_index(device, PLAYBACK);
+    }
+#endif
     ALOGI("%s(), open ALSA hw:%d,%d", __func__, card, device);
     pcm = pcm_open(card, device, PCM_OUT | PCM_MONOTONIC, &pcm_cfg);
     if ((pcm == NULL) || !pcm_is_ready(pcm)) {

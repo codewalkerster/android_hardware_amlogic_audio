@@ -179,6 +179,16 @@ LOCAL_CFLAGS += -DSUBMIXER_V1_1
 endif
     #LOCAL_CFLAGS += -Wall -Wunknown-pragmas
 
+ifneq ($(wildcard device/hardkernel), )
+ifeq ($(strip $(TARGET_BOOTLOADER_BOARD_NAME)), odroidn2)
+    LOCAL_CFLAGS += -DODROIDN2
+else ifeq ($(strip $(TARGET_BOOTLOADER_BOARD_NAME)), odroidn2l)
+    LOCAL_CFLAGS += -DODROIDN2
+else
+    LOCAL_CFLAGS += -DODROIDC4
+endif
+endif
+
 #add dolby ms12support
     LOCAL_SHARED_LIBRARIES += libms12api
     LOCAL_CFLAGS += -DDOLBY_MS12_ENABLE
