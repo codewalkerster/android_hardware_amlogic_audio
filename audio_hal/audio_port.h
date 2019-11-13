@@ -146,6 +146,7 @@ struct output_port {
     ssize_t (*start)(struct output_port *port);
     int (*standby)(struct output_port *port);
     struct timespec tval_last;
+    int sound_track_mode;
 };
 bool is_inport_valid(enum MIXER_INPUT_PORT index);
 bool is_outport_valid(enum MIXER_OUTPUT_PORT index);

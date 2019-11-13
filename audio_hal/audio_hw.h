@@ -71,6 +71,9 @@
 #define RESAMPLER_BUFFER_FRAMES (DEFAULT_PLAYBACK_PERIOD_SIZE * 6)
 #define RESAMPLER_BUFFER_SIZE (4 * RESAMPLER_BUFFER_FRAMES)
 
+/* bluetootch and usb in read data period delay count, for audio format detection too slow */
+#define BT_AND_USB_PERIOD_DELAY_BUF_CNT (3)
+
 static unsigned int DEFAULT_OUT_SAMPLING_RATE = 48000;
 
 /* sampling rate when using MM low power port */
@@ -294,6 +297,18 @@ struct aml_bt_output {
     size_t resampler_buffer_size_in_frames;
     size_t resampler_in_frames;
 };
+
+enum mic_in_dev {
+    DEV_MIC_PDM = 0,
+    DEV_MIC_TDM,
+    DEV_MIC_CNT
+};
+
+struct mic_in_desc {
+    enum mic_in_dev mic;
+    struct pcm_config config;
+};
+
 #define MAX_STREAM_NUM   5
 #define HDMI_ARC_MAX_FORMAT  20
 struct aml_audio_device {
@@ -466,6 +481,10 @@ struct aml_audio_device {
     int patch_start;
     int mute_start;
     aml_audio_ease_t  *audio_ease;
+    int sound_track_mode;
+
+    /* MIC_IN<->PDM/TDM and default configs */
+    struct mic_in_desc *mic_desc;
 };
 
 struct meta_data {
@@ -617,9 +636,11 @@ struct aml_stream_in {
     size_t input_tmp_buffer_size;
     void *tmp_buffer_8ch;
     size_t tmp_buffer_8ch_size;
-    void *delay_buffer;
-    size_t delay_buffer_size;
-    void *tmp_delay_buffer;
+
+    void        *pBtUsbPeriodDelayBuf[BT_AND_USB_PERIOD_DELAY_BUF_CNT];
+    void        *pBtUsbTempDelayBuf;
+    size_t      delay_buffer_size;
+
     bool bt_sco_active;
 };
 typedef  int (*do_standby_func)(struct aml_stream_out *out);

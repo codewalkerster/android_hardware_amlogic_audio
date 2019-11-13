@@ -907,16 +907,28 @@ static int check_input_parameters(uint32_t sample_rate, audio_format_t format, i
     return 0;
 }
 
+static int check_mic_parameters(struct mic_in_desc *mic_desc,
+        struct audio_config *config)
+{
+    struct pcm_config *pcm_cfg = &mic_desc->config;
+    uint32_t sample_rate = config->sample_rate;
+    audio_format_t format =config->format;
+    unsigned int channel_count = audio_channel_count_from_in_mask(config->channel_mask);
+
+    ALOGD("%s(sample_rate=%d, format=%d, channel_count=%d)",
+            __func__, sample_rate, format, channel_count);
+    if (sample_rate == pcm_cfg->rate &&
+            format == AUDIO_FORMAT_PCM_16_BIT)
+        return 0;
+
+    return -EINVAL;
+}
+
 static size_t get_input_buffer_size(unsigned int period_size, uint32_t sample_rate, audio_format_t format, int channel_count)
 {
     size_t size;
 
     ALOGD("%s(sample_rate=%d, format=%d, channel_count=%d)", __FUNCTION__, sample_rate, format, channel_count);
-
-    if (check_input_parameters(sample_rate, format, channel_count, AUDIO_DEVICE_NONE) != 0) {
-        return 0;
-    }
-
     /* take resampling into account and return the closest majoring
     multiple of 16 frames, as audioflinger expects audio buffers to
     be a multiple of 16 frames */
@@ -3286,9 +3298,10 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
 }
 
 /** audio_stream_in implementation **/
-static unsigned int select_port_by_device(audio_devices_t in_device)
+static unsigned int select_port_by_device(struct aml_audio_device *adev)
 {
     unsigned int inport = PORT_I2S;
+    audio_devices_t in_device = adev->in_device;
 
     if (in_device & AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET) {
         inport = PORT_PCM;
@@ -3302,7 +3315,22 @@ static unsigned int select_port_by_device(audio_devices_t in_device)
             inport = PORT_SPDIF;
     } else if ((in_device & AUDIO_DEVICE_IN_BACK_MIC) ||
             (in_device & AUDIO_DEVICE_IN_BUILTIN_MIC)) {
-        inport = PORT_BUILTINMIC;
+        if (adev->mic_desc) {
+            struct mic_in_desc *desc = adev->mic_desc;
+
+            switch (desc->mic) {
+            case DEV_MIC_PDM:
+                inport = PROT_PDM;
+                break;
+            case DEV_MIC_TDM:
+                inport = PORT_BUILTINMIC;
+                break;
+            default:
+                inport = PORT_BUILTINMIC;
+                break;
+            }
+        } else
+            inport = PORT_BUILTINMIC;
     } else {
         /* fix auge tv input, hdmirx, tunner */
         if (alsa_device_is_auge()
@@ -3366,7 +3394,7 @@ static int start_input_stream(struct aml_stream_in *in)
     }
 
     card = alsa_device_get_card_index();
-    port = select_port_by_device(adev->in_device);
+    port = select_port_by_device(adev);
     /* check to update alsa device by port */
     alsa_device = alsa_device_update_pcm_index(port, CAPTURE);
     ALOGD("*%s, open alsa_card(%d) alsa_device(%d), in_device:0x%x\n",
@@ -3879,6 +3907,38 @@ static void inread_proc_aec(struct audio_stream_in *stream,
 }
 #endif
 
+/* here to fix pcm switch to raw nosie issue ,it is caused by hardware format detection later than output
+so we delay pcm output one frame to work around the issue,but it has a negative effect on av sync when normal
+pcm playback.abouot delay audio 21.3*BT_AND_USB_PERIOD_DELAY_BUF_CNT ms */
+static void processBtAndUsbCardData(struct aml_stream_in *in, struct aml_audio_parser *parser, void *pBuffer, size_t bytes)
+{
+    bool bIsBufNull = false;
+    for (int i=0; i<BT_AND_USB_PERIOD_DELAY_BUF_CNT; i++) {
+        if (NULL == in->pBtUsbPeriodDelayBuf[i]) {
+            bIsBufNull = true;
+        }
+    }
+
+    if (NULL == in->pBtUsbTempDelayBuf || in->delay_buffer_size != bytes || bIsBufNull) {
+        in->pBtUsbTempDelayBuf = realloc(in->pBtUsbTempDelayBuf, bytes);
+        memset(in->pBtUsbTempDelayBuf, 0, bytes);
+        for (int i=0; i<BT_AND_USB_PERIOD_DELAY_BUF_CNT; i++) {
+            in->pBtUsbPeriodDelayBuf[i] = realloc(in->pBtUsbPeriodDelayBuf[i], bytes);
+            memset(in->pBtUsbPeriodDelayBuf[i], 0, bytes);
+        }
+        in->delay_buffer_size = bytes;
+    }
+
+    if (AUDIO_FORMAT_PCM_16_BIT == parser->aformat || AUDIO_FORMAT_PCM_32_BIT == parser->aformat) {
+        memcpy(in->pBtUsbTempDelayBuf, pBuffer, bytes);
+        memcpy(pBuffer, in->pBtUsbPeriodDelayBuf[BT_AND_USB_PERIOD_DELAY_BUF_CNT-1], bytes);
+        for (int i=BT_AND_USB_PERIOD_DELAY_BUF_CNT-1; i>0; i--) {
+            memcpy(in->pBtUsbPeriodDelayBuf[i], in->pBtUsbPeriodDelayBuf[i-1], bytes);
+        }
+        memcpy(in->pBtUsbPeriodDelayBuf[0], in->pBtUsbTempDelayBuf, bytes);
+    }
+}
+
 static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t bytes)
 {
     int ret = 0;
@@ -3923,18 +3983,11 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
 
     /* if audio patch type is hdmi to mixer, check audio format from hdmi*/
     if (adev->patch_src == SRC_HDMIIN && parser != NULL) {
-        if (in->delay_buffer == NULL ||
-            in->tmp_delay_buffer == NULL ||
-            in->delay_buffer_size < bytes) {
-            in->delay_buffer = realloc(in->delay_buffer, bytes);
-            in->tmp_delay_buffer =  realloc(in->tmp_delay_buffer, bytes);
-            in->delay_buffer_size = bytes;
-        }
         audio_format_t cur_aformat = audio_parse_get_audio_type(parser->audio_parse_para);
         if (cur_aformat != parser->aformat) {
             ALOGI("%s: input format changed from %#x to %#x", __func__, parser->aformat, cur_aformat);
-            if (cur_aformat == AUDIO_FORMAT_PCM_16_BIT)  {
-                 memset(in->delay_buffer, 0 ,in->delay_buffer_size);
+            for (int i=0; i<BT_AND_USB_PERIOD_DELAY_BUF_CNT; i++) {
+                 memset(in->pBtUsbPeriodDelayBuf[i], 0, in->delay_buffer_size);
             }
             if (parser->aformat == AUDIO_FORMAT_PCM_16_BIT && //from pcm -> dd/dd+
                 (cur_aformat == AUDIO_FORMAT_AC3 || cur_aformat == AUDIO_FORMAT_E_AC3)) {
@@ -4084,8 +4137,22 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
                         *out_ptr++ = (int32_t)(left >> 2);
                         *out_ptr++ = (int32_t)(right >> 2);
                     }
-                } else
+                } else if (in->config.channels == 4 ||
+                        (in->config.channels == 2 && channel_count != 2)) {
+                    unsigned int mult = in->config.channels / channel_count;
+                    size_t read_bytes = mult * bytes;
+
+                    if (in->input_tmp_buffer ||
+                        in->input_tmp_buffer_size < read_bytes) {
+                        in->input_tmp_buffer = realloc(in->input_tmp_buffer, read_bytes);
+                        in->input_tmp_buffer_size = read_bytes;
+                    }
+                    aml_alsa_input_read(stream, in->input_tmp_buffer, read_bytes);
+                    adjust_channels(in->input_tmp_buffer, in->config.channels,
+                            buffer, channel_count, 2, read_bytes);
+                } else {
                     ret = aml_alsa_input_read(stream, buffer, bytes);
+                }
 
                 //ALOGI("%s, %d,ret:%d",__func__,__LINE__,ret);
                 if (getprop_bool("media.audiohal.indump")) {
@@ -4133,26 +4200,18 @@ exit:
     }
     pthread_mutex_unlock(&in->lock);
 
+    if (SRC_HDMIIN == adev->patch_src && parser != NULL) {
+        audio_format_t cur_aformat = audio_parse_get_audio_type(parser->audio_parse_para);
+        if ((parser->aformat == AUDIO_FORMAT_PCM_16_BIT && cur_aformat != parser->aformat ) ||
+            (parser->aformat == AUDIO_FORMAT_PCM_32_BIT && cur_aformat != parser->aformat))
+            memset(buffer , 0 , bytes);
+        else
+            processBtAndUsbCardData(in, parser, buffer, bytes);
+    }
+
     if (getprop_bool("media.audiohal.indump")) {
         aml_audio_dump_audio_bitstreams("/data/audio/in_read.raw",
             buffer, bytes);
-    }
-    /* here to fix pcm switch to raw nosie issue ,it is caused by hardware format detection later than output
-    so we delay pcm output one frame to work around the issue,but it has a negative effect on av sync when normal
-    pcm playback.abouot delay audio 25ms*/
-    if (adev->patch_src == SRC_HDMIIN && parser != NULL) {
-           audio_format_t cur_aformat = audio_parse_get_audio_type(parser->audio_parse_para);
-           if (cur_aformat != AUDIO_FORMAT_PCM_16_BIT && cur_aformat != parser->aformat) {
-               memset(buffer , 0, bytes);
-           } else if (parser->aformat == AUDIO_FORMAT_PCM_16_BIT) {
-                int tmp_bytes;
-                tmp_bytes = in->delay_buffer_size;
-                memcpy(in->tmp_delay_buffer,in->delay_buffer,in->delay_buffer_size);
-                in->delay_buffer_size = bytes;
-                memcpy(in->delay_buffer,buffer,in->delay_buffer_size);
-                memcpy(buffer,in->tmp_delay_buffer,tmp_bytes);
-                bytes = tmp_bytes;
-           }
     }
 
     return bytes;
@@ -5386,6 +5445,16 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
         ALOGI("DTV sound mode %d ",mode );
         adev->audio_patch->mode = mode;
     }
+    ret = str_parms_get_str(parms, "sound_track", value, sizeof(value));
+    if (ret > 0) {
+        int mode = atoi(value);
+        if (adev->audio_patch != NULL) {
+            ALOGI("%s()the audio patch is not NULL \n", __func__);
+            goto exit;
+        }
+        ALOGI("video player sound_track mode %d ",mode );
+        adev->sound_track_mode = mode;
+    }
     ret = str_parms_get_str(parms, "fmt", value, sizeof(value));
     if (ret > 0) {
         unsigned int audio_fmt = (unsigned int)atoi(value); // zz
@@ -5790,10 +5859,6 @@ static size_t adev_get_input_buffer_size(const struct audio_hw_device *dev __unu
     ALOGD("%s: enter: channel_mask(%#x) rate(%d) format(%#x)", __func__,
         config->channel_mask, config->sample_rate, config->format);
 
-    if (check_input_parameters(config->sample_rate, config->format, channel_count, AUDIO_DEVICE_NONE) != 0) {
-        return -EINVAL;
-    }
-
     size = get_input_buffer_size(config->frame_count, config->sample_rate, config->format, channel_count);
 
     ALOGD("%s: exit: buffer_size = %zu", __func__, size);
@@ -5803,6 +5868,7 @@ static size_t adev_get_input_buffer_size(const struct audio_hw_device *dev __unu
 
 static int choose_stream_pcm_config(struct aml_stream_in *in)
 {
+    struct aml_audio_device *adev = in->dev;
     int channel_count = audio_channel_count_from_in_mask(in->hal_channel_mask);
     int ret = 0;
 
@@ -5811,7 +5877,15 @@ static int choose_stream_pcm_config(struct aml_stream_in *in)
     else
         memcpy(&in->config, &pcm_config_in, sizeof(pcm_config_in));
 
-    in->config.channels = channel_count;
+    if (adev->mic_desc) {
+        struct mic_in_desc *desc = adev->mic_desc;
+
+        in->config.channels = desc->config.channels;
+        in->config.rate = desc->config.rate;
+        in->config.format = desc->config.format;
+    } else
+        in->config.channels = channel_count;
+
     switch (in->hal_format) {
         case AUDIO_FORMAT_PCM_16_BIT:
             in->config.format = PCM_FORMAT_S16_LE;
@@ -5892,6 +5966,19 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
         return -EINVAL;
     }
 
+    /* add constrains for MIC which may be used by both loopback and normal record */
+    if (adev->mic_desc && (devices & AUDIO_DEVICE_IN_BUILTIN_MIC ||
+            devices & AUDIO_DEVICE_IN_BACK_MIC)) {
+        struct mic_in_desc *mic_desc = adev->mic_desc;
+
+        ret = check_mic_parameters(mic_desc, config);
+        if (ret < 0) {
+            config->sample_rate = mic_desc->config.rate;
+            config->format = AUDIO_FORMAT_PCM_16_BIT;
+            return ret;
+        }
+    }
+
     if (channel_count == 1)
         // in fact, this value should be AUDIO_CHANNEL_OUT_BACK_LEFT(16u) according to VTS codes,
         // but the macroname can be confusing, so I'd like to set this value to
@@ -5946,6 +6033,12 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     in->hal_channel_mask = config->channel_mask;
     in->hal_format = config->format;
     in->mute_mdelay = INPUTSOURCE_MUTE_DELAY_MS;
+
+    for (int i=0; i<BT_AND_USB_PERIOD_DELAY_BUF_CNT; i++) {
+        in->pBtUsbPeriodDelayBuf[i] = NULL;
+    }
+    in->pBtUsbTempDelayBuf = NULL;
+    in->delay_buffer_size = 0;
 
     if (in->device & AUDIO_DEVICE_IN_WIRED_HEADSET) {
         // bluetooth rc voice
@@ -6054,14 +6147,18 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
         free(in->input_tmp_buffer);
         in->input_tmp_buffer = NULL;
     }
-    if (in->delay_buffer) {
-        free(in->delay_buffer);
-        in->delay_buffer = NULL;
+    for (int i=0; i<BT_AND_USB_PERIOD_DELAY_BUF_CNT; i++) {
+        if (in->pBtUsbPeriodDelayBuf[i]) {
+            free(in->pBtUsbPeriodDelayBuf[i]);
+            in->pBtUsbPeriodDelayBuf[i] = NULL;
+        }
     }
-    if (in->tmp_delay_buffer) {
-        free(in->tmp_delay_buffer);
-        in->delay_buffer = NULL;
+
+    if (in->pBtUsbTempDelayBuf) {
+        free(in->pBtUsbTempDelayBuf);
+        in->pBtUsbTempDelayBuf = NULL;
     }
+    in->delay_buffer_size = 0;
 
     if (in->proc_buf) {
         free(in->proc_buf);
@@ -6855,6 +6952,10 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
 
             if (adev->patch_src == SRC_DTV && adev->audio_patch != NULL) {
                 aml_audio_switch_output_mode((int16_t *)effect_tmp_buf, bytes, adev->audio_patch->mode);
+            } else if ( adev->audio_patch == NULL) {
+               if (adev->sound_track_mode == 3)
+                  adev->sound_track_mode = AM_AOUT_OUTPUT_LRMIX;
+               aml_audio_switch_output_mode((int16_t *)effect_tmp_buf, bytes, adev->sound_track_mode);
             }
 
             /* apply volume for spk/hp, SPDIF/HDMI keep the max volume */
@@ -10256,6 +10357,10 @@ static int adev_close(hw_device_t *device)
     aml_hwsync_close_tsync(adev->tsync_fd);
     pthread_mutex_destroy(&adev->patch_lock);
 
+#ifdef PDM_MIC_CHANNELS
+    if (adev->mic_desc)
+        free(adev->mic_desc);
+#endif
     free(device);
     return 0;
 }
@@ -10514,6 +10619,33 @@ static int adev_get_audio_port(struct audio_hw_device *dev __unused, struct audi
 #define MAX_SPK_EXTRA_LATENCY_MS (100)
 #define DEFAULT_SPK_EXTRA_LATENCY_MS (15)
 
+//#define PDM_MIC_CHANNELS 4
+int init_mic_desc(struct aml_audio_device *adev)
+{
+    struct mic_in_desc *mic_desc = calloc(1, sizeof(struct mic_in_desc));
+    if (!mic_desc)
+        return -ENOMEM;
+
+    /* Config the default MIC-IN device */
+    mic_desc->mic = DEV_MIC_PDM;
+    mic_desc->config.rate = 16000;
+    mic_desc->config.format = PCM_FORMAT_S16_LE;
+
+#if (PDM_MIC_CHANNELS == 4)
+    ALOGI("%s(), 4 channels PDM mic", __func__);
+    mic_desc->config.channels = 4;
+#elif (PDM_MIC_CHANNELS == 2)
+    mic_desc->config.channels = 2;
+    ALOGI("%s(), 2 channels PDM mic", __func__);
+#else
+    ALOGI("%s(), default 2 channels PDM mic", __func__);
+    mic_desc->config.channels = 2;
+#endif
+
+    adev->mic_desc = mic_desc;
+    return 0;
+};
+
 static int adev_open(const hw_module_t* module, const char* name, hw_device_t** device)
 {
     struct aml_audio_device *adev;
@@ -10707,6 +10839,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     ALOGI("%s() adev->dolby_lib_type = %d", __FUNCTION__, adev->dolby_lib_type);
     adev->patch_src = SRC_INVAL;
     adev->audio_type = LPCM;
+    adev->sound_track_mode = 0;
 
 #if (ENABLE_NANO_PATCH == 1)
 /*[SEN5-autumn.zhao-2018-01-11] add for B06 audio support { */
@@ -10761,6 +10894,9 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
         goto err_ringbuf;
     }
 
+#ifdef PDM_MIC_CHANNELS
+    init_mic_desc(adev);
+#endif
     // adev->debug_flag is set in hw_write()
     // however, sometimes function didn't goto hw_write() before encounting error.
     // set debug_flag here to see more debug log when debugging.
