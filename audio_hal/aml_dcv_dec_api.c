@@ -15,6 +15,7 @@
  */
 
 #define LOG_TAG "aml_audio_dcv_dec"
+//#define LOG_NDEBUG 0
 
 #include <unistd.h>
 #include <math.h>
@@ -107,10 +108,24 @@ const DDPshort frmsizetab[MAXFSCOD][MAXDDDATARATE] = {
         1536, 1536, 1728, 1728, 1920, 1920
     }
 };
+const float ddp_udc_int_altmixtab[8] =
+{
+    1.414,         /*!< +3.0 dB    */
+    1.189,       /*!< +1.5 dB    */
+    1.0,        /*!<  0.0 dB     */
+    0.840896415,       /*!< -1.5 dB     */
+    0.707106781,         /*!< -3.0 dB    */
+    0.594603557,       /*!< -4.5 dB    */
+    0.5,         /*!< -6.0 dB    */
+    0           /*!< -inf dB        */
+};
+
 
 static int (*ddp_decoder_init)(int, int,void **);
 static int (*ddp_decoder_cleanup)(void *);
 static int (*ddp_decoder_process)(char *, int, int *, int, char *, int *, struct pcm_info *, char *, int *,void *);
+static int (*set_hal_version)(int );
+
 static void *gDDPDecoderLibHandler = NULL;
 static void *handle = NULL;
 
@@ -318,13 +333,54 @@ static int Get_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChN
     }
     return 0;
 }
+int aml_downmix6to2(unsigned char *outbuf,int outlen_pcm,struct pcm_info pcm_out_info) {
+    double lfe;
+    double centre;
+    int bit_width = 16;
+    uint16_t *p = (uint16_t *)outbuf;
 
-static  int unload_ddp_decoder_lib()
-{
-    if (ddp_decoder_cleanup != NULL && handle != NULL) {
-        (*ddp_decoder_cleanup)(handle);
-        handle = NULL;
+#if defined(IS_ATOM_PROJECT)
+    int32_t *p1 = (int32_t *)outbuf;
+    int framenum = outlen_pcm / 2;
+    for (int i = 0; i < framenum; i++) {
+        p1[framenum - 1 - i] = ((int32_t)p[framenum - 1 -i]) << 16;
     }
+    bit_width = 32;
+    outlen_pcm *= 2;
+#else
+    int16_t *p1 = (int16_t *)outbuf;
+#endif
+
+    if (pcm_out_info.channel_num == 6) {
+        int samplenum = outlen_pcm / (pcm_out_info.channel_num * bit_width / 8);
+        //Lt = L + (C *  -3 dB)  - (Ls * -1.2 dB)  -  (Rs * -6.2 dB)
+        //Rt = R + (C * -3 dB) + (Ls * -6.2 dB) + (Rs *  -1.2 dB)
+        //Lo = L + (C *  -3 dB)  + (Ls * -3 dB)
+        //Ro = R + (C *  -3 dB)  + (Rs * -3 dB)
+       for (int i = 0; i < samplenum; i++ ) {
+            lfe = (double)p1[6 * i + 3]*(1.678804f / 4);
+            centre = (double)p1[6 * i + 2] * ddp_udc_int_altmixtab[pcm_out_info.lorocmixlev];
+            //p1[6 * i] = p1[6 * i] + (int32_t)centre - p1[6 * i + 4] * 0.870963 - p1[6 * i + 5] * 0.489778;
+            //p1[6 * i + 1] = p1[6 * i + 1] + (int32_t)centre + p1[6 * i + 4] * 0.489778 + p1[6 * i + 5] * 0.870963;
+            p1[6 * i] = p1[6 * i] + centre + p1[6 * i + 4] * ddp_udc_int_altmixtab[pcm_out_info.lorosurmixlev];
+            p1[6 * i + 1] = p1[6 * i + 1] + centre  + p1[6 * i + 5] * ddp_udc_int_altmixtab[pcm_out_info.lorosurmixlev];
+            p1[2 * i ] = (p1[6 * i] >> 2) + lfe;
+            p1[2 * i  + 1] = (p1[6 * i + 1] >> 2) + lfe;
+       }
+       outlen_pcm /= 3;
+    } else if (pcm_out_info.channel_num == 2) {
+#if defined(IS_ATOM_PROJECT)
+        int samplenum = outlen_pcm >> 3;
+        for (int i = 0; i < samplenum; i++ ) {
+            p1[2 * i ] = p1[2 * i] >> 2;
+            p1[2 * i  + 1] = p1[2 * i + 1] >> 2;
+        }
+#endif
+    }
+    return outlen_pcm;
+}
+int unload_ddp_decoder_lib()
+{
     ddp_decoder_init = NULL;
     ddp_decoder_process = NULL;
     ddp_decoder_cleanup = NULL;
@@ -335,7 +391,7 @@ static  int unload_ddp_decoder_lib()
     return 0;
 }
 
-static int dcv_decoder_init(int digital_raw)
+int load_ddp_decoder_lib()
 {
     //int digital_raw = 1;
     gDDPDecoderLibHandler = dlopen("/vendor/lib/libHwAudio_dcvdec.so", RTLD_NOW);
@@ -370,9 +426,13 @@ static int dcv_decoder_init(int digital_raw)
     } else {
         ALOGV("<%s::%d>--[ddp_decoder_cleanup:]", __FUNCTION__, __LINE__);
     }
-
-    /*TODO: always decode*/
-    (*ddp_decoder_init)(1, digital_raw,&handle);
+    set_hal_version = (int (*)(int )) dlsym(gDDPDecoderLibHandler, "set_hal_version");
+     if (set_hal_version == NULL) {
+        ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
+    } else {
+        ALOGV("<%s::%d>--[set_hal_version:]", __FUNCTION__, __LINE__);
+        set_hal_version(1);
+    }
     return 0;
 Error:
     unload_ddp_decoder_lib();
@@ -432,10 +492,10 @@ int Write_buffer(struct aml_audio_parser *parser, unsigned char *buffer, int siz
     return writecnt;
 }
 
-#define MAX_DECODER_FRAME_LENGTH 6144
+#define MAX_DECODER_FRAME_LENGTH 6144 * 3
 #define READ_PERIOD_LENGTH 2048
 #define MAX_DDP_FRAME_LENGTH 2560
-#define MAX_DDP_BUFFER_SIZE (MAX_DECODER_FRAME_LENGTH * 4 + MAX_DECODER_FRAME_LENGTH + 8)
+#define MAX_DDP_BUFFER_SIZE (MAX_DECODER_FRAME_LENGTH * 4 / 3 + 2 * MAX_DECODER_FRAME_LENGTH + 8)
 
 void *decode_threadloop(void *data)
 {
@@ -451,40 +511,42 @@ void *decode_threadloop(void *data)
     int outlen_pcm = 0;
     int remain_size = 0;
     int used_size = 0;
-    int read_size = READ_PERIOD_LENGTH;
+    unsigned int u32AlsaFrameSize = 0;
+    int s32AlsaReadFrames = 0;
     int ret = 0;
     int mSample_rate = 0;
-    int mFrame_size = 0;
+    int s32DolbyFrameSize = 0;
     int is_eac3 = 0;
     int mChNum = 0;
     int in_sync = 0;
     unsigned char temp;
     int i;
     int digital_raw = 0;
+    if (NULL == parser) {
+        ALOGE("%s:%d parser == NULL", __func__, __LINE__);
+        return NULL;
+    }
 
-    ALOGI ("++ %s, in_sr = %d, out_sr = %d\n", __func__, parser->in_sample_rate, parser->out_sample_rate);
+    ALOGI("++ %s:%d in_sr = %d, out_sr = %d\n", __func__, __LINE__, parser->in_sample_rate, parser->out_sample_rate);
     outbuf = (unsigned char*) malloc (MAX_DDP_BUFFER_SIZE);
-
     if (!outbuf) {
-        ALOGE("malloc buffer failed\n");
+        ALOGE("%s:%d malloc output buffer failed", __func__, __LINE__);
         return NULL;
     }
     outbuf_raw = outbuf + MAX_DECODER_FRAME_LENGTH;
-
-    inbuf = (unsigned char *) malloc(MAX_DDP_FRAME_LENGTH + read_size);
+    inbuf = (unsigned char *) malloc(MAX_DDP_FRAME_LENGTH + READ_PERIOD_LENGTH);
     if (!inbuf) {
-        ALOGE("malloc inbuf failed\n");
+        ALOGE("%s:%d malloc input buffer failed", __func__, __LINE__);
         free(outbuf);
         return NULL;
     }
-
-    ret = dcv_decoder_init(digital_raw);
+       /*TODO: always decode*/
+    ret = (*ddp_decoder_init)(1, digital_raw,&handle);
     if (ret) {
-        ALOGW("dec init failed, maybe no lisensed ddp decoder.\n");
+        ALOGW("%s:%d ddp decoder init failed, maybe no lisensed ddp decoder", __func__, __LINE__);
         valid_lib = 0;
     }
     //parser->decode_enabled = 1;
-
     if (parser->in_sample_rate != parser->out_sample_rate) {
         parser->aml_resample.input_sr = parser->in_sample_rate;
         parser->aml_resample.output_sr = parser->out_sample_rate;
@@ -492,6 +554,8 @@ void *decode_threadloop(void *data)
         resampler_init(&parser->aml_resample);
     }
 
+    struct aml_stream_in *in = (struct aml_stream_in *)parser->stream;
+    u32AlsaFrameSize = in->config.channels * pcm_format_to_bits(in->config.format) / 8;
     prctl(PR_SET_NAME, (unsigned long)"audio_dcv_dec");
     while (parser->decode_ThreadExitFlag == 0) {
         outlen = 0;
@@ -500,26 +564,18 @@ void *decode_threadloop(void *data)
         in_sync = 0;
 
         if (parser->decode_ThreadExitFlag == 1) {
-            ALOGI("%s, exit threadloop! \n", __func__);
+            ALOGI("%s:%d exit threadloop!", __func__, __LINE__);
             break;
         }
-
-        if (parser->aformat == AUDIO_FORMAT_E_AC3) {
-            nIsEc3 = 1;
-        } else {
-            nIsEc3 = 0;
-        }
-
+        nIsEc3 = (AUDIO_FORMAT_E_AC3 == parser->aformat)? 1 : 0;
         //here we call decode api to decode audio frame here
         if (remain_size < MAX_DDP_FRAME_LENGTH) {
-            //pthread_mutex_lock(parser->decode_dev_op_mutex);
-            ret = pcm_read(parser->aml_pcm, inbuf + remain_size, read_size);
-            //pthread_mutex_unlock(parser->decode_dev_op_mutex);
-            if (ret < 0) {
-                usleep(1000);  //1ms
+            s32AlsaReadFrames = pcm_read(parser->aml_pcm, inbuf + remain_size, READ_PERIOD_LENGTH);
+            if (s32AlsaReadFrames < 0) {
+                usleep(1000);
                 continue;
             }
-            remain_size += read_size;
+            remain_size += s32AlsaReadFrames * u32AlsaFrameSize;
         }
 
         if (valid_lib == 0) {
@@ -531,10 +587,11 @@ void *decode_threadloop(void *data)
         while (parser->decode_ThreadExitFlag == 0 && remain_size > 16) {
             if ((read_pointer[0] == 0x0b && read_pointer[1] == 0x77) || \
                 (read_pointer[0] == 0x77 && read_pointer[1] == 0x0b)) {
-                Get_Parameters(read_pointer, &mSample_rate, &mFrame_size, &mChNum, &is_eac3);
-                if ((mFrame_size == 0) || (mFrame_size < PTR_HEAD_SIZE) || \
+                Get_Parameters(read_pointer, &mSample_rate, &s32DolbyFrameSize, &mChNum, &is_eac3);
+                if ((s32DolbyFrameSize == 0) || (s32DolbyFrameSize < PTR_HEAD_SIZE) || \
                     (mChNum == 0) || (mSample_rate == 0)) {
-                    ALOGI("error dolby frame !!!");
+                    ALOGW("%s:%d error dolby frame, DolbyFrameSize:%d, mChNum:%d, mSample_rate:%d", __func__, __LINE__,
+                        s32DolbyFrameSize, mChNum, mSample_rate);
                 } else {
                     in_sync = 1;
                     break;
@@ -543,34 +600,31 @@ void *decode_threadloop(void *data)
             remain_size--;
             read_pointer++;
         }
-        //ALOGI("remain %d, frame size %d\n", remain_size, mFrame_size);
-
-        if (remain_size < mFrame_size || in_sync == 0) {
+        if (remain_size < s32DolbyFrameSize || in_sync == 0) {
             //if (in_sync == 1)
             //    ALOGI("remain %d,frame size %d, read more\n",remain_size,mFrame_size);
             memcpy(inbuf, read_pointer, remain_size);
             continue;
         }
 
-        //ALOGI("frame size %d,remain %d\n",mFrame_size,remain_size);
+        ALOGV("DolbyFrameSize %d, remain_size:%d", s32DolbyFrameSize,remain_size);
         //do the endian conversion
         if (read_pointer[0] == 0x77 && read_pointer[1] == 0x0b) {
-            for (i = 0; i < mFrame_size / 2; i++) {
+            for (i = 0; i < s32DolbyFrameSize / 2; i++) {
                 temp = read_pointer[2 * i + 1];
                 read_pointer[2 * i + 1] = read_pointer[2 * i];
                 read_pointer[2 * i] = temp;
             }
         }
 
-        used_size = dcv_decode_process(read_pointer, mFrame_size, outbuf,
+        used_size = dcv_decode_process(read_pointer, s32DolbyFrameSize, outbuf,
                                        &outlen_pcm, (char *) outbuf_raw, &outlen_raw, nIsEc3, &parser->pcm_out_info);
         if (used_size > 0) {
             remain_size -= used_size;
             memcpy(inbuf, read_pointer + used_size, remain_size);
         }
-
-        //ALOGI("outlen_pcm: %d,outlen_raw: %d\n", outlen_pcm, outlen_raw);
-
+        ALOGV("%s:%d outlen_pcm:%d, outlen_raw:%d, used_size:%d, remain_size:%d", __func__, __LINE__,
+            outlen_pcm, outlen_raw, used_size, remain_size);
         //only need pcm data
         if (outlen_pcm > 0) {
             // here only downresample, so no need to malloc more buffer
@@ -584,6 +638,10 @@ void *decode_threadloop(void *data)
         }
     }
 
+    if (ddp_decoder_cleanup != NULL && handle != NULL) {
+        (*ddp_decoder_cleanup)(handle);
+        handle = NULL;
+    }
     parser->decode_enabled = 0;
     if (inbuf) {
         free(inbuf);
@@ -592,7 +650,6 @@ void *decode_threadloop(void *data)
         free(outbuf);
     }
 
-    unload_ddp_decoder_lib();
     ALOGI("-- %s\n", __func__);
     return NULL;
 }
@@ -635,7 +692,8 @@ int dcv_decode_release(struct aml_audio_parser *parser)
 
 int dcv_decoder_init_patch(struct dolby_ddp_dec *ddp_dec)
 {
-    ddp_dec->status = dcv_decoder_init(ddp_dec->digital_raw);
+    //ddp_dec->status = dcv_decoder_init(ddp_dec->digital_raw);
+    ddp_dec->status = (*ddp_decoder_init)(1, ddp_dec->digital_raw,&handle);
     if (ddp_dec->status < 0) {
         return -1;
     }
@@ -667,7 +725,7 @@ int dcv_decoder_init_patch(struct dolby_ddp_dec *ddp_dec)
         return -1;
     }
     ring_buffer_init(&ddp_dec->output_ring_buf, 6 * MAX_DECODER_FRAME_LENGTH);
-    ddp_dec->outbuf_raw = ddp_dec->outbuf + MAX_DECODER_FRAME_LENGTH;
+    ddp_dec->outbuf_raw = ddp_dec->outbuf + 2 * MAX_DECODER_FRAME_LENGTH;
     ddp_dec->decoder_process = dcv_decode_process;
     ddp_dec->get_parameters = Get_Parameters;
 
@@ -708,6 +766,30 @@ int dcv_decoder_release_patch(struct dolby_ddp_dec *ddp_dec)
     return 0;
 }
 #define IEC61937_HEADER_SIZE 8
+int dcv_decoder_get_framesize(unsigned char*buffer, int bytes, int* p_head_offset)
+{
+    int offset = 0;
+    unsigned char *read_pointer = buffer;
+    int mSample_rate = 0;
+    int mFrame_size = 0;
+    int mChNum = 0;
+    int is_eac3 = 0;
+    ALOGE("%s %x %x\n", __FUNCTION__, read_pointer[0], read_pointer[1]);
+
+    while (offset <  bytes -1) {
+        if ((read_pointer[0] == 0x0b && read_pointer[1] == 0x77) || \
+                    (read_pointer[0] == 0x77 && read_pointer[1] == 0x0b)) {
+            Get_Parameters(read_pointer, &mSample_rate, &mFrame_size, &mChNum,&is_eac3);
+            *p_head_offset = offset;
+            ALOGE("%s mFrame_size %d offset %d\n", __FUNCTION__, mFrame_size, offset);
+            return mFrame_size;
+        }
+        offset++;
+        read_pointer++;
+    }
+    return 0;
+}
+
 int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffer, int bytes)
 {
     int mSample_rate = 0;
@@ -830,6 +912,7 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
                                              &outRAWLen,
                                              ddp_dec->nIsEc3,
                                              &ddp_dec->pcm_out_info);
+        ddp_dec->is_dolby_atmos = ddp_dec->pcm_out_info.is_dolby_atmos;
         used_size += current_size;
         ddp_dec->outlen_pcm += outPCMLen;
         ddp_dec->outlen_raw += outRAWLen;
@@ -852,6 +935,17 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
         }
     }
 #endif
+    if (ddp_dec->outlen_pcm > 0) {
+        if (ddp_dec->pcm_out_info.lorocmixlev < 0 && ddp_dec->pcm_out_info.lorocmixlev > 9) {
+           ALOGI("invalid lorocmixlev:%d force to default",ddp_dec->pcm_out_info.lorocmixlev);
+           ddp_dec->pcm_out_info.lorocmixlev = 4;
+        }
+        if (ddp_dec->pcm_out_info.lorosurmixlev < 3 && ddp_dec->pcm_out_info.lorosurmixlev > 9) {
+           ALOGI("invalid lorosurmixlev:%d force to default ",ddp_dec->pcm_out_info.lorosurmixlev);
+           ddp_dec->pcm_out_info.lorosurmixlev = 4;
+        }
+        //ALOGI("ddp_dec->pcm_out_info.lorocmixlev:%d ddp_dec->pcm_out_info.lorosurmixlev:%d ",ddp_dec->pcm_out_info.lorocmixlev,ddp_dec->pcm_out_info.lorosurmixlev);
+    }
 
     if (ddp_dec->outlen_pcm > 0 && ddp_dec->pcm_out_info.sample_rate > 0 && ddp_dec->pcm_out_info.sample_rate != 48000) {
         if ((int)ddp_dec->aml_resample.input_sr != ddp_dec->pcm_out_info.sample_rate) {
@@ -874,7 +968,7 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
         out_frame = resample_process (&ddp_dec->aml_resample, out_frame,
                 (int16_t *) ddp_dec->outbuf, (int16_t *) ddp_dec->resample_outbuf);
         ddp_dec->outlen_pcm = out_frame << 2;
-
+        ddp_dec->outlen_pcm = aml_downmix6to2(ddp_dec->outbuf,ddp_dec->outlen_pcm,ddp_dec->pcm_out_info);
         if (get_buffer_write_space(&ddp_dec->output_ring_buf) > ddp_dec->outlen_pcm) {
             ring_buffer_write(&ddp_dec->output_ring_buf, ddp_dec->resample_outbuf,
                     ddp_dec->outlen_pcm, UNCOVER_WRITE);
@@ -884,6 +978,7 @@ int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffe
         }
 
     } else if (ddp_dec->outlen_pcm > 0) {
+        ddp_dec->outlen_pcm = aml_downmix6to2(ddp_dec->outbuf,ddp_dec->outlen_pcm,ddp_dec->pcm_out_info);
         if (get_buffer_write_space(&ddp_dec->output_ring_buf) > ddp_dec->outlen_pcm) {
             ring_buffer_write(&ddp_dec->output_ring_buf, ddp_dec->outbuf,
                     ddp_dec->outlen_pcm, UNCOVER_WRITE);

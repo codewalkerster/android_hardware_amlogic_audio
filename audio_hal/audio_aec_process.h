@@ -22,6 +22,7 @@ extern "C" {
 #endif
 
 int32_t* aec_spk_mic_process(int32_t *spk_buf, int32_t *mic_buf, int *cleaned_samples_per_channel);
+int16_t* aec_spk_mic_process_int16(int16_t *spk_buf, int16_t *mic_buf, int *cleaned_samples_per_channel);
 int aec_spk_mic_init(int sample_rate_hz, int num_loudspeaker_feeds,
             int num_microphone_channels);
 void aec_spk_mic_reset(void);

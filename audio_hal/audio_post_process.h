@@ -23,6 +23,7 @@
 struct aml_native_postprocess {
     int num_postprocessors;
     effect_handle_t postprocessors[MAX_POSTPROCESSORS];
+    int total_postprocessors;
 };
 
 int audio_post_process(effect_handle_t effect, int16_t *in_buffer, size_t out_frames);

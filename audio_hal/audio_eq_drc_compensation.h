@@ -26,6 +26,7 @@ struct eq_drc_data {
     struct  audio_eq_drc_info_s *p_attr;
     struct  audio_source_gain_s s_gain;
     struct  audio_post_gain_s p_gain;
+    struct audio_source_mute   s_mute;
 };
 #ifdef __cplusplus
 extern "C" {

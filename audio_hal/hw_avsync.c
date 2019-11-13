@@ -1,3 +1,11 @@
+/*
+* Copyright (c) 2014 Amlogic, Inc. All rights reserved.
+* *
+This source code is subject to the terms and conditions defined in the
+* file 'LICENSE' which is part of this source code package.
+* *
+Description:
+*/
 
 
 #define LOG_TAG "audio_hw_avsync"
@@ -7,6 +15,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <cutils/log.h>
 
 
@@ -116,7 +125,7 @@ void hwsync_header_set_pts(struct hw_avsync_header *header, uint64_t pts)
 
 int hwsync_read_header_byte(struct hw_avsync_header *header, uint8_t *byte)
 {
-    if (!header || !byte || header->bytes_read >= HW_AVSYNC_HEADER_SIZE_V2)
+    if (!header || !byte || header->bytes_read >= header->header_size)
         return -EINVAL;
 
     if (header->bytes_read == 0)
@@ -124,7 +133,7 @@ int hwsync_read_header_byte(struct hw_avsync_header *header, uint8_t *byte)
 
     *byte = header->header[header->bytes_read];
     header->bytes_read++;
-    if (header->bytes_read >= HW_AVSYNC_HEADER_SIZE_V2)
+    if (header->bytes_read >= header->header_size)
         header->is_complete = true;
 
     return 0;
@@ -133,20 +142,36 @@ int hwsync_read_header_byte(struct hw_avsync_header *header, uint8_t *byte)
 int hwsync_write_header_byte(struct hw_avsync_header *header, uint8_t byte)
 {
     size_t size = sizeof(HW_AVSYNC_HEADER_V2);
-    if (!header || header->bytes_written >= HW_AVSYNC_HEADER_SIZE_V2) {
+    if (!header || (header->version_num > 0 && header->bytes_written >= header->header_size)) {
         ALOGE("%s(), header null or inval written bytes", __func__);
         return -EINVAL;
     }
-    if ((header->bytes_written < size &&
-            byte == HW_AVSYNC_HEADER_V2[header->bytes_written]) ||
-            header->bytes_written >= size) {
+    ALOGV("header->bytes_written:%zu byte:%0x",header->bytes_written,byte);
+    if (header->bytes_written < (HW_SYNC_VERSION_SIZE - 1) &&
+        byte == HW_AVSYNC_HEADER_V2[header->bytes_written]) {
         header->header[header->bytes_written++] = byte;
-        if (header->bytes_written >= HW_AVSYNC_HEADER_SIZE_V2) {
+    } else if (header->bytes_written == (HW_SYNC_VERSION_SIZE - 1)) {
+        header->header[header->bytes_written++] = byte;
+        if (byte == 1) {
+            ALOGV("version_num %d ",byte);
+            header->version_num = byte;
+            header->header_size = HW_AVSYNC_HEADER_SIZE_V1;
+        } else if (byte == 2) {
+            ALOGV("version_num %d ",byte);
+            header->version_num = byte;
+            header->header_size = HW_AVSYNC_HEADER_SIZE_V2;
+        } else {
+            ALOGE("invalid version_num %d ",header->version_num);
+        }
+    } else if (header->bytes_written >= HW_SYNC_VERSION_SIZE ) {
+        header->header[header->bytes_written++] = byte;
+        if (header->bytes_written >= header->header_size &&
+            (header->version_num == 2 || header->version_num == 1)) {
             header->is_complete = true;
             hwsync_header_extract(header);
         }
     } else {
-        ALOGE("%s(), invalid data %d, bytes_wrtten %d",
+        ALOGE("%s(), invalid data %d, bytes_wrtten %zu",
                 __func__, byte, header->bytes_written);
         header->bytes_written = 0;
         return -EINVAL;
@@ -177,7 +202,7 @@ int hwsync_header_reset(struct hw_avsync_header *header)
 
 size_t hwsync_header_get_bytes_remaining(struct hw_avsync_header *header)
 {
-    return HW_AVSYNC_HEADER_SIZE_V2 - header->bytes_written;
+    return header->header_size - header->bytes_written;
 }
 
 void extractor_consume_output(struct hw_avsync_header_extractor *header_extractor)
@@ -189,7 +214,7 @@ void extractor_consume_output(struct hw_avsync_header_extractor *header_extracto
             header_extractor->cbk_cookie,
             header_extractor->data,
             header_extractor->data_size_bytes);
-        ALOGV("%s, header_extractor->data_size_bytes = %d, written =%d", __func__,
+        ALOGV("%s, header_extractor->data_size_bytes = %d, written =%zu", __func__,
                 header_extractor->data_size_bytes, written);
         if (written <= header_extractor->data_size_bytes) {
             header_extractor->sync_frame_written += written;
@@ -202,7 +227,7 @@ void extractor_consume_output(struct hw_avsync_header_extractor *header_extracto
         //header_extractor->sync_frame_written += written;
         //header_extractor->data_size_bytes -= written;
         ALOGV("--%s, data size =%d", __func__, header_extractor->data_size_bytes);
-        ALOGV("--%s, sync_frame_written =%d", __func__, header_extractor->sync_frame_written);
+        ALOGV("--%s, sync_frame_written =%zu", __func__, header_extractor->sync_frame_written);
     }
 }
 
@@ -227,7 +252,7 @@ ssize_t header_extractor_write(struct hw_avsync_header_extractor *header_extract
             ALOGV("--%s() writing header byte val %#x", __func__, *data);
             int ret = hwsync_write_header_byte(sync_header, *data);
             if (ret < 0) {
-                ALOGE("%s(), invalid data!!, bytes_remaining %d", __func__, bytes_remaining);
+                ALOGE("%s(), invalid data!!, bytes_remaining %zu", __func__, bytes_remaining);
                 extractor_reset(header_extractor);
                 bytes_remaining--;
                 data++;
@@ -250,17 +275,17 @@ ssize_t header_extractor_write(struct hw_avsync_header_extractor *header_extract
                 memset(header_extractor->data, 0, HW_AVSYNC_FRAME_SIZE);
                 // accumulate the payload consumed
                 header_extractor->payload_offset += frame_size;
-                ALOGV("%s() filling header complete, framesize = %d, payload offset %lld",
+                ALOGV("%s() filling header complete, framesize = %d, payload offset %"PRIu64"",
                         __func__, frame_size, header_extractor->payload_offset);
             }
             bytes_remaining--;
             data++;
         } else {
-            ALOGV("start dealing body read, bytes_remaing %d, sync_frame_written %d",
+            ALOGV("start dealing body read, bytes_remaing %zu, sync_frame_written %zu",
                     bytes_remaining, header_extractor->sync_frame_written);
             size_t bytes_to_copy = min(bytes_remaining,
                     hwsync_header_get_frame_size(sync_header) - header_extractor->sync_frame_written);
-            ALOGV("%s() writing body_bytes= %d,data_size_bytes= %d",
+            ALOGV("%s() writing body_bytes= %zu,data_size_bytes= %d",
 		    __func__, bytes_to_copy, header_extractor->data_size_bytes);
 
             memcpy(header_extractor->data + header_extractor->data_size_bytes, data, bytes_to_copy);
@@ -274,7 +299,7 @@ ssize_t header_extractor_write(struct hw_avsync_header_extractor *header_extract
                 extractor_consume_output(header_extractor);
                 extractor_reset(header_extractor);
                 header_extractor->sync_frame_written = 0;
-                ALOGV("%s() reading body over, next to reading header, return bytes %d",
+                ALOGV("%s() reading body over, next to reading header, return bytes %zu",
                         __func__, bytes - bytes_remaining);
                 continue;
                 //return bytes - bytes_remaining;

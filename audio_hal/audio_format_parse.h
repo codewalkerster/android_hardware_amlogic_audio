@@ -36,10 +36,10 @@ enum audio_type {
     AC3,
     EAC3,
     DTS,
-    DTSCD,
     DTSHD,
     TRUEHD,
     PAUSE,
+    DTSCD,
     MUTE,
 };
 
@@ -56,20 +56,12 @@ enum audio_type {
 /*min DTSHD Period 2048; max DTSHD Period 65536*/
 #define DTSHD_PERIOD_SIZE (2048)
 
-enum input_source {
-    LINEIN = 0,
-    ATV,
-    HDMIIN,
-    SPDIFIN,
-    REMOTE_SUBMIXIN,
-    WIRED_HEADSETIN,
-    BUILTIN_MIC,
+enum parser_state {
+    IEC61937_UNSYNC,
+    IEC61937_SYNCING,
+    IEC61937_SYNCED,
 };
 
-enum auge_input_source {
-	FRATV    = 5,
-	FRHDMIRX = 8,
-};
 
 typedef struct audio_type_parse {
     struct pcm_config config_in;
@@ -91,12 +83,18 @@ typedef struct audio_type_parse {
     int package_size;
 
     int running_flag;
+    // used for software detection
+    int state;
+    int parsed_size;
+    audio_devices_t input_src;
+
 } audio_type_parse_t;
 
 int creat_pthread_for_audio_type_parse(
     pthread_t *audio_type_parse_ThreadID,
                      void **status,
-                     struct aml_mixer_handle *mixer);
+                     struct aml_mixer_handle *mixer,
+                     audio_devices_t input_src);
 void exit_pthread_for_audio_type_parse(
     pthread_t audio_type_parse_ThreadID,
     void **status);
@@ -104,8 +102,12 @@ void exit_pthread_for_audio_type_parse(
 /*
  *@brief convert the audio type to android audio format
  */
-audio_format_t andio_type_convert_to_android_audio_format_t(int codec_type);
+audio_format_t audio_type_convert_to_android_audio_format_t(int codec_type);
 
+/*
+ *@brief convert the audio type to string format
+ */
+char* audio_type_convert_to_string(int s32AudioType);
 
 /*
  *@brief convert android audio format to the audio type
@@ -127,5 +129,11 @@ int audio_parse_get_audio_type_direct(audio_type_parse_t *status);
  *@brief gget current audio type from buffer data
  */
 int audio_type_parse(void *buffer, size_t bytes, int *package_size, audio_channel_mask_t *cur_ch_mask);
+
+/*
+ *@brief feed data to software format detection
+ */
+void feeddata_audio_type_parse(void **status, char * input, int size);
+
 
 #endif
