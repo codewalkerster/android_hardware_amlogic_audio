@@ -29,6 +29,8 @@
 #include "dolby_lib_api.h"
 #include "aml_audio_stream.h"
 #include "audio_virtual_buf.h"
+#include "alsa_config_parameters.h"
+
 #define AML_ZERO_ADD_MIN_SIZE 1024
 
 #define AUDIO_EAC3_FRAME_SIZE 16
@@ -92,6 +94,26 @@ int aml_alsa_output_open(struct audio_stream_out *stream)
             if (aml_out->device != device) {
                 ALOGI("%s stream device(%d) differ with current device(%d)!", __func__, aml_out->device, device);
                 aml_out->is_device_differ_with_ms12 = true;
+            }
+        }
+        else {
+            get_hardware_config_parameters(
+                config
+                , adev->sink_format
+                , audio_channel_count_from_out_mask(aml_out->hal_channel_mask)
+                , aml_out->config.rate
+                , aml_out->is_tv_platform);
+            switch (adev->sink_format) {
+                case AUDIO_FORMAT_E_AC3:
+                    device = DIGITAL_DEVICE;
+                    break;
+                case AUDIO_FORMAT_AC3:
+                    device = DIGITAL_DEVICE;
+                    break;
+                case AUDIO_FORMAT_PCM_16_BIT:
+                default:
+                    device = I2S_DEVICE;
+                    break;
             }
         }
     } else if (eDolbyDcvLib == adev->dolby_lib_type) {
