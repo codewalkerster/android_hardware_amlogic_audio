@@ -53,7 +53,8 @@ static void get_dts_hd_hardware_config_parameters(
 static void get_ddp_hardware_config_parameters(
     struct pcm_config *hardware_config
     , unsigned int channels __unused
-    , unsigned int rate)
+    , unsigned int rate
+    , bool continuous_mode)
 {
     hardware_config->channels = 2;
     hardware_config->format = PCM_FORMAT_S16_LE;
@@ -62,7 +63,10 @@ static void get_ddp_hardware_config_parameters(
     hardware_config->rate = rate /* * 4 */;
     hardware_config->period_count = PLAYBACK_PERIOD_COUNT;
     //hardware_config->period_size = PERIOD_SIZE /* * 4 */;
-    hardware_config->period_size = PERIOD_SIZE * 4 * 2;
+    if (continuous_mode)
+        hardware_config->period_size = PERIOD_SIZE * 4 * 2;
+    else
+        hardware_config->period_size = PERIOD_SIZE * 4;
     hardware_config->start_threshold = hardware_config->period_size * hardware_config->period_count/2;
     hardware_config->avail_min = 0;
 
@@ -128,12 +132,13 @@ int get_hardware_config_parameters(
     , audio_format_t output_format
     , unsigned int channels
     , unsigned int rate
-    , bool platform_is_tv)
+    , bool platform_is_tv
+    , bool continuous_mode)
 {
     ALOGI("%s()\n", __FUNCTION__);
     //DD+
     if (output_format == AUDIO_FORMAT_E_AC3) {
-        get_ddp_hardware_config_parameters(final_config, channels, rate);
+        get_ddp_hardware_config_parameters(final_config, channels, rate, continuous_mode);
     }
     //DD
     else if (output_format == AUDIO_FORMAT_AC3) {

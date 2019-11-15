@@ -553,6 +553,7 @@ struct aml_stream_out {
     struct audio_config audioCfg;
     /* config which set to ALSA device */
     struct pcm_config config;
+    audio_format_t    alsa_output_format;
     /* channel mask exposed to AudioFlinger. */
     audio_channel_mask_t hal_channel_mask;
     /* format mask exposed to AudioFlinger. */

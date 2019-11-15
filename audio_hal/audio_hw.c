@@ -7643,6 +7643,7 @@ ssize_t hw_write (struct audio_stream_out *stream
     pthread_mutex_lock(&adev->alsa_pcm_lock);
     if (aml_out->status != STREAM_HW_WRITING) {
         ALOGI("%s, aml_out %p alsa open output_format %#x\n", __func__, aml_out, output_format);
+        aml_out->alsa_output_format = output_format;
         if (eDolbyDcvLib == adev->dolby_lib_type) {
             if (!is_dual_output_stream(stream)) {
                 aml_tinymix_set_spdif_format(output_format,aml_out);

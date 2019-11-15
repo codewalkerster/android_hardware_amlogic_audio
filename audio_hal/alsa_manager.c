@@ -95,6 +95,27 @@ int aml_alsa_output_open(struct audio_stream_out *stream)
                 ALOGI("%s stream device(%d) differ with current device(%d)!", __func__, aml_out->device, device);
                 aml_out->is_device_differ_with_ms12 = true;
             }
+        } else {
+            audio_format_t output_format = aml_out->alsa_output_format;
+            get_hardware_config_parameters(
+                config
+                , output_format
+                , audio_channel_count_from_out_mask(aml_out->hal_channel_mask)
+                , aml_out->config.rate
+                , aml_out->is_tv_platform
+                , continous_mode(adev));
+            switch (output_format) {
+                case AUDIO_FORMAT_E_AC3:
+                    device = DIGITAL_DEVICE;
+                    break;
+                case AUDIO_FORMAT_AC3:
+                    device = DIGITAL_DEVICE;
+                    break;
+                case AUDIO_FORMAT_PCM_16_BIT:
+                default:
+                    device = I2S_DEVICE;
+                    break;
+            }
         }
         else {
             get_hardware_config_parameters(
@@ -361,8 +382,6 @@ size_t aml_alsa_output_write(struct audio_stream_out *stream,
     if (cur_vpts <= first_vpts) {
         cur_vpts = first_vpts;
     }
-
-
 
     cur_apts = (unsigned int)((int64_t)first_apts + (int64_t)(((int64_t)aml_out->dropped_size * 90) / (48 * frame_size)));
     av_diff = (int)((int64_t)cur_apts - (int64_t)cur_vpts);

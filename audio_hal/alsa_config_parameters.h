@@ -38,7 +38,8 @@ int get_hardware_config_parameters(
     , audio_format_t output_format
     , unsigned int channels
     , unsigned int rate
-    , bool platform_is_tv);
+    , bool platform_is_tv
+    , bool continuous_mode);
 
 #endif // _ALSA_MANAGER_H_
 
