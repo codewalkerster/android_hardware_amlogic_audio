@@ -103,6 +103,12 @@ struct aml_mixer_ctrl {
     char ctrl_name[50];
 };
 
+/* the same as toddr source*/
+typedef enum ResampleSource {
+    RESAMPLE_FROM_SPDIFIN = 3,
+    RESAMPLE_FROM_FRHDMIRX = 8,
+} eMixerAudioResampleSource;
+
 /*
  *  Alsa Mixer Control Command List
  **/
@@ -142,6 +148,7 @@ typedef enum AML_MIXER_CTRL_ID {
     AML_MIXER_ID_AED_MULTI_DRC_ENABLE,
     AML_MIXER_ID_AED_FULL_DRC_ENABLE,
     AML_MIXER_ID_SPDIF_IN_SAMPLERATE,
+    AML_MIXER_ID_HW_RESAMPLE_SOURCE,
     AML_MIXER_ID_MAX,
 } eMixerCtrlID;
 
