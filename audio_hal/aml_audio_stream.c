@@ -370,9 +370,14 @@ int set_audio_source(struct aml_mixer_handle *mixer_handle,
     return aml_mixer_ctrl_set_int(mixer_handle, AML_MIXER_ID_AUDIO_IN_SRC, src);
 }
 
+int set_resample_source(struct aml_mixer_handle *mixer_handle, enum ResampleSource source)
+{
+    return aml_mixer_ctrl_set_int(mixer_handle, AML_MIXER_ID_HW_RESAMPLE_SOURCE, source);
+}
+
 int set_spdifin_pao(struct aml_mixer_handle *mixer_handle,int enable)
 {
-    return aml_mixer_ctrl_set_int(mixer_handle,AML_MIXER_ID_SPDIFIN_PAO, enable);
+    return aml_mixer_ctrl_set_int(mixer_handle, AML_MIXER_ID_SPDIFIN_PAO, enable);
 }
 
 int get_spdifin_samplerate(struct aml_mixer_handle *mixer_handle)
@@ -453,19 +458,19 @@ bool signal_status_check(audio_devices_t in_device, int *mute_time,
     }
     if ((in_device & AUDIO_DEVICE_IN_TV_TUNER) &&
             !is_atv_in_stable_hw (stream)) {
-        *mute_time = 500;
+        *mute_time = 100;
         return false;
     }
     if (((in_device & AUDIO_DEVICE_IN_SPDIF) ||
             ((in_device & AUDIO_DEVICE_IN_HDMI_ARC) &&
                     (access(SYS_NODE_EARC_RX, F_OK) == -1))) &&
             !is_spdif_in_stable_hw(stream)) {
-        *mute_time = 1000;
+        *mute_time = 100;
         return false;
     }
     if ((in_device & AUDIO_DEVICE_IN_LINE) &&
             !is_av_in_stable_hw(stream)) {
-       *mute_time = 1000;
+       *mute_time = 100;
        return false;
     }
     return true;
