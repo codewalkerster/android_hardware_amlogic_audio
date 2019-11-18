@@ -21,6 +21,7 @@
 #include <hardware/audio.h>
 #include <cutils/list.h>
 #include <sound/asound.h>
+#include <string.h>
 #include <tinyalsa/asoundlib.h>
 
 /* ALSA cards for AML */
@@ -31,10 +32,12 @@
 #define PORT_MM 1
 #endif
 
+#define ADD_AUDIO_DELAY_INTERFACE
+
 #include "audio_hwsync.h"
 #include "audio_post_process.h"
 #include "aml_hw_mixer.h"
-#include "audio_eq_drc_compensation.h"
+#include "../amlogic_AQ_tools/audio_eq_drc_compensation.h"
 #include "aml_dcv_dec_api.h"
 #include "aml_dca_dec_api.h"
 #include "aml_audio_types_def.h"
@@ -46,13 +49,16 @@
 #include "audio_port.h"
 #include "aml_audio_ease.h"
 
+#ifdef ADD_AUDIO_DELAY_INTERFACE
+#include "aml_audio_delay.h"
+#endif
 /* number of frames per period */
 /*
  * change DEFAULT_PERIOD_SIZE from 1024 to 512 for passing CTS
  * test case test4_1MeasurePeakRms(android.media.cts.VisualizerTest)
  */
 #define DEFAULT_PLAYBACK_PERIOD_SIZE 512//1024
-#define DEFAULT_CAPTURE_PERIOD_SIZE  512//1024
+#define DEFAULT_CAPTURE_PERIOD_SIZE  1024
 #define DEFAULT_PLAYBACK_PERIOD_CNT 6
 
 //#define DEFAULT_PERIOD_SIZE 512
@@ -97,6 +103,18 @@ static unsigned int DEFAULT_OUT_SAMPLING_RATE = 48000;
 
 #define DDP_FRAME_SIZE      768
 #define EAC3_MULTIPLIER 4
+#define MAX(a,b) (((a) > (b)) ? (a) : (b))
+#define MIN(a,b) (((a) < (b)) ? (a) : (b))
+
+#define SYS_NODE_EARC_RX           "/sys/class/extcon/earcrx/state"
+#define SYS_NODE_EARC_TX           "/sys/class/extcon/earctx/state"
+
+#define IS_HDMI_IN_HW(device) ((device) == AUDIO_DEVICE_IN_HDMI ||\
+                             (device) == AUDIO_DEVICE_IN_HDMI_ARC)
+
+#define IS_HDMI_ARC_OUT_HW(device) ((access(SYS_NODE_EARC_TX, F_OK) == 0) &&\
+                (device & AUDIO_DEVICE_OUT_HDMI_ARC))
+
 enum {
     TYPE_PCM = 0,
     TYPE_AC3 = 2,
@@ -208,8 +226,9 @@ enum patch_src_assortion {
     SRC_WIRED_HEADSETIN         = 6,
     SRC_BUILTIN_MIC             = 7,
     SRC_BT_SCO_HEADSET_MIC      = 8,
-    SRC_OTHER                   = 9,
-    SRC_INVAL                   = 10,
+    SRC_ARCIN                   = 9,
+    SRC_OTHER                   = 10,
+    SRC_INVAL                   = 11,
 };
 
 enum OUT_PORT {
@@ -234,7 +253,8 @@ enum IN_PORT {
     INPORT_WIRED_HEADSETIN      = 5,
     INPORT_BUILTIN_MIC          = 6,
     INPORT_BT_SCO_HEADSET_MIC   = 7,
-    INPORT_MAX                  = 8,
+    INPORT_ARCIN                = 8,
+    INPORT_MAX                  = 9,
 };
 
 struct audio_patch_set {
@@ -258,6 +278,7 @@ typedef enum alsa_device {
     I2S_DEVICE = 0,
     DIGITAL_DEVICE,
     TDM_DEVICE,
+    EARC_DEVICE,
     ALSA_DEVICE_CNT
 } alsa_device_t;
 
@@ -275,6 +296,13 @@ typedef enum atom_stream_type {
     STREAM_OPTAUX
 } atom_stream_type_t;
 #endif
+
+typedef enum AML_INPUT_STREAM_CONFIG_TYPE {
+    AML_INPUT_STREAM_CONFIG_TYPE_CHANNELS   = 0,
+    AML_INPUT_STREAM_CONFIG_TYPE_PERIODS    = 1,
+
+    AML_INPUT_STREAM_CONFIG_TYPE_BUTT       = -1,
+} AML_INPUT_STREAM_CONFIG_TYPE_E;
 
 typedef union {
     unsigned long long timeStamp;
@@ -371,7 +399,7 @@ struct aml_audio_device {
     struct aml_audio_patch *audio_patch;
     /* indicates atv to mixer patch, no need HAL patching  */
     bool tuner2mix_patch;
-    /* Now only two pcm handle supported: I2S, SPDIF */
+    /* Now only three pcm handle supported: I2S, SPDIF, EARC */
     pthread_mutex_t alsa_pcm_lock;
     struct pcm *pcm_handle[ALSA_DEVICE_CNT];
     int pcm_refs[ALSA_DEVICE_CNT];
@@ -417,6 +445,7 @@ struct aml_audio_device {
      * buffer size equal to efect_buf_size
      */
     void *spk_output_buf;
+    void *spdif_output_buf;
     void *effect_buf;
     size_t effect_buf_size;
     size_t spk_tuning_lvl;
@@ -456,7 +485,7 @@ struct aml_audio_device {
     int aml_ng_enable;
     float aml_ng_level;
     int source_mute;
-    int aml_ng_attrack_time;
+    int aml_ng_attack_time;
     int aml_ng_release_time;
     int system_app_mixing_status;
     int audio_type;
@@ -485,6 +514,15 @@ struct aml_audio_device {
 
     /* MIC_IN<->PDM/TDM and default configs */
     struct mic_in_desc *mic_desc;
+    bool virtualx_mulch;
+    int effect_in_ch;
+    /*
+    for karaoke use case, the apk will acess
+    the sound card device directly.the apk will
+    send the direct mode flag to audio hal. the audio
+    hal need by-pass hw acess until the apk release flag
+    */
+    unsigned int direct_mode;
 };
 
 struct meta_data {
@@ -514,6 +552,7 @@ struct aml_stream_out {
     audio_output_flags_t flags;
     audio_devices_t out_device;
     struct pcm *pcm;
+    struct pcm *earc_pcm;
     struct resampler_itfe *resampler;
     char *buffer;
     size_t buffer_frames;
@@ -590,6 +629,8 @@ struct aml_stream_out {
     bool need_convert;
     size_t last_playload_used;
     void * alsa_vir_buf_handle;
+    aml_audio_resample_t *resample_handle;
+    int need_drop_size;
 };
 
 typedef ssize_t (*write_func)(struct audio_stream_out *stream, const void *buffer, size_t bytes);
@@ -597,6 +638,9 @@ typedef ssize_t (*write_func)(struct audio_stream_out *stream, const void *buffe
 #define MAX_PREPROCESSORS 3 /* maximum one AGC + one NS + one AEC per input stream */
 struct aml_stream_in {
     struct audio_stream_in stream;
+#if defined(ENABLE_HBG_PATCH)
+    int hbg_channel;
+#endif
     pthread_mutex_t lock;       /* see note below on mutex acquisition order */
     struct pcm_config config;
     struct pcm *pcm;
@@ -645,6 +689,19 @@ struct aml_stream_in {
 };
 typedef  int (*do_standby_func)(struct aml_stream_out *out);
 typedef  int (*do_startup_func)(struct aml_stream_out *out);
+
+inline struct pcm_config update_earc_out_config(struct pcm_config *config)
+{
+    struct pcm_config earc_config;
+    memset(&earc_config, 0, sizeof(struct pcm_config));
+    earc_config.channels = 2;
+    earc_config.rate = config->rate;
+    earc_config.period_size = config->period_size;
+    earc_config.period_count = config->period_count;
+    earc_config.start_threshold = config->start_threshold;
+    earc_config.format = config->format;
+    return earc_config;
+}
 
 inline int continous_mode(struct aml_audio_device *adev)
 {

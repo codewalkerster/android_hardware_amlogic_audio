@@ -31,13 +31,14 @@
  */
 #define PROT_TDM           3
 #define PROT_PDM           4
-#define PORT_SPDIFB2HDMI   5
+#define PORT_SPDIFB        5
 #define PORT_I2S2HDMI      6
 #define PORT_TV            7
 #define PORT_I2S1          8
 #define PORT_I2S2          9
 #define PORT_LOOPBACK      10
 #define PORT_BUILTINMIC    11
+#define PORT_EARC          12
 
 #define PLAYBACK           0
 #define CAPTURE            1

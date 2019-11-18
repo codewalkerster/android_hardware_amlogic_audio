@@ -139,6 +139,149 @@ static int hw_audio_format_detection(struct aml_mixer_handle *mixer_handle)
 
 }
 
+/*
+ * Extracts the relevant bits of the specified length from the string based on the offset address
+ */
+static size_t extract_bits(const char* buffer, size_t extract_bits_offset, size_t extract_bits_len) {
+    int i = 0;
+    size_t ret = 0;
+    char mask = 0xFF;
+    int offset_divisor = (int)extract_bits_offset / 8;
+    int offset_remainder = (int)extract_bits_offset % 8;
+    int len_divisor = 0;
+    int len_remainder = 0;
+    if (buffer == NULL) {
+        ALOGE("%s, illegal param buffer, it is null", __FUNCTION__);
+        return 0;
+    }
+    ALOGD("%s, extract_bits_offset = %d, extract_bits_len = %d, offset_divisor = %d, offset_remainder = %d",
+        __FUNCTION__, extract_bits_offset, extract_bits_len, offset_divisor, offset_remainder);
+    char *temp_pointer = (char *)buffer;
+    temp_pointer += offset_divisor;
+    if (8 - offset_remainder >= (int)extract_bits_len) {
+        ret = (temp_pointer[0] & (mask >> offset_remainder)) >> (8 - offset_remainder - (int)extract_bits_len);
+        ALOGD("%s, ret = %#x", __FUNCTION__, ret);
+        return ret;
+    }
+    len_divisor = (extract_bits_len - (8 - offset_remainder)) / 8;
+    len_remainder = (extract_bits_len - (8 - offset_remainder)) % 8;
+    ALOGD("%s, len_divisor = %d, len_remainder = %d", __FUNCTION__,  len_divisor, len_remainder);
+    for (i = (len_divisor + 1); i >= 0; i--) {
+        if (i == (len_divisor + 1)) {
+            ret |= (temp_pointer[i] >> (8 - len_remainder));
+        } else if (i == 0) {
+            ret |= ((temp_pointer[i] & (mask >> offset_remainder)) << ((len_divisor - i) * 8 + len_remainder));
+        } else {
+            ret |= (temp_pointer[i] << ((len_divisor - i) * 8 + len_remainder));
+        }
+    }
+    ALOGD("%s, ret = %#x", __FUNCTION__, ret);
+    return ret;
+}
+
+int get_dts_stream_channels(const char *buffer, size_t buffer_size) {
+    int i = 0;
+    int count = 0;
+    int pos_iec_header = 0;
+    bool little_end = false;
+    size_t frame_header_len = 8;
+    char *temp_buffer = NULL;
+    char temp_ch;
+    int channels = 0;
+    int lfe = 0;
+    size_t amode = 0;
+    size_t lfe_value = 0;
+    size_t bytes = 0;
+
+    pos_iec_header = seek_61937_sync_word((char *)buffer, (int)buffer_size);
+    if (pos_iec_header > 0) {
+        bytes = buffer_size - (size_t)pos_iec_header;
+    } else {
+        bytes = buffer_size;
+    }
+
+    //8 Byte IEC Header + 15 Byte Bitstream Header(120 bits)
+    if (bytes < 23) {
+        ALOGE("%s, illegal param bytes(%d)", __FUNCTION__, bytes);
+        return -1;
+    }
+    temp_buffer = (char *)malloc(sizeof(char) * bytes);
+    if (temp_buffer == NULL) {
+        ALOGE("%s, malloc error", __FUNCTION__);
+        return -1;
+    }
+    memset(temp_buffer, '\0', sizeof(char) * bytes);
+    if (pos_iec_header > 0) {
+        memcpy(temp_buffer, buffer + pos_iec_header, bytes);
+    } else {
+        memcpy(temp_buffer, buffer, bytes);
+    }
+    if (temp_buffer[0] == 0xf8 && temp_buffer[1] == 0x72 && temp_buffer[2] == 0x4e && temp_buffer[3] == 0x1f) {
+        little_end = true;
+    }
+    ALOGD("%s, little_end = %d", __FUNCTION__, little_end);
+    if (!little_end) {
+        if ((bytes - frame_header_len) % 2 == 0) {
+            count = bytes - frame_header_len;
+        } else {
+            count = bytes - frame_header_len - 1;
+        }
+        for (i = 0; i < count; i+=2) {
+            temp_ch = temp_buffer[frame_header_len + i];
+            temp_buffer[frame_header_len + i] = temp_buffer[frame_header_len + i + 1];
+            temp_buffer[frame_header_len + i + 1] = temp_ch;
+        }
+    }
+    if (!((temp_buffer[frame_header_len + 0] == 0x7F
+            && temp_buffer[frame_header_len + 1] == 0xFE
+            && temp_buffer[frame_header_len + 2] == 0x80
+            && temp_buffer[frame_header_len + 3] == 0x01))) {
+        ALOGE("%s, illegal synchronization", __FUNCTION__);
+        goto exit;
+    } else {
+        ALOGI("%s, right synchronization", __FUNCTION__);
+    }
+    amode = extract_bits((const char*)(temp_buffer + frame_header_len), 60, 6);
+    if (amode == 0x0) {
+        channels = 1;
+    } else if ((amode == 0x1) || (amode == 0x2) || (amode == 0x3) || (amode == 0x4)) {
+        channels = 2;
+    } else if ((amode == 0x5) || (amode == 0x6)) {
+        channels = 3;
+    } else if ((amode == 0x7) || (amode == 0x8)) {
+        channels = 4;
+    } else if (amode == 0x9) {
+        channels = 5;
+    } else if ((amode == 0xa) || (amode == 0xb) || (amode == 0xc)) {
+        channels = 6;
+    } else if (amode == 0xd) {
+        channels = 7;
+    } else if ((amode == 0xe) || (amode == 0xf)) {
+        channels = 8;
+    } else {
+        ALOGE("%s, amode user defined", __FUNCTION__);
+        goto exit;
+    }
+    lfe_value = extract_bits((const char*)(temp_buffer + frame_header_len), 85, 2);
+    if (lfe_value == 0x0) {
+        lfe = 0;
+    } else if ((lfe_value == 1) || (lfe_value == 2)) {
+        lfe = 1;
+    } else {
+        ALOGE("%s, invalid lfe value", __FUNCTION__);
+        goto exit;
+    }
+    ALOGD("%s, channels = %d, lfe = %d", __FUNCTION__, channels, lfe);
+    return (channels + lfe);
+
+exit:
+    if (temp_buffer != NULL) {
+        free(temp_buffer);
+        temp_buffer = NULL;
+    }
+    return -1;
+}
+
 int audio_type_parse(void *buffer, size_t bytes, int *package_size, audio_channel_mask_t *cur_ch_mask)
 {
     int pos_sync_word = -1, pos_dtscd_sync_word = -1;
@@ -331,6 +474,7 @@ void* audio_type_parse_threadloop(void *data)
     int read_bytes = 0;
     int txlx_chip = is_txlx_chip();
     int txl_chip = is_txl_chip();
+    int auge_chip = alsa_device_is_auge();
 
     ret = audio_type_parse_init(audio_type_status);
     if (ret < 0) {
@@ -350,10 +494,15 @@ void* audio_type_parse_threadloop(void *data)
             cur_samplerate = get_hdmiin_samplerate(audio_type_status->mixer_handle);
         } else if (audio_type_status->input_src == AUDIO_DEVICE_IN_SPDIF) {
             cur_samplerate = get_spdifin_samplerate(audio_type_status->mixer_handle);
+        } else if (audio_type_status->input_src == AUDIO_DEVICE_IN_HDMI_ARC) {
+            cur_samplerate = -1;//temp code
         }
 
+        if (cur_samplerate == -1)
+            cur_samplerate = HW_RESAMPLE_48K;
+
         /*check hdmiin audio input sr and reset hw resample*/
-        if (cur_samplerate != -1 && cur_samplerate != HW_RESAMPLE_DISABLE &&
+        if (cur_samplerate != HW_RESAMPLE_DISABLE &&
                 cur_samplerate != last_cur_samplerate &&
                 audio_type_status->audio_type == LPCM) {
             enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
@@ -393,13 +542,13 @@ void* audio_type_parse_threadloop(void *data)
                         enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
                     }
                 }
-                if (audio_packet != AUDIO_PACKET_HBR) {
+                if (auge_chip || audio_packet != AUDIO_PACKET_HBR) {
                     audio_type_status->cur_audio_type = hw_audio_format_detection(audio_type_status->mixer_handle);
                     if (audio_type_status->audio_type != LPCM && audio_type_status->cur_audio_type == LPCM) {
                         enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
                     }
                     else if (audio_type_status->audio_type == LPCM && audio_type_status->cur_audio_type != LPCM){
-                        ALOGV("1 Raw data found: type(%d)\n", audio_type_status->cur_audio_type);
+                        ALOGV("Raw data found: type(%d)\n", audio_type_status->cur_audio_type);
                         enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
                     }
                     audio_type_status->audio_type = audio_type_status->cur_audio_type;

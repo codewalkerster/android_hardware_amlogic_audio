@@ -113,12 +113,35 @@ int aml_ms12_config(struct dolby_ms12_desc *ms12_desc
     return 0;
 }
 
+int aml_ms12_lib_preload() {
+    int ret = 0;
+    void * dolby_ms12_ptr = NULL;
+    ALOGD("+%s()\n", __FUNCTION__);
+    ret = get_libdolbyms12_handle();
+    if (ret == 0) {
+        dolby_ms12_ptr = dolby_ms12_init(1, NULL);
+        if (dolby_ms12_ptr) {
+            dolby_ms12_release(dolby_ms12_ptr);
+        }
+    }
+    ALOGD("-%s()\n", __FUNCTION__);
+    return 0;
+}
+
+int aml_ms12_lib_release() {
+    release_libdolbyms12_handle();
+    dolby_ms12_self_cleanup();
+    ALOGD("-%s()\n", __FUNCTION__);
+    return 0;
+}
+
+
 int aml_ms12_cleanup(struct dolby_ms12_desc *ms12_desc)
 {
     dolby_ms12_status_self_cleanup();
     dolby_ms12_config_params_self_cleanup();
     dolby_ms12_release(ms12_desc->dolby_ms12_ptr);
-    dolby_ms12_self_cleanup();
+    //dolby_ms12_self_cleanup();
 #ifdef REPLACE_OUTPUT_BUFFER_WITH_CALLBACK
 
 #else

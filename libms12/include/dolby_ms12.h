@@ -29,6 +29,9 @@ extern "C" {
 //get the handle of dlopen "/system/lib/libdolbyms12.so"
 int get_libdolbyms12_handle(void);
 
+//release the handle of dlopen
+int release_libdolbyms12_handle(void);
+
 /*@@
     @brief dolby ms12 self cleanup
 */

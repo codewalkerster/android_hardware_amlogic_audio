@@ -66,6 +66,17 @@ extern "C" int get_libdolbyms12_handle(void)
     }
 }
 
+extern "C" int release_libdolbyms12_handle(void)
+{
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance) {
+        dolby_ms12_instance->ReleaseLibHandle();
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
 extern "C" int get_dolby_ms12_output_max_size(void)
 {
     android::DolbyMS12* dolby_ms12_instance = getInstance();

@@ -34,6 +34,7 @@ enum input_source {
     ATV     = 1,
     HDMIIN  = 2,
     SPDIFIN = 3,
+    ARCIN   = 4,
 };
 
 /* sync with tinymix after auge */
@@ -248,6 +249,8 @@ struct aml_audio_patch {
     int dtv_decoder_state;
     int dtv_decoder_cmd;
     int dtv_first_apts_flag;
+    unsigned char dtv_NchOriginal;
+    unsigned char dtv_lfepresent;
     unsigned int dtv_first_apts;
     unsigned int dtv_pcm_writed;
     unsigned int dtv_pcm_readed;
@@ -256,6 +259,7 @@ struct aml_audio_patch {
     unsigned int decoder_offset ;
     unsigned int outlen_after_last_validpts;
     unsigned long last_valid_pts;
+    unsigned long last_out_pts;
     unsigned int first_apts_lookup_over;
     int dtv_symple_rate;
     int dtv_pcm_channel;
@@ -265,6 +269,14 @@ struct aml_audio_patch {
     unsigned int spdif_format_set;
     int spdif_step_clk;
     int i2s_step_clk;
+    int dtv_audio_mode;
+    int dtv_pcr_mode;
+    int tsync_mode;
+    int dtv_apts_lookup;
+    int dtv_audio_tune;
+    int pll_state;
+    unsigned int last_apts;
+    unsigned int last_pcrpts;
     dtv_avsync_process_cb avsync_callback;
     pthread_mutex_t dtv_output_mutex;
     pthread_mutex_t dtv_input_mutex;
@@ -276,6 +288,11 @@ struct aml_audio_patch {
     struct resample_para dtv_resample;
     unsigned char *resample_outbuf;
     AM_AOUT_OutputMode_t   mode;
+    unsigned char avsync_adelay;
+    unsigned char avsync_tuned;
+    unsigned char avsync_drop;
+    void *drop_buf;
+    bool ac3_pcm_dropping;
 };
 
 struct audio_stream_out;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Amlogic Corporation.
+ * Copyright (C) 2019 Amlogic Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
-#ifndef _AUDIO_POST_PROCESS_H_
-#define _AUDIO_POST_PROCESS_H_
+#ifndef _EARC_UTILS_H_
+#define _EARC_UTILS_H_
 
-#include <hardware/audio_effect.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <cutils/log.h>
+#include <aml_alsa_mixer.h>
 
-#define MAX_POSTPROCESSORS 10
-struct aml_native_postprocess {
-    int num_postprocessors;
-    effect_handle_t postprocessors[MAX_POSTPROCESSORS];
-    int total_postprocessors;
-};
-
-int audio_post_process(effect_handle_t effect, int16_t *in_buffer, size_t out_frames);
+int earcrx_config_latency(struct mixer *pMixer, int latency);
+int earctx_fetch_latency(struct mixer * pMixer);
+int earcrx_config_cds(struct mixer *pMixer, char *cds_str);
+int earcrx_fetch_cds(struct mixer *pMixer, char *cds_str);
+int earctx_fetch_cds(struct mixer *pMixer, char *cds_str);
 
 #endif

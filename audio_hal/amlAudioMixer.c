@@ -869,8 +869,10 @@ static int mixer_do_mixing_32bit(struct amlAudioMixer *audio_mixer)
                 aml_audio_dump_audio_bitstreams("/data/audio/sysAftermix.raw",
                         audio_mixer->tmp_buffer, frames * FRAMESIZE_32BIT_STEREO);
             }
-            apply_volume(gain_speaker, audio_mixer->tmp_buffer,
+            if (adev->is_TV) {
+                apply_volume(gain_speaker, audio_mixer->tmp_buffer,
                     sizeof(uint32_t), frames * FRAMESIZE_32BIT_STEREO);
+            }
 #ifdef IS_ATOM_PROJECT
             if (adev->has_dsp_lib) {
                 dsp_process_output(audio_mixer->adev,
@@ -901,8 +903,10 @@ static int mixer_do_mixing_32bit(struct amlAudioMixer *audio_mixer)
             if (DEBUG_DUMP)
                 aml_audio_dump_audio_bitstreams("/data/audio/tmpMixed1.raw",
                     audio_mixer->tmp_buffer, frames * audio_mixer->frame_size_tmp);
-            apply_volume(gain_speaker, audio_mixer->tmp_buffer,
+            if (adev->is_TV) {
+                apply_volume(gain_speaker, audio_mixer->tmp_buffer,
                     sizeof(uint32_t), frames * FRAMESIZE_32BIT_STEREO);
+            }
 #ifdef IS_ATOM_PROJECT
             if (adev->has_dsp_lib) {
                 dsp_process_output(audio_mixer->adev,
@@ -941,8 +945,10 @@ static int mixer_do_mixing_32bit(struct amlAudioMixer *audio_mixer)
             aml_audio_dump_audio_bitstreams("/data/audio/sysTmp.raw",
                     audio_mixer->tmp_buffer, frames * FRAMESIZE_32BIT_STEREO);
         }
-        apply_volume(gain_speaker, audio_mixer->tmp_buffer,
+        if (adev->is_TV) {
+            apply_volume(gain_speaker, audio_mixer->tmp_buffer,
                 sizeof(uint32_t), frames * FRAMESIZE_32BIT_STEREO);
+        }
         if (DEBUG_DUMP) {
             aml_audio_dump_audio_bitstreams("/data/audio/sysvol.raw",
                     audio_mixer->tmp_buffer, frames * FRAMESIZE_32BIT_STEREO);
@@ -1004,9 +1010,10 @@ static int mixer_do_mixing_32bit(struct amlAudioMixer *audio_mixer)
                 aml_audio_dump_audio_bitstreams("/data/audio/dirctTmp.raw",
                         audio_mixer->tmp_buffer, frames * FRAMESIZE_32BIT_STEREO);
             }
-            apply_volume(gain_speaker, audio_mixer->tmp_buffer,
+            if (adev->is_TV) {
+                apply_volume(gain_speaker, audio_mixer->tmp_buffer,
                     sizeof(uint32_t), frames * FRAMESIZE_32BIT_STEREO);
-
+            }
 #ifdef IS_ATOM_PROJECT
             if (adev->has_dsp_lib) {
                 dsp_process_output(audio_mixer->adev,
@@ -1130,9 +1137,10 @@ static int mixer_do_mixing_16bit(struct amlAudioMixer *audio_mixer)
             if (DEBUG_DUMP)
                 aml_audio_dump_audio_bitstreams("/data/audio/tmpMixed1.raw",
                     audio_mixer->tmp_buffer, frames * audio_mixer->frame_size_tmp);
-            apply_volume(gain_speaker, audio_mixer->tmp_buffer,
+            if (adev->is_TV) {
+                apply_volume(gain_speaker, audio_mixer->tmp_buffer,
                     sizeof(uint16_t), frames * out_port->cfg.frame_size);
-
+            }
             memcpy(data_mixed, audio_mixer->tmp_buffer, frames * out_port->cfg.frame_size);
             in_port_drct->data_valid = 0;
             in_port_sys->data_valid = 0;
@@ -1157,9 +1165,10 @@ static int mixer_do_mixing_16bit(struct amlAudioMixer *audio_mixer)
             aml_audio_dump_audio_bitstreams("/data/audio/sysTmp.raw",
                     audio_mixer->tmp_buffer, frames * out_port->cfg.frame_size);
         }
-
-        apply_volume(gain_speaker, audio_mixer->tmp_buffer,
+	if (adev->is_TV) {
+            apply_volume(gain_speaker, audio_mixer->tmp_buffer,
                 sizeof(uint16_t), frames * out_port->cfg.frame_size);
+        }
         if (DEBUG_DUMP) {
             aml_audio_dump_audio_bitstreams("/data/audio/sysvol.raw",
                     audio_mixer->tmp_buffer, frames * out_port->cfg.frame_size);
@@ -1204,8 +1213,10 @@ static int mixer_do_mixing_16bit(struct amlAudioMixer *audio_mixer)
                 aml_audio_dump_audio_bitstreams("/data/audio/dirctTmp.raw",
                         audio_mixer->tmp_buffer, frames * out_port->cfg.frame_size);
             }
-            apply_volume(gain_speaker, audio_mixer->tmp_buffer,
+            if (adev->is_TV) {
+                apply_volume(gain_speaker, audio_mixer->tmp_buffer,
                     sizeof(uint16_t), frames * out_port->cfg.frame_size);
+            }
 
             memcpy(data_mixed, audio_mixer->tmp_buffer, frames * out_port->cfg.frame_size);
             if (DEBUG_DUMP) {

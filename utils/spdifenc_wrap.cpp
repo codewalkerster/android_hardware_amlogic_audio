@@ -18,10 +18,15 @@
 
 //#define LOG_NDEBUG 0
 #define LOG_TAG "AudioSPDIF-wrap"
+
 #include <stdint.h>
+#include <sys/ioctl.h>
+#include <sys/time.h>
+#include <sound/asound.h>
 #include <utils/Log.h>
 #include <system/audio.h>
 #include <audio_utils/spdif/SPDIFEncoder.h>
+
 #include <tinyalsa/asoundlib.h>
 #include <cutils/properties.h>
 #include <string.h>
@@ -122,9 +127,22 @@ public:
             muteFrame(buf, bytes);
         }
         if (mFirstFrameMuted == false) {
-            memset(buf, 0, bytes);
+            //memset(buf, 0, bytes);
             mFirstFrameMuted = true;
         }
+        /*to avoid ca noise in Sony TV*/
+        {
+            struct snd_pcm_status status;
+            pcm_ioctl(pcm_handle, SNDRV_PCM_IOCTL_STATUS, &status);
+            if (status.state == PCM_STATE_SETUP ||
+                status.state == PCM_STATE_PREPARED ||
+                status.state == PCM_STATE_XRUN) {
+                ALOGI("mute the first raw data");
+                memset(buf, 0, bytes);
+            }
+        }
+
+
         ret = pcm_write(pcm_handle, buffer, bytes);
         if (ret)
             return ret;

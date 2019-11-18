@@ -44,7 +44,7 @@ static audio_format_t get_sink_capability (struct audio_stream_out *stream)
     audio_format_t sink_capability = AUDIO_FORMAT_PCM_16_BIT;
 
     //STB case
-    if (adev->is_STB)
+    if (!adev->is_TV)
     {
         char *cap = NULL;
         cap = (char *) get_hdmi_sink_cap (AUDIO_PARAMETER_STREAM_SUP_FORMATS,0,&(adev->hdmi_descs));
@@ -111,11 +111,8 @@ void get_sink_format (struct audio_stream_out *stream)
     // "adev->hdmi_format" is the UI selection item.
     // "adev->active_outport" was set when HDMI ARC cable plug in/off
     // condition 1: ARC port, single output.
-    // condition 2: for BOX with continous mode, there are no speaker, only on HDMI outport, same use case
-    // condition 3: for STB case
-    if (adev->active_outport == OUTPORT_HDMI_ARC
-         || ((eDolbyMS12Lib == adev->dolby_lib_type) && adev->continuous_audio_mode && !adev->is_TV)
-         || adev->is_STB) {
+    // condition 2: for STB/OTT case
+    if (adev->active_outport == OUTPORT_HDMI_ARC || !adev->is_TV) {
         ALOGI("%s() HDMI ARC case", __FUNCTION__);
         switch (adev->hdmi_format) {
         case PCM:
@@ -357,6 +354,9 @@ int set_audio_source(struct aml_mixer_handle *mixer_handle,
         case HDMIIN:
             src = FRHDMIRX;
             break;
+        case ARCIN:
+            src = EARCRX_DMAC;
+            break;
         case SPDIFIN:
             src = SPDIFIN_AUGE;
             break;
@@ -448,7 +448,7 @@ bool signal_status_check(audio_devices_t in_device, int *mute_time,
     if ((in_device & AUDIO_DEVICE_IN_HDMI) &&
             (!is_hdmi_in_stable_hw(stream) ||
             !is_hdmi_in_stable_sw(stream))) {
-        *mute_time = 600;
+        *mute_time = 100;
         return false;
     }
     if ((in_device & AUDIO_DEVICE_IN_TV_TUNER) &&
@@ -456,7 +456,9 @@ bool signal_status_check(audio_devices_t in_device, int *mute_time,
         *mute_time = 500;
         return false;
     }
-    if ((in_device & AUDIO_DEVICE_IN_SPDIF) &&
+    if (((in_device & AUDIO_DEVICE_IN_SPDIF) ||
+            ((in_device & AUDIO_DEVICE_IN_HDMI_ARC) &&
+                    (access(SYS_NODE_EARC_RX, F_OK) == -1))) &&
             !is_spdif_in_stable_hw(stream)) {
         *mute_time = 1000;
         return false;
@@ -489,6 +491,9 @@ unsigned int inport_to_device(enum IN_PORT inport)
         break;
     case INPORT_HDMIIN:
         device = AUDIO_DEVICE_IN_AUX_DIGITAL;
+        break;
+    case INPORT_ARCIN:
+        device = AUDIO_DEVICE_IN_HDMI_ARC;
         break;
     case INPORT_SPDIF:
         device = AUDIO_DEVICE_IN_SPDIF;

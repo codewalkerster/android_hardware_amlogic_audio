@@ -182,11 +182,13 @@ static int aml_dev_sample_audio_path_latency(struct aml_audio_device *aml_dev)
     }
 
     if (in) {
-        ret = pcm_ioctl(in->pcm, SNDRV_PCM_IOCTL_DELAY, &frames);
-        if (ret >= 0) {
-            alsa_in_ltcy = frames / SAMPLE_RATE_MS;
+        if (in->pcm != NULL) {
+            ret = pcm_ioctl(in->pcm, SNDRV_PCM_IOCTL_DELAY, &frames);
+            if (ret >= 0) {
+                alsa_in_ltcy = frames / SAMPLE_RATE_MS;
+            }
+            ALOGV("  audio alsa in latency = %d", alsa_in_ltcy);
         }
-        ALOGV("  audio alsa in latency = %d", alsa_in_ltcy);
     }
 
     /* calc whole path latency considering with format */
@@ -266,7 +268,9 @@ err:
 
 static inline void aml_dev_accumulate_avsync_diff(struct aml_audio_patch *patch, int av_diff)
 {
-    patch->av_diffs += av_diff;
+    if (patch->avsync_sample_accumed > 5) {
+        patch->av_diffs += av_diff;
+    }
     patch->avsync_sample_accumed++;
 }
 
@@ -320,15 +324,16 @@ int aml_dev_try_avsync(struct aml_audio_patch *patch)
     if (!patch) {
         return 0;
     }
-
-    /* if source unstable, reaccumulate avsync diff from start */
-    if (!patch->is_src_stable) {
-        aml_dev_avsync_reset(patch);
+    if (patch->avsync_tuned == 1) {
+        patch->avsync_adelay = 0;
+        patch->avsync_drop = 0;
         return 0;
     }
 
     ret = aml_dev_avsync_diff_in_path(patch, &av_diff);
     if (ret < 0) {
+        patch->avsync_adelay = 0;
+        patch->avsync_drop = 0;
         return 0;
     }
 
@@ -342,20 +347,31 @@ int aml_dev_try_avsync(struct aml_audio_patch *patch)
     }
 
     if (patch->do_tune) {
-        int tune_val = patch->av_diffs / patch->avsync_sample_accumed;
+        int tune_val = patch->av_diffs / (patch->avsync_sample_accumed - 5);
         //tune_val += 50/factor;
         int user_tune_val = aml_audio_get_src_tune_latency(aml_dev->patch_src);
         ALOGV("%s(), av user tuning latency = %dms",
               __func__, user_tune_val);
         tune_val += user_tune_val;
-        if (patch->input_src != AUDIO_DEVICE_IN_LINE) {
+        patch->avsync_tuned = 1;
+        aml_dev_avsync_reset(patch);
+        if (tune_val < 0) {
+            patch->avsync_adelay = -tune_val;
+            patch->avsync_drop = 0;
+        } else {
+            if (patch->input_src == AUDIO_DEVICE_IN_LINE) {
+                patch->avsync_drop = tune_val;
+            } else {
+                patch->avsync_drop = tune_val;
+            }
+            patch->avsync_adelay = 0;
+        }
+        if (tune_val > 0) {
             ret = aml_dev_tune_video_path_latency(tune_val);
         }
         if (ret < 0) {
             ALOGE("%s() fail, err = %d", __func__, ret);
         }
-        ALOGV("%s(): tuning video total latency: value %dms", __func__, tune_val);
-        aml_dev_avsync_reset(patch);
     }
     return 0;
 }

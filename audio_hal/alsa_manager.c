@@ -114,7 +114,8 @@ int aml_alsa_output_open(struct audio_stream_out *stream)
     }
     int card = aml_out->card;
     struct pcm *pcm = adev->pcm_handle[device];
-    ALOGI("%s pcm %p", __func__, pcm);
+    struct pcm *earc_pcm = adev->pcm_handle[EARC_DEVICE];
+    ALOGI("%s pcm %p earc_pcm %p", __func__, pcm, earc_pcm);
 
     // close former and open with configs
     // TODO: check pcm configs and if no changes, do nothing
@@ -133,6 +134,12 @@ int aml_alsa_output_open(struct audio_stream_out *stream)
             aml_out->pcm = NULL;
             pcm = NULL;
         }
+        if (IS_HDMI_ARC_OUT_HW(adev->out_device) && earc_pcm) {
+            pcm_close(earc_pcm);
+            adev->pcm_handle[EARC_DEVICE] = NULL;
+            aml_out->earc_pcm = NULL;
+            earc_pcm = NULL;
+        }
         int device_index = device;
         // mark: will there wil issue here? conflit with MS12 device?? zz
         if (card == alsa_device_get_card_index()) {
@@ -148,6 +155,18 @@ int aml_alsa_output_open(struct audio_stream_out *stream)
         if (!pcm || !pcm_is_ready(pcm)) {
             ALOGE("%s, pcm %p open [ready %d] failed", __func__, pcm, pcm_is_ready(pcm));
             return -ENOENT;
+        }
+        if (IS_HDMI_ARC_OUT_HW(adev->out_device) && (!aml_out->earc_pcm)) {
+            int earc_port = alsa_device_update_pcm_index(PORT_EARC, PLAYBACK);
+            struct pcm_config earc_config = update_earc_out_config(config);
+            earc_pcm = pcm_open(card, earc_port, PCM_OUT, &earc_config);
+            if (!earc_pcm || !pcm_is_ready(earc_pcm)) {
+                ALOGE("%s, earc_pcm %p open [ready %d] failed", __func__,
+                        earc_pcm, pcm_is_ready(earc_pcm));
+                return -ENOENT;
+            }
+            aml_out->earc_pcm = earc_pcm;
+            adev->pcm_handle[EARC_DEVICE] = earc_pcm;
         }
     }
     aml_out->pcm = pcm;
@@ -184,6 +203,7 @@ void aml_alsa_output_close(struct audio_stream_out *stream)
     }
 
     struct pcm *pcm = adev->pcm_handle[device];
+    struct pcm *earc_pcm = adev->pcm_handle[EARC_DEVICE];
 
     adev->pcm_refs[device]--;
     ALOGI("+%s, audio out(%p) device(%d), refs(%d) is_normal_pcm %d,handle %p",
@@ -199,6 +219,12 @@ void aml_alsa_output_close(struct audio_stream_out *stream)
         insert_eff_zero_bytes(adev, DEFAULT_PLAYBACK_PERIOD_SIZE * 32);
         pcm_close(pcm);
         adev->pcm_handle[device] = NULL;
+        if (IS_HDMI_ARC_OUT_HW(adev->out_device) && earc_pcm) {
+            pcm_close (earc_pcm);
+            adev->pcm_handle[EARC_DEVICE] = NULL;
+            aml_out->earc_pcm = NULL;
+            earc_pcm = NULL;
+        }
     }
     aml_out->pcm = NULL;
 
@@ -225,6 +251,7 @@ static int aml_alsa_add_zero(struct aml_stream_out *stream, int size)
     int write_size = 0;
     int adjust_bytes = size;
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
+    struct aml_audio_device *adev = aml_out->dev;
 
     while (retry--) {
         buf = malloc(AML_ZERO_ADD_MIN_SIZE);
@@ -257,6 +284,7 @@ size_t aml_alsa_output_write(struct audio_stream_out *stream,
 {
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = aml_out->dev;
+    struct aml_audio_patch *patch = adev->audio_patch;
     int ret = 0;
     struct pcm_config *config = &aml_out->config;
     size_t frame_size = audio_stream_out_frame_size(stream);
@@ -359,7 +387,11 @@ size_t aml_alsa_output_write(struct audio_stream_out *stream,
             return bytes;
         } else {
             //emset(audio_data, 0, need_drop_inject);
-            ret = pcm_write(aml_out->pcm, audio_data + need_drop_inject, bytes - need_drop_inject);
+            if (IS_HDMI_ARC_OUT_HW(adev->out_device) && aml_out->earc_pcm && adev->bHDMIARCon) {
+                ret = pcm_write(aml_out->earc_pcm, audio_data + need_drop_inject, bytes - need_drop_inject);
+            } else {
+                ret = pcm_write(aml_out->pcm, audio_data + need_drop_inject, bytes - need_drop_inject);
+            }
             aml_out->dropped_size += bytes;
             cur_apts = first_apts + (aml_out->dropped_size * 90) / (48 * frame_size);
             adev->first_apts = cur_apts;
@@ -414,13 +446,43 @@ write:
     if (adev->patch_src == SRC_DTV && adev->parental_control_av_mute) {
         memset(buffer,0x0,bytes);
     }
+    /*+[SE][BUG][SWPL-14811][zhizhong] add drop ac3 pcm function*/
+    if (adev->patch_src ==  SRC_DTV && aml_out->need_drop_size > 0) {
+        if (aml_out->need_drop_size >= (int)bytes) {
+            aml_out->need_drop_size -= bytes;
+            ALOGI("av sync drop %d pcm, need drop:%d more,apts:0x%x,pcr:0x%x\n",
+                (int)bytes, aml_out->need_drop_size, patch->last_apts, patch->last_pcrpts);
+            if (patch->last_apts >= patch->last_pcrpts) {
+                ALOGI("pts already ok, drop finish\n");
+                aml_out->need_drop_size = 0;
+            } else
+                return bytes;
+        } else {
+            ALOGI("bytes:%d, need_drop_size=%d\n", bytes, aml_out->need_drop_size);
+            ret = pcm_write(aml_out->pcm, audio_data + aml_out->need_drop_size,
+                    bytes - aml_out->need_drop_size);
+            aml_out->need_drop_size = 0;
+            ALOGI("drop finish\n");
+            return bytes;
+        }
+    }
+
     if (getprop_bool("media.audiohal.outdump")) {
         aml_audio_dump_audio_bitstreams("/data/audio/pcm_write.raw",
             buffer, bytes);
     }
-    ret = pcm_write(aml_out->pcm, buffer, bytes);
-    if (ret < 0) {
-        ALOGE("%s write failed,pcm handle:%p, ret:%#x, err info:%s", __func__, aml_out->pcm, ret, strerror(errno));
+    if (IS_HDMI_ARC_OUT_HW(adev->out_device) && aml_out->earc_pcm && adev->bHDMIARCon) {
+        ret = pcm_write(aml_out->earc_pcm, buffer, bytes);
+        if (ret < 0) {
+            ALOGE("%s write failed,aml_out->earc_pcm handle:%p, ret:%#x, err info:%s",
+                    __func__, aml_out->earc_pcm, ret, strerror(errno));
+        }
+    } else {
+        ret = pcm_write(aml_out->pcm, buffer, bytes);
+        if (ret < 0) {
+            ALOGE("%s write failed,pcm handle:%p, ret:%#x, err info:%s", __func__,
+                    aml_out->pcm, ret, strerror(errno));
+        }
     }
 
     if ((adev->continuous_audio_mode == 1) && (eDolbyMS12Lib == adev->dolby_lib_type) && (bytes != 0)) {
@@ -464,6 +526,7 @@ void aml_close_continuous_audio_device(struct aml_audio_device *adev)
     int pcm_index = 0;
     int spdif_index = 1;
     struct pcm *continuous_pcm_device = adev->pcm_handle[pcm_index];
+    struct pcm *earc_pcm = adev->pcm_handle[EARC_DEVICE];
     struct pcm *continuous_spdif_device = adev->pcm_handle[1];
     ALOGI("\n+%s() choose device %d pcm %p\n", __FUNCTION__, pcm_index, continuous_pcm_device);
     ALOGI("%s maybe also choose device %d pcm %p\n", __FUNCTION__, spdif_index, continuous_spdif_device);
@@ -472,6 +535,10 @@ void aml_close_continuous_audio_device(struct aml_audio_device *adev)
         continuous_pcm_device = NULL;
         adev->pcm_handle[pcm_index] = NULL;
         adev->pcm_refs[pcm_index] = 0;
+        if (IS_HDMI_ARC_OUT_HW(adev->out_device) && earc_pcm) {
+            pcm_close (earc_pcm);
+            adev->pcm_handle[EARC_DEVICE] = NULL;
+        }
     }
     if (continuous_spdif_device) {
         pcm_close(continuous_spdif_device);
@@ -514,6 +581,7 @@ int alsa_depop(int card)
     return 0;
 }
 
+#define WAIT_COUNT_MAX 30
 size_t aml_alsa_input_read(struct audio_stream_in *stream,
                         const void *buffer,
                         size_t bytes)
@@ -524,6 +592,7 @@ size_t aml_alsa_input_read(struct audio_stream_in *stream,
     char  *read_buf = (char *)buffer;
     int ret = 0;
     size_t  read_bytes = 0;
+    int nodata_count = 0;
     struct pcm *pcm_handle = in->pcm;
     size_t frame_size = in->config.channels * pcm_format_to_bits(in->config.format) / 8;
     while (read_bytes < bytes) {
@@ -536,6 +605,7 @@ size_t aml_alsa_input_read(struct audio_stream_in *stream,
             return 0;
         }
         if (ret >= 0) {
+            nodata_count = 0;
             ALOGV("ret:%d read_bytes:%d, bytes:%d ",ret,read_bytes,bytes);
         } else if (ret != -EAGAIN ) {
             ALOGE("%s:%d, pcm_read fail, ret:%#x, error info:%s", __func__, __LINE__, ret, strerror(errno));
@@ -543,6 +613,13 @@ size_t aml_alsa_input_read(struct audio_stream_in *stream,
         } else {
              usleep( (bytes - read_bytes) * 1000000 / audio_stream_in_frame_size(stream) /
                 in->requested_rate / 2);
+             nodata_count++;
+             if (nodata_count >= WAIT_COUNT_MAX) {
+                 nodata_count = 0;
+                 ALOGV("aml_alsa_input_read immediate return");
+                 memset((void*)buffer,0,bytes);
+                 return 0;
+             }
         }
     }
     return 0;

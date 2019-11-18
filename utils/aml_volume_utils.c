@@ -80,11 +80,10 @@ void apply_volume_16to32(float volume, int16_t *in_buf, int32_t *out_buf, int by
     int16_t *input16 = (int16_t *)in_buf;
     int32_t *output32 = (int32_t *)out_buf;
     unsigned int i = 0;
-    int32_t fixed_volume = (int32_t)((double) volume * (1 << 31));
 
     for (i = 0; i < bytes / sizeof(int16_t); i++) {
         int32_t samp = ((int32_t)input16[i]) << 16;
-        output32[i] = clamp32(((int64_t)samp * fixed_volume) >> 31);
+        output32[i] = clamp32((int64_t)(samp * (double)(volume)));
     }
 
     return;

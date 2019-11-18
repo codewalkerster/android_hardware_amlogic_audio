@@ -48,6 +48,7 @@ enum {
 #define DTS_TYPE_II    0xC
 #define DTS_TYPE_III   0xD
 #define DTS_TYPE_IV    0x11
+
 #define IEC61937_HEADER_LENGTH  8
 #define IEC_DTS_HD_APPEND_LNGTH 12
 #define IEC61937_PA_OFFSET  0
@@ -59,6 +60,16 @@ enum {
 #define IEC61937_PD_OFFSET  6
 #define IEC61937_PD_SIZE    2
 
+#define AML_DCA_INPUT_DATA_LEN_PTIME               (10*1024)
+#define AML_DCA_SW_CORE_16M          0x7ffe8001
+#define AML_DCA_SW_CORE_14M          0x1fffe800
+#define AML_DCA_SW_CORE_24M          0xfe80007f
+#define AML_DCA_SW_CORE_16             0xfe7f0180
+#define AML_DCA_SW_CORE_14             0xff1f00e8
+#define AML_DCA_SW_CORE_24             0x80fe7f01
+#define AML_DCA_SW_SUBSTREAM_M    0x64582025
+#define AML_DCA_SW_SUBSTREAM         0x58642520
+
 //#define MAX_DDP_FRAME_LENGTH 2048
 
 ///static struct pcm_info pcm_out_info;
@@ -69,7 +80,7 @@ int (*dts_decoder_process)(char * , int , int *, char *, int *, struct pcm_info 
 void *gDtsDecoderLibHandler = NULL;
 
 
-static  int unload_dts_decoder_lib()
+static int unload_dts_decoder_lib()
 {
     if (dts_decoder_cleanup != NULL) {
         (*dts_decoder_cleanup)();
@@ -149,9 +160,9 @@ static int dca_decode_process(unsigned char*input, int input_size, unsigned char
                                  , (char *) spdif_buf
                                  , (int *) raw_size);
     if (ret == 0) {
-        ALOGI("decode ok");
+        ALOGV("decode ok");
     }
-    ALOGV("used_size %d,lpcm out_size %d,raw out size %d", used_size, *out_size, *raw_size);
+    ALOGV("used_size %d,input_size:%d, lpcm out_size %d,raw out size %d", used_size, input_size, *out_size, *raw_size);
 
     return used_size;
 }
@@ -215,30 +226,137 @@ int dca_decoder_release_patch(struct dca_dts_dec *dts_dec)
     return 1;
 }
 
+static int AML_Match_DTS_SyncWord(unsigned char *read_pointer, unsigned int *pTemp0)
+{
+    unsigned int ui32Temp0 = 0;
+    unsigned int ui32Temp1 = 0;
+
+    ui32Temp0  = read_pointer[0];
+    ui32Temp0 <<= 8;
+    ui32Temp0 |= read_pointer[1];
+    ui32Temp0 <<= 8;
+    ui32Temp0 |= read_pointer[2];
+    ui32Temp0 <<= 8;
+    ui32Temp0 |= read_pointer[3];
+
+    ui32Temp1  = read_pointer[4];
+    ui32Temp1 <<= 8;
+    ui32Temp1 |= read_pointer[5];
+    ui32Temp1 <<= 8;
+    ui32Temp1 |= read_pointer[6];
+    ui32Temp1 <<= 8;
+    ui32Temp1 |= read_pointer[7];
+
+    /* 16-bit bit core stream*/
+    if ( ui32Temp0 == AML_DCA_SW_CORE_16  || ui32Temp0 == AML_DCA_SW_CORE_14 ||
+         ui32Temp0 == AML_DCA_SW_CORE_16M || ui32Temp0 == AML_DCA_SW_CORE_14M ||
+         ui32Temp0 == AML_DCA_SW_SUBSTREAM|| ui32Temp0 ==AML_DCA_SW_SUBSTREAM_M)
+    {
+        *pTemp0 = ui32Temp0;
+        return 1;
+    }
+
+    if ((ui32Temp0 & 0xffffff00) == (AML_DCA_SW_CORE_24 & 0xffffff00) &&
+       ((ui32Temp1 >> 16) & 0xFF)== (AML_DCA_SW_CORE_24 & 0xFF)) {
+        *pTemp0 = ui32Temp0;
+        return 1;
+    }
+
+    return 0;
+}
+
 int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer, int bytes)
 {
     int mFrame_size = 0;
     unsigned char *read_pointer = NULL;
+    unsigned char *read_pointer1 = NULL;
     int dts_type = 0;
-    //ALOGD("remain=%d bytes=%d\n",dts_dec->remain_size,bytes);
-    memcpy((char *)dts_dec->inbuf + dts_dec->remain_size, (char *)buffer, bytes);
-    dts_dec->remain_size += bytes;
-    read_pointer = dts_dec->inbuf;
     int decoder_used_bytes = 0;
     void *main_frame_buffer = NULL;
     int main_frame_size = 0;
     bool SyncFlag = false;
-    bool  little_end = false;
+    bool little_end = false;
     int data_offset = 0;
     int ret = -1;
+    int second_sync_pos=-1,first_sync_pos=-1;
+    int tmp_size = 0;
+
+    memcpy((char *)dts_dec->inbuf + dts_dec->remain_size, (char *)buffer, bytes);
+    dts_dec->remain_size += bytes;
+    read_pointer = dts_dec->inbuf;
+
     if (dts_dec->is_dtscd == 1) {
         main_frame_buffer = read_pointer;
         main_frame_size = mFrame_size = dts_dec->remain_size;
+    } else if (dts_dec->is_dtv) {
+        ALOGD("dtv dts remain=%d bytes=%d",dts_dec->remain_size,bytes);
+        if (dts_dec->remain_size >= AML_DCA_INPUT_DATA_LEN_PTIME) {
+            unsigned int ui32Sword0 = 0, ui32Sword1 = 0;
+            unsigned int ui32Sword0_save = 0;
+            while (!SyncFlag && dts_dec->remain_size > IEC61937_HEADER_LENGTH) {
+                SyncFlag = AML_Match_DTS_SyncWord(read_pointer, &ui32Sword0);
 
+                if (SyncFlag == 0) {
+                    read_pointer++;
+                    dts_dec->remain_size--;
+                } else {
+                    first_sync_pos = dts_dec->remain_size;
+                    read_pointer1 = read_pointer;
+                    read_pointer1++;
+                    tmp_size = dts_dec->remain_size;
+                    tmp_size--;
+                    ui32Sword0_save = ui32Sword0;
+                }
+            }
+
+            if (SyncFlag) {
+                while (first_sync_pos >= 0 && second_sync_pos == -1 && tmp_size > IEC61937_HEADER_LENGTH) {
+                    if (AML_Match_DTS_SyncWord(read_pointer1, &ui32Sword0) && (ui32Sword0_save == ui32Sword0)) {
+                        second_sync_pos = tmp_size;
+                        break;
+                    } else {
+                        read_pointer1++;
+                        tmp_size--;
+                    }
+                }
+
+                if (first_sync_pos != -1 && second_sync_pos != -1) {
+                    mFrame_size = first_sync_pos - second_sync_pos;
+                } else {
+                    mFrame_size = 0;
+                }
+            } else {
+                mFrame_size = 0;
+            }
+
+            if (mFrame_size <= 0) {
+                ALOGE("wrong data for DTS,skip the header remain=%d", dts_dec->remain_size);
+
+                if (dts_dec->remain_size < 0) {
+                    dts_dec->remain_size = 0;
+                    ALOGE("Carsh issue happens");
+                }
+                memmove(dts_dec->inbuf, read_pointer, dts_dec->remain_size);
+                return -1;
+            }
+
+            //to do know why
+            if (mFrame_size == 2013) {
+                mFrame_size = 2012;
+            }
+
+            main_frame_buffer = read_pointer;
+            main_frame_size = mFrame_size;
+            ALOGI("mFrame_size:%d dts_dec->remain_size:%d", mFrame_size, dts_dec->remain_size);
+            if (dts_dec->remain_size < mFrame_size) {
+                memmove(dts_dec->inbuf, read_pointer, dts_dec->remain_size);
+                mFrame_size = 0;
+            }
+        }
     } else if (dts_dec->remain_size >= MAX_DECODER_FRAME_LENGTH) {
         while (!SyncFlag && dts_dec->remain_size > IEC61937_HEADER_LENGTH) {
             //DTS_SYNCWORD_IEC61937 : 0xF8724E1F
-            if (read_pointer[0] == 0x72 && read_pointer[ 1] == 0xf8
+            if (read_pointer[0] == 0x72 && read_pointer[1] == 0xf8
                 && read_pointer[2] == 0x1f && read_pointer[3] == 0x4e) {
                 SyncFlag = true;
                 dts_type = read_pointer[4] & 0x1f;
@@ -248,6 +366,7 @@ int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer,
                 little_end = true;
                 dts_type = read_pointer[5] & 0x1f;
             }
+
             if (SyncFlag == 0) {
                 read_pointer++;
                 dts_dec->remain_size--;
@@ -280,7 +399,7 @@ int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer,
                 read_pointer = read_pointer + IEC61937_PD_SIZE;
                 if (dts_dec->remain_size < (IEC_DTS_HD_APPEND_LNGTH + IEC61937_HEADER_LENGTH)) {
                     // point to pa
-                    memcpy(dts_dec->inbuf, read_pointer - IEC61937_HEADER_LENGTH, dts_dec->remain_size);
+                    memmove(dts_dec->inbuf, read_pointer - IEC61937_HEADER_LENGTH, dts_dec->remain_size);
                     ALOGD("Not enough data for DTS HD header parsing\n");
                     return -1;
                 }
@@ -297,7 +416,6 @@ int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer,
                 // point to the address after 12 bytes header
                 read_pointer = read_pointer + IEC_DTS_HD_APPEND_LNGTH;
                 data_offset = IEC_DTS_HD_APPEND_LNGTH + IEC61937_HEADER_LENGTH;
-
             } else {
                 ALOGE("Unknow DTS type=0x%x\n", dts_type);
                 mFrame_size = 0;
@@ -312,7 +430,7 @@ int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer,
                     dts_dec->remain_size = 0;
                     ALOGE("Carsh issue happens\n");
                 }
-                memcpy(dts_dec->inbuf, read_pointer, dts_dec->remain_size);
+                memmove(dts_dec->inbuf, read_pointer, dts_dec->remain_size);
                 return -1;
             }
 
@@ -327,7 +445,7 @@ int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer,
             // the remain size contain the header and raw data size
             if (dts_dec->remain_size < (mFrame_size + data_offset)) {
                 // point to pa and copy these bytes
-                memcpy(dts_dec->inbuf, read_pointer - data_offset, dts_dec->remain_size);
+                memmove(dts_dec->inbuf, read_pointer - data_offset, dts_dec->remain_size);
                 mFrame_size = 0;
             } else {
                 // there is enough data, header has been used, update the remain size
@@ -336,8 +454,8 @@ int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer,
         } else {
             mFrame_size = 0;
         }
-
     }
+
     if (mFrame_size <= 0) {
         return -1;
     }
@@ -354,7 +472,6 @@ int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer,
         }
     }
 #endif
-
 
     int used_size = dts_dec->decoder_process((unsigned char*)main_frame_buffer,
                     main_frame_size,
@@ -387,11 +504,10 @@ int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer,
             ALOGE("remain ori=%d new=%d used_size=%d main=%d\n", temp, dts_dec->remain_size, used_size, main_frame_size);
             dts_dec->remain_size = 0;
         }
-        memcpy(dts_dec->inbuf, read_pointer + used_size, dts_dec->remain_size);
+        memmove(dts_dec->inbuf, read_pointer + used_size, dts_dec->remain_size);
     }
 
     if (dts_dec->outlen_pcm > 0 && dts_dec->pcm_out_info.sample_rate > 0 && dts_dec->pcm_out_info.sample_rate != 48000) {
-
         if (dts_dec->resample_handle) {
             if (dts_dec->pcm_out_info.sample_rate != (int)dts_dec->resample_handle->resample_config.input_sr) {
                 audio_resample_config_t resample_config;
@@ -414,8 +530,6 @@ int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer,
                 return -1;
             }
         }
-
-
 
         ret = aml_audio_resample_process(dts_dec->resample_handle, dts_dec->outbuf, dts_dec->outlen_pcm);
         if (ret < 0) {
@@ -443,8 +557,8 @@ int dca_decoder_process_patch(struct dca_dts_dec *dts_dec, unsigned char*buffer,
 
 
     return 0;
-EXIT:
 
+EXIT:
     return -1;
 }
 
@@ -499,7 +613,10 @@ static void *decode_threadloop(void *data)
     unsigned char temp;
     int i, j;
     int digital_raw = 0;
+    int mute_count = 5;
     struct pcm_info  pcm_out_info;
+    int dts_type = 0;
+    int data_offset = 0;
 
     if (NULL == parser) {
         ALOGE("%s:%d parser == NULL", __func__, __LINE__);
@@ -525,7 +642,8 @@ static void *decode_threadloop(void *data)
     if (dts_decoder_init != NULL) {
         unload_dts_decoder_lib();
     }
-    if (dca_decoder_init(1)) {
+    //use and bt output need only pcm output,need not raw output
+    if (dca_decoder_init(0)) {
         ALOGW("%s:%d dts decoder init failed, maybe no lisensed dts decoder", __func__, __LINE__);
         valid_lib = 0;
     }
@@ -538,7 +656,7 @@ static void *decode_threadloop(void *data)
         resampler_init(&parser->aml_resample);
     }
 
-    struct aml_stream_in *in = (struct aml_stream_in *)parser->stream;
+    struct aml_stream_in *in = parser->in;
     u32AlsaFrameSize = in->config.channels * pcm_format_to_bits(in->config.format) / 8;
     prctl(PR_SET_NAME, (unsigned long)"audio_dca_dec");
     while (parser->decode_ThreadExitFlag == 0) {
@@ -581,43 +699,132 @@ static void *decode_threadloop(void *data)
 #endif
         //find header and get paramters
         read_pointer = inbuf;
-        while (parser->decode_ThreadExitFlag == 0 && remain_size > 8) {
-            //DTS_SYNCWORD_IEC61937 : 0xF8724E1F
-            if (read_pointer[0] == 0x72 && read_pointer[ 1] == 0xf8
-                && read_pointer[2] == 0x1f && read_pointer[3] == 0x4e) {
-                SyncFlag = true;
-                little_end = false;
-                s32DtsFramesize = (read_pointer[6] | read_pointer[7] << 8) / 8;
+        if  (remain_size > MAX_DECODER_FRAME_LENGTH)
+        {
+            while (parser->decode_ThreadExitFlag == 0 && !SyncFlag && remain_size > IEC61937_HEADER_LENGTH) {
+                //DTS_SYNCWORD_IEC61937 : 0xF8724E1F
+                if (read_pointer[0] == 0x72 && read_pointer[1] == 0xf8
+                    && read_pointer[2] == 0x1f && read_pointer[3] == 0x4e) {
+                    SyncFlag = true;
+                    dts_type = read_pointer[4] & 0x1f;
+                } else if (read_pointer[0] == 0xf8 && read_pointer[1] == 0x72
+                           && read_pointer[2] == 0x4e && read_pointer[3] == 0x1f) {
+                    SyncFlag = true;
+                    little_end = true;
+                    dts_type = read_pointer[5] & 0x1f;
+                }
+
+                if (SyncFlag == 0) {
+                    read_pointer++;
+                    remain_size--;
+                }
+            }
+            ALOGV("DTS Sync:%d little endian:%d dts type:%d, remain_size:%d",SyncFlag,little_end,dts_type, remain_size);
+            if (SyncFlag) {
+                // point to pd
+                read_pointer = read_pointer + IEC61937_PD_OFFSET;
+                //ALOGD("read_pointer[0]:0x%x read_pointer[1]:0x%x",read_pointer[0],read_pointer[1]);
+                if (!little_end) {
+                    s32DtsFramesize = (read_pointer[0] | read_pointer[1] << 8);
+                } else {
+                    s32DtsFramesize = (read_pointer[1] | read_pointer[0] << 8);
+                }
+
+                if (dts_type == DTS_TYPE_I ||
+                    dts_type == DTS_TYPE_II ||
+                    dts_type == DTS_TYPE_III) {
+                    // these DTS type use bits length for PD
+                    s32DtsFramesize = s32DtsFramesize >> 3;
+                    // point to the address after pd
+                    read_pointer = read_pointer + IEC61937_PD_SIZE;
+                    data_offset = IEC61937_HEADER_LENGTH;
+                } else if (dts_type == DTS_TYPE_IV) {
+                    /*refer kodi how to add 12 bytes header for DTS HD
+                    01 00 00 00 00 00 00 00 fe fe ** **, last 2 bytes for data size
+                    */
+                    // point to the address after pd
+                    read_pointer = read_pointer + IEC61937_PD_SIZE;
+                    if (remain_size < (IEC_DTS_HD_APPEND_LNGTH + IEC61937_HEADER_LENGTH)) {
+                        // point to pa
+                        memmove(inbuf, read_pointer - IEC61937_HEADER_LENGTH, remain_size);
+                        ALOGD("Not enough data for DTS HD header parsing\n");
+                        continue;
+                    }
+
+                    if (read_pointer[0] == 0x00 && read_pointer[1] == 0x01 && read_pointer[8] == 0xfe && read_pointer[9] == 0xfe) {
+                        s32DtsFramesize = (read_pointer[10] | read_pointer[11] << 8);
+                    } else if ((read_pointer[0] == 0x01 && read_pointer[1] == 0x00 && read_pointer[8] == 0xfe && read_pointer[9] == 0xfe)) {
+                        s32DtsFramesize = (read_pointer[11] | read_pointer[10] << 8);
+                    } else {
+                        ALOGE("DTS HD error data\n");
+                        s32DtsFramesize = 0;
+                    }
+                    //ALOGD("size data=0x%x 0x%x\n",read_pointer[10],read_pointer[11]);
+                    // point to the address after 12 bytes header
+                    read_pointer = read_pointer + IEC_DTS_HD_APPEND_LNGTH;
+                    data_offset = IEC_DTS_HD_APPEND_LNGTH + IEC61937_HEADER_LENGTH;
+                } else {
+                    ALOGW("Unknow DTS type=0x%x", dts_type);
+                    s32DtsFramesize = 0;
+                    data_offset = IEC61937_PD_OFFSET;
+                }
+
+                if (s32DtsFramesize <= 0) {
+                    ALOGW("wrong data for DTS,skip the header remain=%d data offset=%d", remain_size, data_offset);
+                    remain_size = remain_size - data_offset;
+
+                    if (remain_size < 0) {
+                        remain_size = 0;
+                        ALOGE("Carsh issue happens\n");
+                    }
+                    memmove(inbuf, read_pointer, remain_size);
+                    continue;
+                }
+
+                //to do know why
                 if (s32DtsFramesize == 2013) {
                     s32DtsFramesize = 2012;
                 }
-                //ALOGI("mFrame_size:%d dts_dec->remain_size:%d little_end:%d", mFrame_size, remain_size, little_end);
-                break;
+
+                ALOGV("mFrame_size:%d dts_dec->remain_size:%d little_end:%d", s32DtsFramesize, remain_size, little_end);
+                // the remain size contain the header and raw data size
+                if (remain_size < (s32DtsFramesize + data_offset)) {
+                    // point to pa and copy these bytes
+                    memmove(inbuf, read_pointer - data_offset, remain_size);
+                    s32DtsFramesize = 0;
+                } else {
+                    // there is enough data, header has been used, update the remain size
+                    remain_size = remain_size - data_offset;
+                }
+            } else {
+                s32DtsFramesize = 0;
             }
-            read_pointer++;
-            remain_size--;
         }
 
-        if (remain_size < (s32DtsFramesize + 8) || SyncFlag == 0) {
-            ALOGV("%s:%d remain:%d, DtsFramesize:%d, SyncFlag:%d, read more...", __func__, __LINE__,
-                remain_size, s32DtsFramesize, SyncFlag);
-            memcpy(inbuf, read_pointer, remain_size);
-            continue;
-        }
-        read_pointer += 8;   //pa pb pc pd
 #ifdef DTS_DECODER_ENABLE
+        ALOGV("%s:%d Framesize:%d, remain_size:%d, dts_type:%d", __func__, __LINE__, s32DtsFramesize, remain_size, dts_type);
         used_size = dca_decode_process(read_pointer, s32DtsFramesize, outbuf,
                                        &outlen_pcm, (char *) outbuf_raw, &outlen_raw,&pcm_out_info);
+    if (getprop_bool("media.audiohal.dtsdump")) {
+        FILE *dump_fp = NULL;
+        dump_fp = fopen("/data/audio_hal/audio2dca.dts", "a+");
+        if (dump_fp != NULL) {
+            fwrite(read_pointer, s32DtsFramesize, 1, dump_fp);
+            fclose(dump_fp);
+        } else {
+            ALOGW("[Error] Can't write to /data/audio_hal/audio2dca.raw");
+        }
+    }
+
 #else
         used_size = s32DtsFramesize;
 #endif
         if (used_size > 0) {
-            remain_size -= 8;    //pa pb pc pd
             remain_size -= used_size;
             ALOGV("%s:%d decode success used_size:%d, outlen_pcm:%d", __func__, __LINE__, used_size, outlen_pcm);
-            memcpy(inbuf, read_pointer + used_size, remain_size);
+            memmove(inbuf, read_pointer + used_size, remain_size);
         } else {
-            ALOGW("%s:%d decode failed, used_size:%d", __func__, __LINE__, used_size);
+            ALOGV("%s:%d decode failed, used_size:%d", __func__, __LINE__, used_size);
         }
 
 #ifdef DTS_DECODER_ENABLE
@@ -630,8 +837,28 @@ static void *decode_threadloop(void *data)
                 outlen_pcm = out_frame << 2;
             }
             parser->data_ready = 1;
+            //here when pcm -> dts,some error frames maybe received by deocder
+            //and I tried to use referrence tools to decoding the frames and the output also has noise frames.
+            //so here we try to mute count outbuf frame to wrok arount the issuse
+            if (mute_count > 0) {
+                memset(outbuf, 0, outlen_pcm);
+                mute_count--;
+            }
+#if 1
+            if (getprop_bool("media.audiohal.dtsdump")) {
+                FILE *dump_fp = NULL;
+                dump_fp = fopen("/data/audio_hal/dtsout.pcm", "a+");
+                if (dump_fp != NULL) {
+                    fwrite(outbuf, outlen_pcm, 1, dump_fp);
+                    fclose(dump_fp);
+                } else {
+                    ALOGW("[Error] Can't write to /data/audio_hal/dtsout.pcm");
+                }
+            }
+#endif
             Write_buffer(parser, outbuf, outlen_pcm);
         }
+
 #endif
     }
     parser->decode_enabled = 0;
@@ -676,12 +903,22 @@ static int stop_decode_thread(struct aml_audio_parser *parser)
 
 int dca_decode_init(struct aml_audio_parser *parser)
 {
+    ring_buffer_reset(&(parser->aml_ringbuffer));
+    struct aml_stream_in *in = parser->in;
+    parser->aml_pcm = in->pcm;
+    parser->in_sample_rate = in->config.rate;
+    parser->out_sample_rate = in->requested_rate;
+    parser->decode_dev_op_mutex = &in->lock;
+    parser->data_ready = 0;
     return start_decode_thread(parser);
 }
 
 int dca_decode_release(struct aml_audio_parser *parser)
 {
-    return stop_decode_thread(parser);
+    int s32Ret = 0;
+    s32Ret = stop_decode_thread(parser);
+    ring_buffer_reset(&(parser->aml_ringbuffer));
+    return s32Ret;
 }
 
 

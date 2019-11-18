@@ -21,6 +21,9 @@
 extern "C" {
 #endif
 
+#include <pthread.h>
+#include <tinyalsa/asoundlib.h>
+
 /*
  *  Value of the Alsa Mixer Control Point
  **/
@@ -108,6 +111,12 @@ typedef enum AML_MIXER_CTRL_ID {
     AML_MIXER_ID_SPDIF_MUTE,
     AML_MIXER_ID_HDMI_OUT_AUDIO_MUTE,
     AML_MIXER_ID_HDMI_ARC_AUDIO_ENABLE,
+	/* eARC latency and CDS */
+    AML_MIXER_ID_HDMI_EARC_AUDIO_ENABLE,
+    AML_MIXER_ID_EARCRX_LATENCY,
+    AML_MIXER_ID_EARCTX_LATENCY,
+    AML_MIXER_ID_EARCRX_CDS, /* Capability Data Structure */
+    AML_MIXER_ID_EARCTX_CDS,
     AML_MIXER_ID_AUDIO_IN_SRC,
     AML_MIXER_ID_I2SIN_AUDIO_TYPE,
     AML_MIXER_ID_SPDIFIN_AUDIO_TYPE,
@@ -183,6 +192,11 @@ int aml_mixer_get_spdifin_type(int mixer_id);
  **/
 int aml_mixer_ctrl_set_int(struct aml_mixer_handle *mixer_handle, int mixer_id, int value);
 int aml_mixer_ctrl_set_str(struct aml_mixer_handle *mixer_handle, int mixer_id, char *value);
+
+int mixer_get_int(struct mixer *pMixer, int mixer_id);
+int mixer_set_int(struct mixer *pMixer, int mixer_id, int value);
+int mixer_get_array(struct mixer *pMixer, int mixer_id, void *array, int count);
+int mixer_set_array(struct mixer *pMixer, int mixer_id, void *array, int count);
 
 #ifdef __cplusplus
 }

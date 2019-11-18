@@ -85,7 +85,7 @@ DolbyMS12::~DolbyMS12()
 int DolbyMS12::GetLibHandle(void)
 {
     ALOGD("+%s()", __FUNCTION__);
-    ReleaseLibHandle();
+    //ReleaseLibHandle();
 
     //here there are two paths, "the DOLBY_MS12_LIB_PATH_A/B", where could exit that dolby ms12 libary.
     mDolbyMS12LibHanle = dlopen(DOLBY_MS12_LIB_PATH_A, RTLD_NOW);
