@@ -126,6 +126,10 @@ audio_channel_mask_t audio_parse_get_audio_channel_mask(audio_type_parse_t *stat
  */
 int audio_parse_get_audio_type_direct(audio_type_parse_t *status);
 /*
+ *@brief parse the channels in the undecoded DTS stream
+ */
+int get_dts_stream_channels(const char *buffer, size_t bytes);
+/*
  *@brief gget current audio type from buffer data
  */
 int audio_type_parse(void *buffer, size_t bytes, int *package_size, audio_channel_mask_t *cur_ch_mask);

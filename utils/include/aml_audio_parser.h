@@ -18,6 +18,16 @@
 #define _AML_AUDIO_PARSER_
 #include "aml_audio_types_def.h"
 
+
+typedef enum AML_AUDIO_DECODER_TYPE{
+    AML_AUDIO_DECODER_TYPE_NONE         = 0,
+    AML_AUDIO_DECODER_TYPE_DOLBY        = 1,
+    AML_AUDIO_DECODER_TYPE_DTS          = 2,
+
+    AML_AUDIO_DECODER_TYPE_BUTT         = 3,
+} aml_audio_decoder_type_e;
+
+
 struct aml_audio_parser {
     struct audio_hw_device *dev;
     ring_buffer_t aml_ringbuffer;
@@ -36,7 +46,8 @@ struct aml_audio_parser {
     struct resample_para aml_resample;
     int data_ready;
     struct pcm_info pcm_out_info;
-    struct audio_stream_in *stream;
+    struct aml_stream_in *in;
+    aml_audio_decoder_type_e    enCurDecType;
 };
 
 

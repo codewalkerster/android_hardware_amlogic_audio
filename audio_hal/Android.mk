@@ -29,6 +29,21 @@ LOCAL_MODULE_TARGET_ARCH:= arm arm64
 LOCAL_MULTILIB := both
 include $(BUILD_PREBUILT)
 
+#voice record of SEI BT remote control
+BOARD_ENABLE_HBG := true
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := libhbgdecode
+LOCAL_SRC_FILES_arm := ../bt_voice/hbg/lib/libhbgdecode.so
+LOCAL_SRC_FILES_arm64 := ../bt_voice/hbg/lib64/libhbgdecode.so
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_SUFFIX := .so
+LOCAL_MODULE_CLASS := SHARED_LIBRARIES
+LOCAL_PROPRIETARY_MODULE := true
+LOCAL_MODULE_TARGET_ARCH:= arm arm64
+LOCAL_MULTILIB := both
+include $(BUILD_PREBUILT)
+
 # The default audio HAL module, which is a stub, that is loaded if no other
 # device specific modules are present. The exact load order can be seen in
 # libhardware/hardware.c
@@ -44,6 +59,7 @@ include $(BUILD_PREBUILT)
     LOCAL_MODULE_RELATIVE_PATH := hw
     LOCAL_SRC_FILES := \
         audio_hw.c \
+        aml_audio_delay.c \
         audio_hw_utils.c \
         audio_hwsync.c \
         audio_hw_profile.c \
@@ -54,8 +70,6 @@ include $(BUILD_PREBUILT)
         aml_audio_stream.c \
         alsa_config_parameters.c \
         spdif_encoder_api.c \
-        audio_eq_drc_compensation.cpp \
-        audio_eq_drc_parser.cpp \
         aml_ac3_parser.c \
         aml_dcv_dec_api.c \
         aml_dca_dec_api.c \
@@ -80,8 +94,11 @@ include $(BUILD_PREBUILT)
         audio_android_resample_api.c \
         aml_audio_timer.c \
         audio_virtual_buf.c \
-        aml_audio_ease.c
-
+        aml_audio_ease.c \
+        ../amlogic_AQ_tools/audio_eq_drc_compensation.c \
+        ../amlogic_AQ_tools/audio_eq_drc_parser.c \
+        ../amlogic_AQ_tools/ini/dictionary.c \
+        ../amlogic_AQ_tools/ini/iniparser.c
 
     LOCAL_C_INCLUDES += \
         external/tinyalsa/include \
@@ -99,13 +116,15 @@ include $(BUILD_PREBUILT)
         $(LOCAL_PATH)/../bt_voice/kehwin \
         frameworks/native/include \
         vendor/amlogic/common/external/dvb/include/am_adp \
-        frameworks/av/include
+        frameworks/av/include \
+        $(LOCAL_PATH)/../amlogic_AQ_tools \
+        $(LOCAL_PATH)/../amlogic_AQ_tools/ini
 
-    LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/lib_aml_ng.a
-    LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/Amlogic_EQ_Param_Generator.a
-    LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/Amlogic_DRC_Param_Generator.a
-    LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/Amlogic_EQ_Param_Generator64.a
-    LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/Amlogic_DRC_Param_Generator64.a
+    LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/../amlogic_AQ_tools/lib_aml_ng.a
+    LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/../amlogic_AQ_tools/Amlogic_EQ_Param_Generator.a
+    LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/../amlogic_AQ_tools/Amlogic_DRC_Param_Generator.a
+    LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/../amlogic_AQ_tools/Amlogic_EQ_Param_Generator64.a
+    LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/../amlogic_AQ_tools/Amlogic_DRC_Param_Generator64.a
     LOCAL_LDFLAGS_arm += $(LOCAL_PATH)/../bt_voice/kehwin/32/btmic.a
     LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/../bt_voice/kehwin/64/btmic.a
 
@@ -121,6 +140,10 @@ else
     LOCAL_SHARED_LIBRARIES += libam_adp
 endif
 
+ifeq ($(BOARD_ENABLE_HBG), true)
+LOCAL_SHARED_LIBRARIES += libhbg
+endif
+
 ifeq ($(BOARD_ENABLE_NANO), true)
     LOCAL_SHARED_LIBRARIES += libnano
 endif
@@ -132,7 +155,11 @@ ifneq ($(TARGET_BUILD_VARIANT),user)
     LOCAL_CFLAGS += -DDEBUG_VOLUME_CONTROL
 endif
 ifeq ($(BOARD_ENABLE_NANO), true)
-		LOCAL_CFLAGS += -DENABLE_NANO_PATCH=1
+	LOCAL_CFLAGS += -DENABLE_NANO_PATCH=1
+endif
+
+ifeq ($(BOARD_ENABLE_HBG), true)
+LOCAL_CFLAGS += -DENABLE_HBG_PATCH
 endif
 
 ifeq ($(strip $(TARGET_WITH_TV_AUDIO_MODE)),true)

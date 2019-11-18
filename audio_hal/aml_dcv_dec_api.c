@@ -554,7 +554,7 @@ void *decode_threadloop(void *data)
         resampler_init(&parser->aml_resample);
     }
 
-    struct aml_stream_in *in = (struct aml_stream_in *)parser->stream;
+    struct aml_stream_in *in = parser->in;
     u32AlsaFrameSize = in->config.channels * pcm_format_to_bits(in->config.format) / 8;
     prctl(PR_SET_NAME, (unsigned long)"audio_dcv_dec");
     while (parser->decode_ThreadExitFlag == 0) {
@@ -682,12 +682,22 @@ static int stop_decode_thread(struct aml_audio_parser *parser)
 
 int dcv_decode_init(struct aml_audio_parser *parser)
 {
+    ring_buffer_reset(&(parser->aml_ringbuffer));
+    struct aml_stream_in *in = parser->in;
+    parser->aml_pcm = in->pcm;
+    parser->in_sample_rate = in->config.rate;
+    parser->out_sample_rate = in->requested_rate;
+    parser->decode_dev_op_mutex = &in->lock;
+    parser->data_ready = 0;
     return start_decode_thread(parser);
 }
 
 int dcv_decode_release(struct aml_audio_parser *parser)
 {
-    return stop_decode_thread(parser);
+    int s32Ret = 0;
+    s32Ret = stop_decode_thread(parser);
+    ring_buffer_reset(&(parser->aml_ringbuffer));
+    return s32Ret;
 }
 
 int dcv_decoder_init_patch(struct dolby_ddp_dec *ddp_dec)

@@ -36,6 +36,7 @@ struct dca_dts_dec {
     int outlen_raw;
     int is_dtscd;
     int digital_raw;
+    bool is_dtv;
     //int (*get_parameters) (void *, int *, int *, int *);
     int (*decoder_process)(unsigned char*, int, unsigned char *, int *, char *, int *,struct pcm_info *);
     pthread_mutex_t lock;

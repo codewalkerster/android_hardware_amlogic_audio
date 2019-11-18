@@ -29,7 +29,9 @@ LOCAL_SRC_FILES  +=               \
     ini/ini.cpp                   \
     ini/IniParser.cpp             \
     ac3_parser_utils.c            \
-    alsa_device_parser.c
+    alsa_device_parser.c          \
+    aml_malloc_debug.c \
+    earc_utils.c
 
 LOCAL_MODULE := libamaudioutils
 
