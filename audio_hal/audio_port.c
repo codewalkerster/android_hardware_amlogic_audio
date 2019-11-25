@@ -492,8 +492,10 @@ static ssize_t output_port_start(struct output_port *port)
     }
 
 #if defined(ODROID)
-    device = aml_getprop_int("media.audio_hal.device");
-    device = alsa_device_update_pcm_index(device, PLAYBACK);
+    if (card == 0) {
+        device = aml_getprop_int("media.audio_hal.device");
+        device = alsa_device_update_pcm_index(device, PLAYBACK);
+    }
 #endif
     ALOGI("%s(), open ALSA hw:%d,%d", __func__, card, device);
     pcm = pcm_open(card, device, PCM_OUT | PCM_MONOTONIC, &pcm_cfg);
