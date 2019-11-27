@@ -293,6 +293,7 @@ struct aml_audio_patch {
     unsigned char avsync_drop;
     void *drop_buf;
     bool ac3_pcm_dropping;
+    int last_audio_delay;
 };
 
 struct audio_stream_out;
