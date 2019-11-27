@@ -107,6 +107,7 @@
 #define DTV_DECODER_CHECKIN_FIRSTAPTS_PATH "/sys/class/tsync/checkin_firstapts"
 #define DTV_DECODER_TSYNC_MODE      "/sys/class/tsync/mode"
 #define PROPERTY_LOCAL_ARC_LATENCY   "media.amnuplayer.audio.delayus"
+#define PROPERTY_LOCAL_PASSTHROUGH_LATENCY  "media.dtv.passthrough.latencyms"
 #define AUDIO_EAC3_FRAME_SIZE 16
 #define AUDIO_AC3_FRAME_SIZE 4
 #define AUDIO_TV_PCM_FRAME_SIZE 32
@@ -1758,6 +1759,7 @@ void process_pts_sync(unsigned int pcm_lancty, struct aml_audio_patch *patch,
 void dtv_avsync_process(struct aml_audio_patch* patch, struct aml_stream_out* stream_out)
 {
     unsigned long pts ;
+    int audio_output_delay = 0;
     ring_buffer_t *ringbuffer = &(patch->aml_ringbuffer);
     struct audio_hw_device *dev = patch->dev;
     struct aml_audio_device *aml_dev = (struct aml_audio_device *)dev;
@@ -1765,24 +1767,35 @@ void dtv_avsync_process(struct aml_audio_patch* patch, struct aml_stream_out* st
         return;
     }
     patch->dtv_pcr_mode = get_dtv_sync_mode();
+
+    audio_output_delay = aml_getprop_int(PROPERTY_LOCAL_PASSTHROUGH_LATENCY);
+    if (patch->last_audio_delay != audio_output_delay) {
+        patch->last_audio_delay = audio_output_delay;
+        patch->dtv_audio_tune = AUDIO_LOOKUP;
+        ALOGI("set audio_output_delay = %d\n", audio_output_delay);
+    }
+
     if (patch->aformat == AUDIO_FORMAT_E_AC3 || patch->aformat == AUDIO_FORMAT_AC3) {
         if (stream_out != NULL) {
             /*The decoder has one frame cached,need to add 32ms to the latency*/
-            unsigned int  pcm_lantcy = out_get_latency(&(stream_out->stream)) + 32;
+            unsigned int  pcm_lantcy = out_get_latency(&(stream_out->stream)) + 32
+                                        + audio_output_delay;
             pts = dtv_hal_get_pts(patch, pcm_lantcy);
             process_ac3_sync(patch, pts, stream_out);
         }
     } else if (patch->aformat ==  AUDIO_FORMAT_DTS || patch->aformat == AUDIO_FORMAT_DTS_HD) {
         if (stream_out != NULL) {
             ringbuffer = &(patch->aml_ringbuffer);
-            unsigned int pcm_lantcy = out_get_latency(&(stream_out->stream));
+            unsigned int pcm_lantcy = out_get_latency(&(stream_out->stream)) +
+                                        audio_output_delay;
             pts = dtv_hal_get_pts(patch, pcm_lantcy);
             process_ac3_sync(patch, pts, stream_out);
         }
     } else {
         {
             if (stream_out != NULL) {
-                unsigned int pcm_lantcy = out_get_latency(&(stream_out->stream));
+                unsigned int pcm_lantcy = out_get_latency(&(stream_out->stream)) +
+                                            audio_output_delay;
                 int abuf_level = get_buffer_read_space(ringbuffer);
                 process_pts_sync(pcm_lantcy, patch, abuf_level, stream_out);
             }
@@ -2693,6 +2706,7 @@ static void *audio_dtv_patch_process_threadloop(void *data)
                 patch->last_out_pts = 0;
                 patch->first_apts_lookup_over = 0;
                 patch->ac3_pcm_dropping = 0;
+                patch->last_audio_delay = 0;
                 if (patch->dtv_aformat == ACODEC_FMT_AC3) {
                     patch->aformat = AUDIO_FORMAT_AC3;
                     ddp_dec->is_iec61937 = false;
