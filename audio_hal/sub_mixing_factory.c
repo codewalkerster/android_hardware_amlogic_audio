@@ -632,6 +632,7 @@ static int out_get_presentation_position_port(
         if (ret == 0) {
             out->last_frames_postion = *frames;
         } else {
+            *frames = out->last_frames_postion;
             ALOGV("%s(), pts not valid yet", __func__);
         }
     } else {
