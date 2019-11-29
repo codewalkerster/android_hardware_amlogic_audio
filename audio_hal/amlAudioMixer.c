@@ -35,6 +35,7 @@
 #include "audio_data_process.h"
 
 #include "audio_hw.h"
+#include "audio_a2dp_hw.h"
 
 #define MIXER_IN_BUFFER_SIZE (512*4)
 #define MIXER_OUT_BUFFER_SIZE MIXER_IN_BUFFER_SIZE
@@ -413,15 +414,28 @@ int mixer_output_dummy(struct amlAudioMixer *audio_mixer, bool en)
 static int mixer_output_write(struct amlAudioMixer *audio_mixer)
 {
     enum MIXER_OUTPUT_PORT port_index = 0;
+    struct input_port *in_port_direct = audio_mixer->in_ports[MIXER_INPUT_PORT_PCM_DIRECT];
+    struct input_port *in_port_system = audio_mixer->in_ports[MIXER_INPUT_PORT_PCM_SYSTEM];
+    struct aml_stream_out *out = NULL;
     struct output_port *out_port = audio_mixer->out_ports[port_index];
     out_port->sound_track_mode = audio_mixer->adev->sound_track_mode;
     if (audio_mixer->standby)
         mixer_output_startup(audio_mixer);
 
+
+    if (in_port_direct && in_port_direct->notify_cbk_data) {
+        out = (struct aml_stream_out *)in_port_direct->notify_cbk_data;
+    } else if (in_port_system && in_port_system->notify_cbk_data) {
+        out = (struct aml_stream_out *)in_port_system->notify_cbk_data;
+    }
+
     while (is_output_data_avail(audio_mixer, port_index)) {
         // out_write_callbacks();
         ALOGV("++%s start", __func__);
-        out_port->write(out_port, out_port->data_buf, out_port->bytes_avail);
+        if (out && (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP))
+            a2dp_out_write(&out->stream, out_port->data_buf, out_port->bytes_avail);
+        else
+            out_port->write(out_port, out_port->data_buf, out_port->bytes_avail);
         set_outport_data_avail(out_port, 0);
     };
     return 0;

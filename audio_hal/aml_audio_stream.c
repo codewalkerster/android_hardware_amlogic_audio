@@ -94,6 +94,14 @@ void get_sink_format (struct audio_stream_out *stream)
     audio_format_t sink_capability = get_sink_capability(stream);
     audio_format_t source_format = aml_out->hal_internal_format;
 
+    if (aml_out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
+        ALOGD("get_sink_format: a2dp set to pcm");
+        adev->sink_format = AUDIO_FORMAT_PCM_16_BIT;
+        adev->optical_format = AUDIO_FORMAT_PCM_16_BIT;
+        aml_out->dual_output_flag = false;
+        return;
+    }
+
     /*when device is HDMI_ARC*/
     ALOGI("!!!%s() Sink devices %#x Source format %#x digital_format(hdmi_format) %#x Sink Capability %#x\n",
           __FUNCTION__, adev->active_outport, aml_out->hal_internal_format, adev->hdmi_format, sink_capability);
