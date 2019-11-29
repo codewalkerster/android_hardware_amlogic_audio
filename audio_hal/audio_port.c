@@ -504,9 +504,11 @@ static int output_port_standby(struct output_port *port)
     struct pcm *pcm = port->pcm_handle;
     if (pcm) {
         ALOGI("%s()", __func__);
+        pthread_mutex_lock(&port->lock);
         pcm_close(pcm);
         pcm = NULL;
         port->port_status = STOPPED;
+        pthread_mutex_unlock(&port->lock);
     }
     return 0;
 }
@@ -519,6 +521,12 @@ int outport_stop_pcm(struct output_port *port)
     if (port->port_status == ACTIVE && port->pcm_handle) {
         pcm_stop(port->pcm_handle);
     }
+    return 0;
+}
+
+int outport_set_dummy(struct output_port *port, bool en)
+{
+    port->dummy = en;
     return 0;
 }
 
@@ -542,9 +550,17 @@ static ssize_t output_port_write_alsa(struct output_port *port, void *buffer, in
 {
     int bytes_to_write = bytes;
     int ret = 0;
+
+    // dummy means we abandon the data.
+    if (port->dummy) {
+        usleep(5000);
+        return bytes;
+    }
+
     if (port->sound_track_mode == 3)
            port->sound_track_mode = AM_AOUT_OUTPUT_LRMIX;
     aml_audio_switch_output_mode((int16_t *)buffer, bytes, port->sound_track_mode);
+    pthread_mutex_lock(&port->lock);
     do {
         int written = 0;
         ALOGV("%s(), line %d", __func__, __LINE__);
@@ -562,6 +578,7 @@ static ssize_t output_port_write_alsa(struct output_port *port, void *buffer, in
         }
         bytes_to_write -= written;
     } while (bytes_to_write > 0);
+    pthread_mutex_unlock(&port->lock);
 
     return bytes;
 }

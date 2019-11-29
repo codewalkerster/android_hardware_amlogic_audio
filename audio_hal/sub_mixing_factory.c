@@ -1595,6 +1595,10 @@ static int out_flush_subMixingPCM(struct audio_stream_out *stream)
 
 int switchNormalStream(struct aml_stream_out *aml_out, bool on)
 {
+    struct aml_audio_device *aml_dev = aml_out->dev;
+    struct subMixing *sm = aml_dev->sm;
+    struct amlAudioMixer *audio_mixer = sm->mixerData;
+
     ALOGI("+%s() stream %p, on = %d", __func__, aml_out, on);
     if (!aml_out->is_normal_pcm) {
         ALOGE("%s(), not normal pcm stream", __func__);
@@ -1605,11 +1609,14 @@ int switchNormalStream(struct aml_stream_out *aml_out, bool on)
         aml_out->stream.write = mixer_aux_buffer_write_sm;
         aml_out->stream.common.standby = out_standby_subMixingPCM;
         out_standby_subMixingPCM((struct audio_stream *)aml_out);
+        mixer_output_dummy(audio_mixer, 0);
     } else {
         aml_out->stream.write = mixer_aux_buffer_write;
         aml_out->stream.common.standby = out_standby_new;
         deleteSubMixingInputPcm(aml_out);
         out_standby_new((struct audio_stream *)aml_out);
+        mixer_output_dummy(audio_mixer, 1);
+        mixer_output_standby(audio_mixer);
     }
 
     return 0;

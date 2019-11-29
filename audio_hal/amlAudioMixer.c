@@ -384,14 +384,27 @@ static int mixer_output_startup(struct amlAudioMixer *audio_mixer)
     return 0;
 }
 
-static int mixer_output_standby(struct amlAudioMixer *audio_mixer)
+int mixer_output_standby(struct amlAudioMixer *audio_mixer)
 {
     enum MIXER_OUTPUT_PORT port_index = 0;
     struct output_port *out_port = audio_mixer->out_ports[port_index];
 
-    ALOGI("++%s standby", __func__);
-    out_port->standby(out_port);
+    if (!audio_mixer->standby) {
+        ALOGI("++%s()", __func__);
+        out_port->standby(out_port);
+    }
     audio_mixer->standby = 1;
+
+    return 0;
+}
+
+int mixer_output_dummy(struct amlAudioMixer *audio_mixer, bool en)
+{
+    enum MIXER_OUTPUT_PORT port_index = 0;
+    struct output_port *out_port = audio_mixer->out_ports[port_index];
+
+    ALOGI("++%s(), en = %d", __func__, en);
+    outport_set_dummy(out_port, en);
 
     return 0;
 }
@@ -424,6 +437,9 @@ static int mixer_update_tstamp(struct amlAudioMixer *audio_mixer)
 
     /*only deal with system audio */
     if (in_port == NULL || out_port == NULL)
+        return 0;
+
+    if (out_port->pcm_handle)
         return 0;
 
     if (pcm_get_htimestamp(out_port->pcm_handle, &avail, &in_port->timestamp) == 0) {
@@ -1430,8 +1446,7 @@ static void *mixer_16b_threadloop(void *data)
                 clock_gettime(CLOCK_MONOTONIC, &tval_new);
                 delta_us = tspec_diff_to_us(audio_mixer->tval_last_write, tval_new);
                 if (delta_us >= STANDBY_TIME_US) {
-                    if (!audio_mixer->standby)
-                        mixer_output_standby(audio_mixer);
+                    mixer_output_standby(audio_mixer);
                     pthread_mutex_lock(&audio_mixer->lock);
                     ALOGI("%s() sleep", __func__);
                     pthread_cond_wait(&audio_mixer->cond, &audio_mixer->lock);

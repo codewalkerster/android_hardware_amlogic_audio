@@ -147,6 +147,8 @@ struct output_port {
     int (*standby)(struct output_port *port);
     struct timespec tval_last;
     int sound_track_mode;
+    // not sending audio data to ALSA
+    bool dummy;
 };
 bool is_inport_valid(enum MIXER_INPUT_PORT index);
 bool is_outport_valid(enum MIXER_OUTPUT_PORT index);
@@ -196,4 +198,5 @@ int outport_get_latency_frames(struct output_port *port);
 int set_inport_pts_valid(struct input_port *in_port, bool valid);
 bool is_inport_pts_valid(struct input_port *in_port);
 int outport_stop_pcm(struct output_port *port);
+int outport_set_dummy(struct output_port *port, bool en);
 #endif /* _AUDIO_PORT_H_ */
