@@ -7543,7 +7543,8 @@ ssize_t hw_write (struct audio_stream_out *stream
             }
         }
 
-        aml_out->status = STREAM_HW_WRITING;
+        if (ret == 0)
+            aml_out->status = STREAM_HW_WRITING;
     }
 
     if (eDolbyMS12Lib == adev->dolby_lib_type && !is_bypass_dolbyms12(stream)) {

@@ -102,6 +102,8 @@ int mixer_set_continuous_output(struct amlAudioMixer *audio_mixer,
 		bool continuous_output);
 int mixer_idle_sleep_time_us(struct amlAudioMixer *audio_mixer);
 int mixer_stop_outport_pcm(struct amlAudioMixer *audio_mixer);
+int mixer_output_standby(struct amlAudioMixer *audio_mixer);
+int mixer_output_dummy(struct amlAudioMixer *audio_mixer, bool en);
 
 __END_DECLS
 
