@@ -1338,7 +1338,7 @@ static int dtv_audio_tune_check(struct aml_audio_patch *patch, int cur_pts_diff,
     char tempbuf[128];
     struct audio_hw_device *adev = patch->dev;
     struct aml_audio_device *aml_dev = (struct aml_audio_device *) adev;
-    if (!patch || !patch->dev || aml_dev->tuner2mix_patch == 1) {
+    if (!patch || !patch->dev || aml_dev->tuner2mix_patch == 1 || (aml_dev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP)) {
         patch->dtv_audio_tune = AUDIO_RUNNING;
         return 1;
     }
@@ -2090,6 +2090,9 @@ void *audio_dtv_patch_output_threadloop(void *data)
 #else
     patch->output_src = AUDIO_DEVICE_OUT_AUX_DIGITAL;
 #endif
+    if (aml_dev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP)
+        patch->output_src = aml_dev->out_device;
+
     ret = adev_open_output_stream_new(patch->dev, 0,
                                       patch->output_src,        // devices_t
                                       AUDIO_OUTPUT_FLAG_DIRECT, // flags

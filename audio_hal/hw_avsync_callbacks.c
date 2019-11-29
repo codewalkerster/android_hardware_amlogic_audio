@@ -156,8 +156,11 @@ int on_meta_data_cbk(void *cookie,
             ALOGD("%s(): audio pts %dms, pcr %dms, latency %lldms, pcr leads %dms",
                 __func__, pts32/90, pcr/90, latency/90, (int)(pcr - pts32)/90);
         apts_gap = get_pts_gap(pcr, pts32);
-        //sync_status = pcm_check_hwsync_status(apts_gap);
-        sync_status = pcm_check_hwsync_status1(pcr, pts32);
+        if (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
+            sync_status = pcm_check_hwsync_status(apts_gap);
+        } else {
+            sync_status = pcm_check_hwsync_status1(pcr, pts32);
+        }
         // limit the gap handle to 0.5~5 s.
         if (sync_status == ADJUSTMENT) {
             // two cases: apts leading or pcr leading

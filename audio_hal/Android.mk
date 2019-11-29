@@ -67,6 +67,7 @@ include $(BUILD_PREBUILT)
         alsa_manager.c \
         audio_hw_ms12.c \
         audio_hw_dtv.c \
+        audio_a2dp_hw.c \
         aml_audio_stream.c \
         alsa_config_parameters.c \
         spdif_encoder_api.c \

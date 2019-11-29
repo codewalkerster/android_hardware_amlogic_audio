@@ -446,6 +446,12 @@ write:
     if (adev->patch_src == SRC_DTV && adev->parental_control_av_mute) {
         memset(buffer,0x0,bytes);
     }
+
+    if (aml_out->pcm == NULL) {
+        ALOGE("%s: pcm is null", __func__);
+        return bytes;
+    }
+
     /*+[SE][BUG][SWPL-14811][zhizhong] add drop ac3 pcm function*/
     if (adev->patch_src ==  SRC_DTV && aml_out->need_drop_size > 0) {
         if (aml_out->need_drop_size >= (int)bytes) {

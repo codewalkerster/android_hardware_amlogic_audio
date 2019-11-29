@@ -241,7 +241,8 @@ enum OUT_PORT {
     OUTPORT_REMOTE_SUBMIX       = 6,
     OUTPORT_BT_SCO              = 7,
     OUTPORT_BT_SCO_HEADSET      = 8,
-    OUTPORT_MAX                 = 9,
+    OUTPORT_A2DP                = 9,
+    OUTPORT_MAX                 = 10,
 };
 
 enum IN_PORT {
@@ -382,6 +383,7 @@ struct aml_audio_device {
     struct audio_config output_config;
     struct aml_arc_hdmi_desc hdmi_descs;
     int arc_hdmi_updated;
+    int a2dp_updated;
     struct aml_native_postprocess native_postprocess;
     /* to classify audio patch sources */
     enum patch_src_assortion patch_src;
@@ -559,6 +561,7 @@ struct aml_stream_out {
     unsigned int hal_rate;
     audio_output_flags_t flags;
     audio_devices_t out_device;
+    struct a2dp_stream_out *a2dp_out;
     struct pcm *pcm;
     struct pcm *earc_pcm;
     struct resampler_itfe *resampler;
@@ -826,5 +829,8 @@ int dsp_process_output(struct aml_audio_device *adev, void *in_buffer,
 int release_patch_l(struct aml_audio_device *adev);
 int start_ease_in(struct aml_audio_device *adev);
 int start_ease_out(struct aml_audio_device *adev);
+
+enum hwsync_status check_hwsync_status (uint apts_gap);
+void config_output(struct audio_stream_out *stream);
 
 #endif

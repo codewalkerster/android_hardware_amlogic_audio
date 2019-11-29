@@ -44,6 +44,7 @@
 #include "audio_hw.h"
 #include "amlAudioMixer.h"
 #include <audio_utils/primitives.h>
+#include "audio_a2dp_hw.h"
 
 #ifdef LOG_NDEBUG_FUNCTION
 #define LOGFUNC(...) ((void)0)
@@ -478,6 +479,10 @@ uint32_t out_get_outport_latency(const struct audio_stream_out *stream)
     struct subMixing *sm = adev->sm;
     struct amlAudioMixer *audio_mixer = sm->mixerData;
     int frames = 0, latency_ms = 0;
+
+    if (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
+        return a2dp_out_get_latency(stream);
+    }
 
     if (is_stream_using_mixer(out)) {
         int outport_latency_frames = mixer_get_outport_latency_frames(audio_mixer);
