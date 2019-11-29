@@ -25,6 +25,7 @@
 #include <sys/time.h>
 #include <dlfcn.h>
 #include <cutils/log.h>
+#include "aml_android_utils.h"
 #include "am_ad.h"
 #include "aml_ringbuffer.h"
 #include "audio_dtv_ad.h"
@@ -86,12 +87,28 @@ static dtv_assoc_audio *get_assoc_audio(void)
     return &assoc_bst;
 }
 
+#define MS12_INPUT_AD_FILE "/data/audio_out/ms12_input_ad.ac3"
+
+static void dump_ad_input_data(void *buffer, int size, char *file_name)
+{
+    if (aml_getprop_bool("media.audiohal.outdump")) {
+        FILE *fp1 = fopen(file_name, "a+");
+        if (fp1) {
+            int flen = fwrite((char *)buffer, 1, size, fp1);
+            ALOGV("%s buffer %p size %d\n", __FUNCTION__, buffer, size);
+            fclose(fp1);
+        }
+    }
+}
+
 static void audio_adcallback(const unsigned char * data, int len, void * handle)
 {
     UNUSED(handle);
     //ALOGI("ASSOC %s,len =%d,data:%02x %02x %02x %02x %02x %02x %02x %02x %02x", __FUNCTION__, len, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8]);
     //pthread_mutex_lock(&assoc_mutex);
     dtv_assoc_audio *param = get_assoc_audio();
+
+    dump_ad_input_data((void*)data, len, MS12_INPUT_AD_FILE);
 
     ring_buffer_t *ringbuffer = &(param->sub_abuf);
     int left;
@@ -284,7 +301,7 @@ void dtv_assoc_audio_cache(int value)
     }
 }
 
-void dtv_assoc_audio_start(unsigned int handle, int pid, int fmt)
+int dtv_assoc_audio_start(unsigned int handle, int pid, int fmt)
 {
     int ret = -1;
     pthread_mutex_lock(&assoc_mutex);
@@ -321,6 +338,8 @@ void dtv_assoc_audio_start(unsigned int handle, int pid, int fmt)
     if (ret == 0) {
         ring_buffer_reset(&param->sub_abuf);
     }
+
+    return ret;
 }
 
 void dtv_assoc_audio_stop(unsigned int handle)

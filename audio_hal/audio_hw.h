@@ -529,6 +529,8 @@ struct aml_audio_device {
     int audio_discontinue;
     int no_underrun_count;
     int no_underrun_max;
+
+    int ad_start_enable;
 };
 
 struct meta_data {

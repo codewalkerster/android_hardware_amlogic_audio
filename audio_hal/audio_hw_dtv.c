@@ -2717,7 +2717,6 @@ static void *audio_dtv_patch_process_threadloop(void *data)
                 dtv_patch_input_start(adec_handle, patch->dtv_aformat,
                                       patch->dtv_has_video);
                 create_dtv_output_stream_thread(patch);
-                dtv_assoc_audio_start(1, aml_dev->sub_apid, aml_dev->sub_afmt);
                 ALOGI("++%s live now  start the audio decoder now !\n",
                       __FUNCTION__);
                 patch->dtv_first_apts_flag = 0;
@@ -2764,6 +2763,14 @@ static void *audio_dtv_patch_process_threadloop(void *data)
                 pthread_mutex_unlock(&patch->dtv_input_mutex);
                 goto exit;
             }
+            /*[SE][BUG][SWPL-17416][chengshun] maybe sometimes subafmt and subapid not set before dtv patch start*/
+            if (aml_dev->ad_start_enable == 0) {
+                int ad_start_flag = dtv_assoc_audio_start(1, aml_dev->sub_apid, aml_dev->sub_afmt);
+                if (ad_start_flag == 0) {
+                    aml_dev->ad_start_enable = 1;
+                }
+            }
+
             patch_thread_get_cmd(patch, &cmd);
             if (cmd == AUDIO_DTV_PATCH_CMD_NULL) {
                 pthread_mutex_unlock(&patch->dtv_input_mutex);
@@ -2786,6 +2793,7 @@ static void *audio_dtv_patch_process_threadloop(void *data)
                 dtv_patch_input_stop(adec_handle);
                 dtv_assoc_audio_stop(1);
                 dts_dec->is_dtv = false;
+                aml_dev->ad_start_enable = 0;
                 patch->dtv_decoder_state = AUDIO_DTV_PATCH_DECODER_STATE_INIT;
             } else {
                 ALOGI("++%s line %d  live state unsupport state %d cmd %d !\n",
@@ -2814,6 +2822,7 @@ static void *audio_dtv_patch_process_threadloop(void *data)
                 dtv_do_ease_out(aml_dev);
                 dtv_patch_input_stop(adec_handle);
                 dtv_assoc_audio_stop(1);
+                aml_dev->ad_start_enable = 0;
                 patch->dtv_decoder_state = AUDIO_DTV_PATCH_DECODER_STATE_INIT;
             } else {
                 ALOGI("++%s line %d  live state unsupport state %d cmd %d !\n",
@@ -2837,6 +2846,7 @@ exit:
     ALOGI("++%s now  live  release  the audio decoder", __FUNCTION__);
     dtv_patch_input_stop(adec_handle);
     dtv_assoc_audio_stop(1);
+    aml_dev->ad_start_enable = 0;
     pthread_exit(NULL);
 }
 

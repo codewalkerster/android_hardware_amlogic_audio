@@ -5792,6 +5792,7 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
                 adev->sub_apid = 0;
             }
         } else {
+            adev->sub_apid = audio_sub_pid;
             ALOGI("%s()the audio patch is NULL \n", __func__);
         }
         goto exit;
@@ -5808,6 +5809,7 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
                 adev->sub_afmt= 0;
             }
         } else {
+            adev->sub_afmt = audio_sub_fmt;
             ALOGI("%s()the audio patch is NULL \n", __func__);
         }
         goto exit;

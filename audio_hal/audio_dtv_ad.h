@@ -18,7 +18,7 @@ void dtv_assoc_get_main_frame_size(int* main_frame_size);
 void dtv_assoc_set_ad_frame_size(int ad_frame_size);
 void dtv_assoc_get_ad_frame_size(int* ad_frame_size);
 void dtv_assoc_audio_cache(int value);
-void dtv_assoc_audio_start(unsigned int handle,int pid,int fmt);
+int dtv_assoc_audio_start(unsigned int handle,int pid,int fmt);
 void dtv_assoc_audio_stop(unsigned int handle);
 //void dtv_assoc_audio_pause(unsigned int handle);
 //void dtv_assoc_audio_resume(unsigned int handle,int pid);
