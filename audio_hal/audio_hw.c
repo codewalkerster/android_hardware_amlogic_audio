@@ -8715,6 +8715,18 @@ ssize_t mixer_main_buffer_write (struct audio_stream_out *stream, const void *bu
                     hw_write (stream, output_buffer, output_buffer_bytes, output_format);
             }
             else {
+                /*not continuous mode, we use sink gain control the volume*/
+                if (!continous_mode(adev)) {
+                    if (!adev->is_TV) {
+                        float out_gain = 1.0f;
+                        out_gain = adev->sink_gain[adev->active_outport];
+                        if (!audio_is_linear_pcm(aml_out->hal_internal_format)) {
+                            dolby_ms12_set_main_volume(out_gain);
+                        } else {
+                            apply_volume(out_gain, write_buf, sizeof(int16_t), write_bytes);
+                        }
+                    }
+                }
 re_write:
                 if (adev->debug_flag) {
                     ALOGI("%s dolby_ms12_main_process before write_bytes %zu!\n", __func__, write_bytes);
