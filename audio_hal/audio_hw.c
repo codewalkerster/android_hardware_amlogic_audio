@@ -7501,6 +7501,9 @@ ssize_t hw_write (struct audio_stream_out *stream
                 if (!adev->is_TV && (adev->ddp).digital_raw > 0 &&
                         output_format != AUDIO_FORMAT_PCM_16_BIT && output_format != AUDIO_FORMAT_PCM) {
                     // TODO: mbox+dvb and bypass case
+		    //avoid some kind of tv noise when raw data detection late
+		    ALOGI("mute the first raw data");
+		    memset(buffer,0,bytes);
                     ret = aml_alsa_output_open(stream);
                     if (ret) {
                         ALOGE("%s() open failed", __func__);
