@@ -592,6 +592,8 @@ static int mixer_inports_read(struct amlAudioMixer *audio_mixer)
                 //if in pausing states, don't retrieve data
                 if (state == PAUSING) {
                     fade_out = 1;
+                    ALOGI("%s(), tsync pause audio", __func__);
+                    aml_hwsync_set_tsync_pause();
                 } else if (state == RESUMING) {
                     fade_in = 1;
                     ALOGI("%s(), tsync resume", __func__);
@@ -633,8 +635,6 @@ static int mixer_inports_read(struct amlAudioMixer *audio_mixer)
                 if (ret == (int)in_port->data_len_bytes) {
                     if (fade_out) {
                         ALOGI("%s(), fade out finished pausing->pausing_1", __func__);
-                        ALOGI("%s(), tsync pause audio", __func__);
-                        aml_hwsync_set_tsync_pause();
                         audio_fade_func(in_port->data, ret, 0);
                         set_inport_state(in_port, PAUSED);
                     } else if (fade_in) {
