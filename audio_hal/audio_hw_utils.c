@@ -53,6 +53,14 @@
 #define LOGFUNC(...) (ALOGD(__VA_ARGS__))
 #endif
 
+//DRC Mode
+#define DDPI_UDC_COMP_LINE 2
+#define DRC_MODE_BIT  0
+#define DRC_HIGH_CUT_BIT 3
+#define DRC_LOW_BST_BIT 16
+static const char *str_compmode[] = {"custom mode, analog dialnorm","custom mode, digital dialnorm",
+                            "line out mode","RF remod mode"};
+
 int64_t aml_gettime(void)
 {
     struct timeval tv;
@@ -764,6 +772,29 @@ uint32_t tspec_diff_to_us(struct timespec tval_old,
 {
     return (tval_new.tv_sec - tval_old.tv_sec) * 1000000
             + (tval_new.tv_nsec - tval_old.tv_nsec) / 1000;
+}
+
+int aml_audio_get_dolby_drc_mode(int *drc_mode, int *drc_cut, int *drc_boost)
+{
+    char cEndpoint[PROPERTY_VALUE_MAX];
+    int ret = 0;
+    unsigned ac3_drc_control = (DDPI_UDC_COMP_LINE<<DRC_MODE_BIT)|(100<<DRC_HIGH_CUT_BIT)|(100<<DRC_LOW_BST_BIT);
+    ac3_drc_control = get_sysfs_int("/sys/class/audiodsp/ac3_drc_control");
+
+    if (!drc_mode || !drc_cut || !drc_boost)
+        return -1;
+    *drc_mode = ac3_drc_control&3;
+    ALOGI("drc mode from sysfs %s\n",str_compmode[*drc_mode]);
+    ret = property_get("ro.vendor.dolby.drcmode",cEndpoint,"");
+    if (ret > 0) {
+        *drc_mode = atoi(cEndpoint)&3;
+        ALOGI("drc mode from prop %s\n",str_compmode[*drc_mode]);
+    }
+    *drc_cut  = (ac3_drc_control>>DRC_HIGH_CUT_BIT)&0xff;
+    *drc_boost  = (ac3_drc_control>>DRC_LOW_BST_BIT)&0xff;
+    ALOGI("dd+ drc mode %s,high cut %d pct,low boost %d pct\n",
+        str_compmode[*drc_mode],*drc_cut, *drc_boost);
+    return 0;
 }
 
 void aml_audio_switch_output_mode(int16_t *buf, size_t bytes, AM_AOUT_OutputMode_t mode)

@@ -36,6 +36,7 @@
 #include "dolby_lib_api.h"
 #include "aml_audio_timer.h"
 #include "audio_virtual_buf.h"
+#include "audio_hw_utils.h"
 
 //#define DOLBY_MS12_OUTPUT_FORMAT_TEST
 
@@ -55,6 +56,7 @@
 #define MS12_MAIN_BUF_INCREASE_TIME_MS (0)
 #define MS12_SYS_BUF_INCREASE_TIME_MS (1000)
 
+#define DDPI_UDC_COMP_LINE 2
 
 
 #define MS12_OUTPUT_PCM_FILE "/data/audio_out/ms12_pcm.raw"
@@ -125,6 +127,7 @@ int get_the_dolby_ms12_prepared(
     struct aml_audio_device *adev = aml_out->dev;
     struct dolby_ms12_desc *ms12 = &(adev->ms12);
     int dolby_ms12_drc_mode = DOLBY_DRC_RF_MODE;
+    int system_app_mixing_status = SYSTEM_APP_SOUND_MIXING_OFF;
     struct aml_stream_out *out;
     ALOGI("\n+%s()", __FUNCTION__);
     pthread_mutex_lock(&ms12->lock);
@@ -162,11 +165,19 @@ int get_the_dolby_ms12_prepared(
     }
 #endif
 
-    if ((input_format == AUDIO_FORMAT_AC3) || (input_format == AUDIO_FORMAT_E_AC3)) {
-        dolby_ms12_drc_mode = DOLBY_DRC_RF_MODE;
-    } else {
+    int drc_mode = 0; int drc_cut = 0; int drc_boost = 0;
+    if (0 == aml_audio_get_dolby_drc_mode(&drc_mode, &drc_cut, &drc_boost))
+        dolby_ms12_drc_mode = (drc_mode == DDPI_UDC_COMP_LINE) ? DOLBY_DRC_LINE_MODE : DOLBY_DRC_RF_MODE;
+    //for mul-pcm
+    dolby_ms12_set_drc_boost(drc_boost);
+    dolby_ms12_set_drc_cut(drc_cut);
+    //for 2-channel downmix
+    dolby_ms12_set_drc_boost_system(drc_boost);
+    dolby_ms12_set_drc_cut_system(drc_cut);
+    if ((input_format != AUDIO_FORMAT_AC3) && (input_format != AUDIO_FORMAT_E_AC3)) {
         dolby_ms12_drc_mode = DOLBY_DRC_LINE_MODE;
     }
+
 
     /*set the associate audio format*/
     if (adev->dual_decoder_support == true) {
@@ -221,13 +232,15 @@ int get_the_dolby_ms12_prepared(
         out = aml_out;
     }
     adev->ms12_out = out;
-    ALOGI("%s adev->ms12_out =  %p", __func__, adev->ms12_out);
+    ALOGI("%s adev->ms12_out =  %p sys mixing =%d", __func__, adev->ms12_out, adev->system_app_mixing_status);
     /************end**************/
     /*set the system app sound mixing enable*/
     if (adev->continuous_audio_mode) {
-        adev->system_app_mixing_status = SYSTEM_APP_SOUND_MIXING_ON;
+        system_app_mixing_status = SYSTEM_APP_SOUND_MIXING_ON;
+    } else {
+        system_app_mixing_status = adev->system_app_mixing_status;
     }
-    dolby_ms12_set_system_app_audio_mixing(adev->system_app_mixing_status);
+    dolby_ms12_set_system_app_audio_mixing(system_app_mixing_status);
 
     //init the dolby ms12
     if (out->dual_output_flag) {
@@ -812,12 +825,12 @@ int set_system_app_mixing_status(struct aml_stream_out *aml_out, int stream_stat
         system_app_mixing_status = SYSTEM_APP_SOUND_MIXING_ON;
     }
 
+    adev->system_app_mixing_status = system_app_mixing_status;
+
     //when under continuous_audio_mode, system app sound mixing always on.
     if (adev->continuous_audio_mode) {
         system_app_mixing_status = SYSTEM_APP_SOUND_MIXING_ON;
     }
-
-    adev->system_app_mixing_status = system_app_mixing_status;
 
     if (adev->debug_flag) {
         ALOGI("%s stream-status %d set system-app-audio-mixing %d current %d continuous_audio_mode %d\n", __func__,

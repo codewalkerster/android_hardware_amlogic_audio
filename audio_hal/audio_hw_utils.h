@@ -58,6 +58,7 @@ int aml_audio_get_hdmi_latency_offset(int aformat);
 int aml_audio_get_speaker_latency_offset(int aformat);
 uint32_t tspec_diff_to_us(struct timespec tval_old,
         struct timespec tval_new);
+int aml_audio_get_dolby_drc_mode(int *drc_mode, int *drc_cut, int *drc_boost);
 void aml_audio_switch_output_mode(int16_t *buf, size_t bytes, AM_AOUT_OutputMode_t mode);
 
 #endif
