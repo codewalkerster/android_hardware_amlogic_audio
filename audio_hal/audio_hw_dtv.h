@@ -48,6 +48,10 @@
 #define ACODEC_FMT_MPEG2 27
 #define ACODEC_FMT_WMAVOI 28
 
+#define IS_DOBLBY_FORMAT(format) ((format == ACODEC_FMT_AC3) || (format == ACODEC_FMT_EAC3))
+#define IS_DTS_FORMAT(format) (format == ACODEC_FMT_DTS)
+
+
 //}
 
 enum {
