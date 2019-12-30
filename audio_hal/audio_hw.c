@@ -6612,6 +6612,16 @@ int do_output_standby_l(struct audio_stream *stream)
         }
     }
     aml_out->status = STREAM_STANDBY;
+    /*
+     *belive that audio is discontinuous in the dtv
+     *ignore the val of adev->continuous_audio_mode
+     */
+    if (adev->patch_src == SRC_DTV && adev->audio_patch != NULL) {
+        int dtv_format = adev->audio_patch->dtv_aformat;
+        if ((IS_DOBLBY_FORMAT(dtv_format) || IS_DTS_FORMAT(dtv_format)) &&
+            !aml_out->dual_output_flag && (AUDIO_FORMAT_PCM_16_BIT != get_output_format(out)))
+            aml_tinymix_set_spdif_format(AUDIO_FORMAT_PCM_16_BIT, aml_out);
+    }
 
     if (adev->continuous_audio_mode == 0) {
         // release buffers
