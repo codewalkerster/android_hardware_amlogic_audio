@@ -147,7 +147,7 @@ struct a2dp_stream_out {
     a2dp_state_t state;
     uint64_t frames_presented;  // frames written, never reset
     uint64_t frames_rendered;   // frames written, reset on standby
-    struct resample_para aml_resample;
+    aml_audio_resample_t *pstResampler;
     uint32_t rate;
     void * vir_buf_handle;
 

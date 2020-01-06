@@ -8991,6 +8991,7 @@ re_write:
                 int ret = -1;
                 struct dolby_ddp_dec *ddp_dec = &(adev->ddp);
 
+dcv_rewrite:
                 if (ddp_dec->status == 1) {
 #if defined(IS_ATOM_PROJECT)
                     /*for 32bit hal, raw data only support 16bit*/
@@ -9037,10 +9038,9 @@ re_write:
                     return return_bytes;
                 }
 
-                int read_bytes =  PLAYBACK_PERIOD_COUNT * DEFAULT_PLAYBACK_PERIOD_SIZE ;
-                if (patch && adev->patch_src == SRC_DTV)
-                    read_bytes = 6144;
-                bytes  = read_bytes;
+                bytes  = ddp_dec->outlen_pcm;
+                if (bytes != 6144)
+                    ALOGD("%s: ddp decoder size %d", __func__, bytes);
 
                 while (get_buffer_read_space(&ddp_dec->output_ring_buf) > (int)bytes) {
                     ring_buffer_read(&ddp_dec->output_ring_buf, ddp_dec->outbuf, bytes);
@@ -9056,8 +9056,10 @@ re_write:
                     }
                 }
 
-                //aml_out->frame_write_sum = (aml_out->input_bytes_size - ddp_dec->remain_size) / audio_stream_out_frame_size(stream);
-                //aml_out->last_frames_postion = aml_out->frame_write_sum - out_get_latency_frames (stream);
+                if (ddp_dec->curFrmSize <= ddp_dec->remain_size) {
+                    write_bytes = 0;
+                    goto dcv_rewrite;
+                }
                 return return_bytes;
             }
 

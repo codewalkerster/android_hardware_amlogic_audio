@@ -828,11 +828,18 @@ static int start_audio_datapath(struct audio_stream_out* stream) {
     /* check to see if delay reporting is enabled */
     out->enable_delay_reporting = !property_get_bool("persist.bluetooth.disabledelayreports", false);
     if (aml_out->hal_rate != out->rate) {
-        out->aml_resample.input_sr = aml_out->hal_rate;
-        out->aml_resample.output_sr = out->rate;
-        out->aml_resample.channels = 2;
-        resampler_init(&out->aml_resample);
+        audio_resample_config_t stResamplerConfig;
+        stResamplerConfig.aformat   = AUDIO_FORMAT_PCM_16_BIT;
+        stResamplerConfig.channels  = 2;
+        stResamplerConfig.input_sr  = aml_out->hal_rate;
+        stResamplerConfig.output_sr = aml_out->a2dp_out->rate;
+        int ret = aml_audio_resample_init(&out->pstResampler, AML_AUDIO_SIMPLE_RESAMPLE, &stResamplerConfig);
+        if (ret < 0) {
+            ALOGE("[%s:%d] Resampler is failed initialization !!!", __func__, __LINE__);
+            return -1;
+        }
     }
+    total_input_ns = 0;
     return 0;
 
 error:
@@ -861,6 +868,11 @@ static int stop_audio_datapath(struct a2dp_stream_out* out) {
     /* disconnect audio path */
     skt_disconnect(out->audio_fd);
     out->audio_fd = AUDIO_SKT_DISCONNECTED;
+
+    if (out->pstResampler) {
+        aml_audio_resample_close(out->pstResampler);
+        out->pstResampler = NULL;
+    }
     return 0;
 }
 
@@ -1216,7 +1228,7 @@ ssize_t a2dp_out_write(struct audio_stream_out* stream, const void* buffer, size
     int sent = -1;
     const void *out_buffer;
     size_t out_size = 0;
-    int frame_size = 4; //2ch 16bits
+    int frame_size = 4;
     size_t in_frames = bytes / frame_size;
     int i;
 #if defined(AUDIO_EFFECT_EXTERN_DEVICE)
@@ -1292,18 +1304,18 @@ ssize_t a2dp_out_write(struct audio_stream_out* stream, const void* buffer, size
     }
 
     if (aml_out->hal_rate != out->rate) {
-        size_t out_frames = 0;
-        out_frames = resample_process(&out->aml_resample, in_frames, (int16_t*) data_buffer, (int16_t*) data_buffer);
-        if (out_frames == 0) {
-            goto finish;
+        if (out->pstResampler == NULL) {
+            ALOGE("[%s:%d] Resampler is uninitialized !!!", __func__, __LINE__);
+            return -1;
         }
-        out_size = out_frames * frame_size;
-        in_frames = out_frames;
-        out_buffer = data_buffer;
+        aml_audio_resample_process(out->pstResampler, data_buffer, in_frames * frame_size);
+        memcpy(data_buffer, out->pstResampler->resample_buffer, out->pstResampler->resample_size);
+        out_size = out->pstResampler->resample_size;
+        in_frames = out->pstResampler->resample_size / frame_size;
     } else {
-        out_buffer = data_buffer;
         out_size = bytes;
     }
+    out_buffer = data_buffer;
 
     // Mix the stereo into mono if necessary
     if (out->is_stereo_to_mono) {
@@ -1436,6 +1448,7 @@ int a2dp_output_enable(struct audio_stream_out* stream) {
         ALOGE("a2dp_output_enable a2dp_stream_out realloc error");
         return -ENOMEM;
     }
+    memset(out, 0, sizeof(struct a2dp_stream_out));
     aml_out->a2dp_out = out;
     //aml_alsa_output_close(stream);
     pthread_mutex_init(&out->mutex, NULL);
