@@ -5208,8 +5208,8 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
                 adev->reset_dtv_audio = 1;
             }
         } else if (val & AUDIO_DEVICE_OUT_ALL_A2DP) {
-            //adev->a2dp_updated = 1;
-            //adev->out_device |= val;
+            adev->a2dp_updated = 1;
+            adev->out_device |= val;
             ALOGI("adev_set_parameters a2dp connect: %x, device=%x\n", val, adev->out_device);
         }
         goto exit;
@@ -8153,7 +8153,10 @@ void config_output(struct audio_stream_out *stream)
                 ddp_dec->digital_raw = 0;
                 break;
             }
-
+            if (aml_out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
+                ALOGI("disable raw output when a2dp device\n");
+                ddp_dec->digital_raw = 0;
+            }
             ALOGI("%s:%d ddp_dec->digital_raw:%d, dcvlib_bypass_enable:%d, dual_output_flag: %d", __func__, __LINE__,
                 ddp_dec->digital_raw, adev->dcvlib_bypass_enable,is_dual_output_stream(stream));
             if (adev->dcvlib_bypass_enable != 1) {
