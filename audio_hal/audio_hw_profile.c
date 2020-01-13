@@ -118,6 +118,7 @@ char*  get_hdmi_sink_cap(const char *keys,audio_format_t format,struct aml_arc_h
             }
             if (mystrstr(infobuf, "DTS-HD")) {
                 size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_DTS|AUDIO_FORMAT_DTS_HD");
+                p_hdmi_descs->dts_fmt.is_support = 1;
             } else if (mystrstr(infobuf, "DTS")) {
                 size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_DTS");
                 p_hdmi_descs->dts_fmt.is_support = 1;
