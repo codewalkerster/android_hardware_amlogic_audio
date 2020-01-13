@@ -112,6 +112,28 @@ static inline bool is_digital_raw_format(audio_format_t format)
     }
 }
 
+static inline bool is_dolby_format(audio_format_t format) {
+    switch (format) {
+    case AUDIO_FORMAT_AC3:
+    case AUDIO_FORMAT_E_AC3:
+    case AUDIO_FORMAT_DOLBY_TRUEHD:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static inline bool is_dts_format(audio_format_t format) {
+    switch (format) {
+    case AUDIO_FORMAT_DTS:
+    case AUDIO_FORMAT_DTS_HD:
+        return true;
+    default:
+        return false;
+    }
+}
+
+
 static inline stream_usecase_t attr_to_usecase(uint32_t devices __unused,
         audio_format_t format, uint32_t flags)
 {
