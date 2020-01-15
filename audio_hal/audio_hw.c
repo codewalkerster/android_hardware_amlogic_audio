@@ -6918,9 +6918,7 @@ audio_format_t get_output_format (struct audio_stream_out *stream)
     struct dolby_ms12_desc *ms12 = & (adev->ms12);
 
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
-        if (ms12->dolby_ms12_enable) {
             output_format = adev->sink_format;
-        }
     } else if (eDolbyDcvLib == adev->dolby_lib_type) {
         if (adev->hdmi_format > 0) {
             output_format = adev->sink_format;
