@@ -8230,10 +8230,11 @@ void config_output(struct audio_stream_out *stream)
             //STB case
             if (!adev->is_TV) {
                 set_stream_dual_output(stream, false);
+                adev->dtslib_bypass_enable = 1;
             } else {
                 set_stream_dual_output(stream, true);
+                adev->dtslib_bypass_enable = 0;
             }
-            adev->dtslib_bypass_enable = 0;
             adev->optical_format = AUDIO_FORMAT_AC3;
             break;
         case AUTO:
