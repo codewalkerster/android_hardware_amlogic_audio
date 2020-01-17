@@ -849,7 +849,7 @@ static void dtv_adjust_output_clock(struct aml_audio_patch * patch, int direct, 
             return;
         }
         dtv_adjust_i2s_output_clock(patch, direct, patch->i2s_step_clk);
-    } else if (!aml_dev->bHDMIARCon) {
+    } else if (!aml_dev->bHDMIARCon && aml_dev->is_TV) {
         if (patch->dtv_default_i2s_clock > DEFAULT_SPDIF_PLL_DDP_CLOCK * 4 ||
             patch->dtv_default_i2s_clock == 0) {
             return;
