@@ -626,6 +626,7 @@ static int out_get_presentation_position_port(
     struct amlAudioMixer *audio_mixer = sm->mixerData;
     uint64_t frames_written_hw = out->last_frames_postion;
     int ret = 0;
+    int frame_latency = 0;
 
     if (!frames || !timestamp) {
         return -EINVAL;
@@ -647,7 +648,25 @@ static int out_get_presentation_position_port(
         *frames = frames_written_hw;
         *timestamp = out->timestamp;
     }
-    ALOGV("%s() out:%p frames:%"PRIu64", sec:%ld, nanosec:%ld, ret:%d\n",
+    if (adev->active_outport == OUTPORT_HDMI) {
+        int hdmi_latency_ms = 0;
+        if (adev->audio_type == EAC3 || adev->audio_type == AC3)
+            hdmi_latency_ms = aml_audio_get_hdmi_latency_offset(out->hal_internal_format);
+        frame_latency = hdmi_latency_ms * (out->hal_rate / 1000);
+        ALOGV("hdmi_latency_ms %d",hdmi_latency_ms);
+        *frames += frame_latency ;
+        if (*frames < 0)
+            ret = -EINVAL;
+    } else if (adev->active_outport == OUTPORT_SPEAKER ) {
+        int speaker_latency_ms = 0;
+        if (adev->audio_type == EAC3 || adev->audio_type == AC3)
+            speaker_latency_ms = aml_audio_get_speaker_latency_offset(out->hal_internal_format);
+        frame_latency = speaker_latency_ms * (out->hal_rate / 1000);
+        *frames += frame_latency ;
+         if (*frames < 0)
+            ret = -EINVAL;
+    }
+    ALOGI("%s() out:%p frames:%"PRIu64", sec:%ld, nanosec:%ld, ret:%d\n",
             __func__, out, *frames, timestamp->tv_sec, timestamp->tv_nsec, ret);
     return ret;
 }

@@ -453,7 +453,7 @@ static int mixer_update_tstamp(struct amlAudioMixer *audio_mixer)
     if (in_port == NULL || out_port == NULL)
         return 0;
 
-    if (out_port->pcm_handle)
+    if (out_port->pcm_handle == NULL)
         return 0;
 
     if (pcm_get_htimestamp(out_port->pcm_handle, &avail, &in_port->timestamp) == 0) {

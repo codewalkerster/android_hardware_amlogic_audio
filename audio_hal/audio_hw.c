@@ -800,7 +800,8 @@ static int start_output_stream_direct (struct aml_stream_out *out)
         //out->raw_61937_frame_size = 4;
     }
     out->config.avail_min = 0;
-    set_codec_type (codec_type);
+    //set_codec_type (codec_type);
+    aml_tinymix_set_spdif_format(out->hal_internal_format,out);
     /* mute spdif when dd+ output */
     if (codec_type == TYPE_EAC3) {
         aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_SPDIF_MUTE, 1);
@@ -1231,7 +1232,7 @@ static int do_output_standby_direct (struct aml_stream_out *out)
         }
     }
     out->pause_status = false;
-    set_codec_type (TYPE_PCM);
+    aml_tinymix_set_spdif_format(AUDIO_FORMAT_PCM_16_BIT, out);
     aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_SPDIF_MUTE, 0);
     /* clear the hdmitx channel config to default */
     if (out->multich == 6) {
@@ -1288,7 +1289,7 @@ static int out_standby_direct (struct audio_stream *stream)
         }
     }
     out->pause_status = false;
-    set_codec_type (TYPE_PCM);
+    aml_tinymix_set_spdif_format(AUDIO_FORMAT_PCM_16_BIT, out);
     aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_SPDIF_MUTE, 0);
 
     if (out->need_convert) {
@@ -3312,6 +3313,13 @@ static int out_get_render_position (const struct audio_stream_out *stream,
     struct aml_audio_device *adev = out->dev;
     uint64_t  dsp_frame_int64 = out->last_frames_postion;
     *dsp_frames = (uint32_t)(dsp_frame_int64 & 0xffffffff);
+    int frame_latency = 0;
+
+    if (*dsp_frames == 0) {
+        ALOGV("%s(), not ready yet", __func__);
+        return -EINVAL;
+    }
+
     if (out->flags & AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO) {
         //dsp_frame_int64 = out->last_frames_postion ;
         //*dsp_frames = (uint32_t)(dsp_frame_int64 & 0xffffffff);
@@ -3337,18 +3345,32 @@ static int out_get_render_position (const struct audio_stream_out *stream,
         }
     }
 
-    if (adev->active_outport == OUTPORT_HDMI_ARC && !adev->continuous_audio_mode) {
-        int arc_latency_ms = 0;
-        int frame_latency = 0;
-        arc_latency_ms = aml_audio_get_arc_latency_offset(adev->sink_format);
-        //TODO we support it is 1 48K audio
-        frame_latency = arc_latency_ms * 48;
-        *dsp_frames += frame_latency;
+    if (!adev->continuous_audio_mode) {
+        if (adev->active_outport == OUTPORT_HDMI_ARC) {
+            int arc_latency_ms = 0;
+            if (adev->audio_type == EAC3 || adev->audio_type == AC3)
+                arc_latency_ms = aml_audio_get_arc_latency_offset(adev->sink_format);
+            frame_latency = arc_latency_ms * (out->hal_rate / 1000);
+            *dsp_frames += frame_latency;
+        } else if (adev->active_outport == OUTPORT_HDMI) {
+            int hdmi_latency_ms = 0;
+            if (adev->audio_type == EAC3 || adev->audio_type == AC3)
+                hdmi_latency_ms = aml_audio_get_hdmi_latency_offset(out->hal_internal_format);
+            frame_latency = hdmi_latency_ms * (out->hal_rate / 1000);
+            *dsp_frames += frame_latency ;
+        } else if (adev->active_outport == OUTPORT_SPEAKER) {
+            int speaker_latency_ms = 0;
+            if (adev->audio_type == EAC3 || adev->audio_type == AC3)
+                speaker_latency_ms = aml_audio_get_speaker_latency_offset(out->hal_internal_format);
+            frame_latency = speaker_latency_ms * (out->hal_rate / 1000);
+            *dsp_frames += frame_latency ;
+        }
     }
+
     if (*dsp_frames < 0)
-        *dsp_frames = 0;
+        return -EINVAL;
     if (adev->debug_flag) {
-        ALOGI("out_get_render_position %d \n", *dsp_frames);
+        ALOGI("out_get_render_position %d frame_latency %d \n", *dsp_frames,frame_latency);
     }
     return 0;
 }
@@ -3449,6 +3471,7 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
     uint64_t frames_written_hw = out->last_frames_postion;
+    int frame_latency = 0;
     if (!frames || !timestamp) {
         ALOGI("%s, !frames || !timestamp\n", __FUNCTION__);
         return -EINVAL;
@@ -3478,17 +3501,34 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
             *timestamp = adev->ms12.timestamp;
         }
     }
-    if (adev->active_outport == OUTPORT_HDMI_ARC && !adev->continuous_audio_mode) {
-        int arc_latency_ms = 0;
-        int frame_latency = 0;
-        arc_latency_ms = aml_audio_get_arc_latency_offset(adev->sink_format);
-        //TODO we support it is 1 48K audio
-        frame_latency = arc_latency_ms * 48;
-        *frames += frame_latency;
+
+    if (!adev->continuous_audio_mode) {
+        if (adev->active_outport == OUTPORT_HDMI_ARC) {
+            int arc_latency_ms = 0;
+            if (adev->audio_type == EAC3 || adev->audio_type == AC3)
+                arc_latency_ms = aml_audio_get_arc_latency_offset(adev->sink_format);
+            frame_latency = arc_latency_ms * (out->hal_rate / 1000);
+            *frames += frame_latency;
+        } else if (adev->active_outport == OUTPORT_HDMI) {
+            int hdmi_latency_ms = 0;
+            if (adev->audio_type == EAC3 || adev->audio_type == AC3)
+                hdmi_latency_ms = aml_audio_get_hdmi_latency_offset(out->hal_internal_format);
+            frame_latency = hdmi_latency_ms * (out->hal_rate / 1000);
+            *frames += frame_latency ;
+        } else if (adev->active_outport == OUTPORT_SPEAKER) {
+            int speaker_latency_ms = 0;
+            if (adev->audio_type == EAC3 || adev->audio_type == AC3)
+                speaker_latency_ms = aml_audio_get_speaker_latency_offset(out->hal_internal_format);
+            frame_latency = speaker_latency_ms * (out->hal_rate / 1000);
+            *frames += frame_latency ;
+        }
     }
+
     if (*frames < 0)
-        *frames = 0;
+        return -EINVAL;
+
     if (adev->debug_flag) {
+        ALOGI("frames_written_hw %llu postion %llu frame_latency %d",frames_written_hw ,*frames,frame_latency);
         ALOGI("out_get_presentation_position out %p %"PRIu64", sec = %ld, nanosec = %ld\n", out, *frames, timestamp->tv_sec, timestamp->tv_nsec);
     }
     return 0;
@@ -7831,9 +7871,7 @@ ssize_t hw_write (struct audio_stream_out *stream
     }
     latency_frames = out_get_latency_frames(stream);
     pthread_mutex_unlock(&adev->alsa_pcm_lock);
-    if (output_format == AUDIO_FORMAT_E_AC3) {
-        latency_frames /= 4;
-    }
+
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
         /*it is the main alsa write function we need notify that to all sub-stream */
         adev->ms12.latency_frame = latency_frames;
@@ -8368,6 +8406,7 @@ ssize_t mixer_main_buffer_write (struct audio_stream_out *stream, const void *bu
     int write_retry = 0;
     static int pre_hdmi_out_format = 0;
     effect_descriptor_t tmpdesc;
+    uint32_t latency_frames = 0;
     audio_hwsync_t *hw_sync = aml_out->hwsync;
     if (adev->debug_flag) {
         ALOGI("%s:%d out:%p write in %zu,format:0x%x,ms12_ott:%d,conti:%d,hw_sync:%d", __FUNCTION__, __LINE__,
@@ -9012,11 +9051,7 @@ dcv_rewrite:
                 if (ret < 0 ) {
                     if (adev->debug_flag)
                         ALOGE("%s(), %d decoder error, ret %d", __func__, __LINE__, ret);
-                    if (aml_out->frame_write_sum > 0 ) {
-                        //aml_out->frame_write_sum = (aml_out->input_bytes_size - ddp_dec->remain_size)  / audio_stream_out_frame_size(stream);
-                        //aml_out->last_frames_postion = aml_out->frame_write_sum  - out_get_latency_frames (stream);
-                    }
-                    return return_bytes;
+                    goto exit;
                 }
                 /*wirte raw data*/
                 if (ddp_dec->outlen_raw > 0 && is_dual_output_stream(stream)) {/*dual output: pcm & raw*/
@@ -9125,6 +9160,16 @@ exit:
             aml_out->timestamp = adev->ms12.timestamp;
             //clock_gettime(CLOCK_MONOTONIC, &aml_out->timestamp);
             aml_out->last_frames_postion = adev->ms12.last_frames_postion;
+        }
+    } else if (eDolbyDcvLib  == adev->dolby_lib_type) {
+        if (aml_out->hal_internal_format == AUDIO_FORMAT_AC3 ||
+            aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3) {
+            latency_frames = out_get_latency_frames(stream);
+            if (aml_out->input_bytes_size >= latency_frames) {
+                aml_out->last_frames_postion = aml_out->input_bytes_size / audio_stream_out_frame_size(stream) - latency_frames;
+            } else {
+                aml_out->last_frames_postion = 0;
+            }
         }
     }
 

@@ -45,6 +45,7 @@
 #include "amlAudioMixer.h"
 #include <audio_utils/primitives.h>
 #include "audio_a2dp_hw.h"
+#include "dolby_lib_api.h"
 
 #ifdef LOG_NDEBUG_FUNCTION
 #define LOGFUNC(...) ((void)0)
@@ -428,9 +429,21 @@ int aml_audio_get_arc_latency_offset(int aformat)
     int ret = -1;
     int latency_ms = 0;
     char *prop_name = NULL;
-	(void)aformat;
-    prop_name = "media.audio.hal.arc_latency.ddp";
-    latency_ms = -40;
+
+    if (aformat == AUDIO_FORMAT_PCM_16_BIT || aformat == AUDIO_FORMAT_PCM_32_BIT) {
+         prop_name = "media.audio.hal.arc_latency.pcm";
+         latency_ms = -120;
+    } else if (aformat == AUDIO_FORMAT_E_AC3) {
+         prop_name = "media.audio.hal.arc_latency.ddp";
+         latency_ms = -80;
+    } else if (aformat == AUDIO_FORMAT_AC3) {
+         prop_name = "media.audio.hal.arc_latency.dd";
+         latency_ms = -60;
+    } else {
+         prop_name = "media.audio.hal.arc_latency.default";
+         latency_ms = 0;
+    }
+
     ret = property_get(prop_name, buf, NULL);
     if (ret > 0) {
         latency_ms = atoi(buf);
@@ -508,26 +521,53 @@ static bool is_4x_rate_fmt(int codec_type)
 uint32_t out_get_latency_frames(const struct audio_stream_out *stream)
 {
     const struct aml_stream_out *out = (const struct aml_stream_out *)stream;
+    struct aml_audio_device *adev = out->dev;
     snd_pcm_sframes_t frames = 0;
     uint32_t whole_latency_frames;
     int ret = 0;
     int codec_type = get_codec_type(out->hal_internal_format);
     int mul = 1;
-    if (out->dual_output_flag) {
-        if (out->hal_internal_format == AUDIO_FORMAT_E_AC3)
-            mul = 1;
-    } else if (is_4x_rate_fmt(codec_type))
-        mul = 4;
+    int ringbuf_latency_frames = 0;
+    int decoder_latency_frames = 0;
+    if (adev->is_TV) {
+        if (eDolbyDcvLib  == adev->dolby_lib_type) {
+            if (adev->sink_format == AUDIO_FORMAT_AC3 ||
+               adev->sink_format == AUDIO_FORMAT_E_AC3) {
+                decoder_latency_frames = adev->ddp.remain_size / 4;
+            } else if (adev->sink_format == AUDIO_FORMAT_PCM_16_BIT) {
+                if (out->hal_internal_format == AUDIO_FORMAT_AC3) {
+                    decoder_latency_frames = adev->ddp.remain_size / 4;
+                    ringbuf_latency_frames = get_buffer_read_space(&adev->ddp.output_ring_buf) / 4;
+                } else if (out->hal_internal_format == AUDIO_FORMAT_E_AC3) {
+                    decoder_latency_frames = adev->ddp.remain_size / 4;
+                    ringbuf_latency_frames = get_buffer_read_space(&adev->ddp.output_ring_buf);
+                }
+            }
+        }
+        if (out->hal_format == AUDIO_FORMAT_IEC61937) {
+             mul = 1;
+        } else {
+             if (out->hal_internal_format == AUDIO_FORMAT_E_AC3 &&
+                adev->sink_format == AUDIO_FORMAT_E_AC3)
+                mul = 4;
+        }
+
+    } else {
+        if (is_4x_rate_fmt(codec_type))
+            mul = 4;
+    }
 
     whole_latency_frames = out->config.period_size * out->config.period_count;
     if (!out->pcm || !pcm_is_ready(out->pcm)) {
         return whole_latency_frames / mul;
     }
+
     ret = pcm_ioctl(out->pcm, SNDRV_PCM_IOCTL_DELAY, &frames);
     if (ret < 0) {
         return whole_latency_frames / mul;
     }
-    return frames / mul;
+
+    return frames / mul + ringbuf_latency_frames + decoder_latency_frames;
 }
 
 int aml_audio_get_spdif_tuning_latency(void)
@@ -676,8 +716,39 @@ int aml_audio_get_hdmi_latency_offset(int aformat)
 
     (void)aformat;
     // PCM latency
-    prop_name = "media.audio.hal.hdmi_latency.pcm";
-    latency_ms = -52;
+
+    if (aformat == AUDIO_FORMAT_PCM_16_BIT || aformat == AUDIO_FORMAT_PCM_32_BIT) {
+        prop_name = "media.audio.hal.hdmi_latency.pcm";
+        latency_ms = -20;
+    } else {
+        prop_name = "media.audio.hal.hdmi_latency.raw";
+        latency_ms = -80;
+    }
+    ret = property_get(prop_name, buf, NULL);
+    if (ret > 0)
+    {
+        latency_ms = atoi(buf);
+    }
+
+    return latency_ms;
+}
+
+int aml_audio_get_speaker_latency_offset(int aformat)
+{
+    char buf[PROPERTY_VALUE_MAX];
+    char *prop_name = NULL;
+    int ret = -1;
+    int latency_ms = 0;
+
+    (void)aformat;
+    // PCM latency
+    if (aformat == AUDIO_FORMAT_PCM_16_BIT || aformat == AUDIO_FORMAT_PCM_32_BIT) {
+        prop_name = "media.audio.hal.speaker_latency.pcm";
+        latency_ms = -20;
+    } else {
+        prop_name = "media.audio.hal.speaker_latency.raw";
+        latency_ms = -80;
+    }
     ret = property_get(prop_name, buf, NULL);
     if (ret > 0)
     {
