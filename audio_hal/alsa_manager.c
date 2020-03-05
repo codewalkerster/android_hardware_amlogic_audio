@@ -430,15 +430,11 @@ write:
     //    aml_audio_start_trigger(stream);
     //    adev->first_apts_flag = false;
     //}
-#if 0
-    FILE *fp1 = fopen("/data/pcm_write.pcm", "a+");
-    if (fp1) {
-        int flen = fwrite((char *)buffer, 1, bytes, fp1);
-        //ALOGD("flen = %d---outlen=%d ", flen, out_frames * frame_size);
-        fclose(fp1);
-    } else {
-        ALOGE("could not open file:/data/pcm_write.pcm");
-    }
+#if 1
+    if (getprop_bool("media.audiohal.outdump")) {
+        aml_audio_dump_audio_bitstreams("/data/alsa_pcm_write.pcm",
+            buffer, bytes);
+     }
 #endif
 
     // SWPL-412, when input source is DTV, and UI set "parental_control_av_mute" command to audio hal
