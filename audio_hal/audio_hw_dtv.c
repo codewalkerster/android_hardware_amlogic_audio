@@ -72,6 +72,7 @@
 #define TSYNC_FIRST_VPTS "/sys/class/tsync/firstvpts"
 #define TSYNC_AUDIO_MODE "/sys/class/tsync_pcr/tsync_audio_mode"
 #define TSYNC_AUDIO_LEVEL "/sys/class/tsync_pcr/tsync_audio_level"
+#define TSYNC_VIDEO_DISCONT "/sys/class/tsync_pcr/tsync_vdiscontinue"
 #define TSYNC_LAST_CHECKIN_APTS "/sys/class/tsync_pcr/tsync_last_discontinue_checkin_apts"
 #define TSYNC_PCR_DEBUG "/sys/class/tsync_pcr/tsync_pcr_debug"
 #define TSYNC_APTS_DIFF "/sys/class/tsync_pcr/tsync_pcr_apts_diff"
@@ -391,6 +392,22 @@ static void clean_dtv_patch_pts(struct aml_audio_patch *patch)
         patch->last_apts = 0;
         patch->last_pcrpts = 0;
     }
+}
+
+static int get_video_discontinue(void)
+{
+    char tempbuf[128];
+    int pcr_vdiscontinue = 0, ret;
+    ret = aml_sysfs_get_str(TSYNC_VIDEO_DISCONT, tempbuf, sizeof(tempbuf));
+    if (ret > 0) {
+        ret = sscanf(tempbuf, "%d\n", &pcr_vdiscontinue);
+    }
+    if (ret > 0 && pcr_vdiscontinue > 0) {
+        pcr_vdiscontinue = (pcr_vdiscontinue & 0xff);
+    } else {
+        pcr_vdiscontinue = 0;
+    }
+    return pcr_vdiscontinue;
 }
 
 static int get_audio_discontinue(struct aml_audio_patch *patch)
@@ -924,27 +941,7 @@ static int dtv_calc_abuf_level(struct aml_audio_patch *patch, struct aml_stream_
 
 static void dtv_check_audio_reset(struct aml_audio_device *aml_dev)
 {
-    unsigned int first_checkinapts = 0xffffffff;
-    unsigned int demux_pcr = 0xffffffff;
-    int ret, audio_reset;
-    char buff[32];
-    memset(buff, 0, 32);
-    ret = aml_sysfs_get_str(TSYNC_FIRSTCHECKIN_APTS, buff, sizeof(buff));
-    if (ret > 0) {
-        ret = sscanf(buff, "0x%x\n", &first_checkinapts);
-    } else {
-        return;
-    }
-    ret = aml_sysfs_get_str(TSYNC_DEMUX_PCR, buff, sizeof(buff));
-    if (ret > 0) {
-        ret = sscanf(buff, "0x%x\n", &demux_pcr);
-    } else {
-        return;
-    }
-    if (first_checkinapts == 0xffffffff) {
-        return;
-    }
-    //ALOGI("demux_pcr %x first_checkinapts %x,reset %d", demux_pcr, first_checkinapts,aml_dev->reset_dtv_audio);
+    ALOGI("reset_dtv_audio = %d\n", aml_dev->reset_dtv_audio);
     if (aml_dev->reset_dtv_audio) {
         ALOGI("dtv_audio_reset %d", aml_dev->reset_dtv_audio);
         aml_sysfs_set_str(AMSTREAM_AUDIO_PORT_RESET, "1");
@@ -1202,6 +1199,8 @@ static void dtv_audio_gap_monitor(struct aml_audio_patch *patch)
 {
     char buff[32];
     unsigned int first_checkinapts = 0;
+    int cur_pts_diff = 0;
+    int audio_discontinue = 0;
     int ret;
     if (!patch) {
         return;
@@ -1209,7 +1208,20 @@ static void dtv_audio_gap_monitor(struct aml_audio_patch *patch)
     if (patch->tsync_mode != TSYNC_MODE_PCRMASTER) {
         return;
     }
-    if (get_audio_discontinue(patch) && patch->dtv_audio_tune == AUDIO_RUNNING) {
+    /*[SE][BUG][OTT-7302][zhizhong.zhang] detect audio discontinue by pts-diff*/
+    if ((patch->last_apts != 0  && patch->last_apts != (unsigned long) - 1) &&
+        (patch->last_pcrpts != 0  && patch->last_pcrpts != (unsigned long) - 1)) {
+        cur_pts_diff = patch->last_pcrpts - patch->last_apts;
+        if (audio_discontinue == 0 &&
+            abs(cur_pts_diff) > DTV_PTS_CORRECTION_THRESHOLD * 5 &&
+            get_video_discontinue() != 1) {
+            audio_discontinue = 1;
+            ALOGV("cur_pts_diff=%d, diff=%d, apts=0x%x, pcrpts=0x%x\n",
+                cur_pts_diff, cur_pts_diff/90, patch->last_apts, patch->last_pcrpts);
+        } else
+            audio_discontinue = 0;
+    }
+    if ((audio_discontinue || get_audio_discontinue(patch)) && patch->dtv_audio_tune == AUDIO_RUNNING) {
         //ALOGI("%s size %d", __FUNCTION__, get_buffer_read_space(&(patch->aml_ringbuffer)));
         ret = aml_sysfs_get_str(TSYNC_LAST_CHECKIN_APTS, buff, sizeof(buff));
         if (ret > 0) {
@@ -1218,6 +1230,9 @@ static void dtv_audio_gap_monitor(struct aml_audio_patch *patch)
         if (first_checkinapts) {
             patch->dtv_audio_tune = AUDIO_BREAK;
             ALOGI("audio discontinue, audio_break");
+        } else if (audio_discontinue == 1) {
+            patch->dtv_audio_tune = AUDIO_BREAK;
+            ALOGI("audio_discontinue set 1, tune -> AUDIO_BREAK\n");
         }
     }
 }
@@ -1380,7 +1395,7 @@ static int dtv_audio_tune_check(struct aml_audio_patch *patch, int cur_pts_diff,
     char tempbuf[128];
     struct audio_hw_device *adev = patch->dev;
     struct aml_audio_device *aml_dev = (struct aml_audio_device *) adev;
-    if (!patch || !patch->dev || aml_dev->tuner2mix_patch == 1 || (aml_dev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP)) {
+    if (!patch || !patch->dev || aml_dev->tuner2mix_patch == 1) {
         patch->dtv_audio_tune = AUDIO_RUNNING;
         return 1;
     }

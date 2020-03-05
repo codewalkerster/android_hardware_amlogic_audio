@@ -306,7 +306,8 @@ int dtv_assoc_audio_start(unsigned int handle, int pid, int fmt)
     int ret = -1;
     pthread_mutex_lock(&assoc_mutex);
     dtv_assoc_audio *param = get_assoc_audio();
-    ALOGI("%s, pid=%d, fmt= %d", __FUNCTION__, pid, fmt);
+    if (VALID_PID(pid))
+        ALOGI("%s, pid=%d, fmt= %d", __FUNCTION__, pid, fmt);
     if (handle == 0 || param->bufinited == 0) {
         ALOGI("%s, buffer was not inited, the handle is %d,return", __FUNCTION__, handle);
     } else if (VALID_PID(pid) && param->assoc_enable == DTV_ASSOC_STAT_DISABLE) {
@@ -332,7 +333,8 @@ int dtv_assoc_audio_start(unsigned int handle, int pid, int fmt)
         param->assoc_enable = DTV_ASSOC_STAT_DISABLE;
         audio_ad_set_source(DTV_ASSOC_STAT_DISABLE, param->sub_apid, param->sub_afmt, NULL);
     } else {
-        ALOGI("%s, invaled", __FUNCTION__);
+        if (VALID_PID(pid))
+            ALOGI("%s, invaled", __FUNCTION__);
     }
     pthread_mutex_unlock(&assoc_mutex);
     if (ret == 0) {

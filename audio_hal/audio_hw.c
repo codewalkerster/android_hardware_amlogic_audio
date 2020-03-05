@@ -10909,6 +10909,8 @@ static int adev_release_audio_patch(struct audio_hw_device *dev,
         if (aml_dev->patch_src == SRC_DTV) {
             ALOGI("patch src == DTV now line %d \n", __LINE__);
             aml_dev->audio_patching = 0;
+            aml_dev->reset_dtv_audio = 1;
+            ALOGI("device->device,reset the dtv audio port\n");
             release_dtv_patch(aml_dev);
         }
 #endif
