@@ -83,6 +83,7 @@
 #define TSYNC_LASTCHECKIN_VPTS "/sys/class/tsync/checkin_firstvpts"
 #define TSYNC_PCR_LANTCY        "/sys/class/tsync/pts_latency"
 #define AMSTREAM_AUDIO_PORT_RESET   "/sys/class/amstream/reset_audio_port"
+#define VIDEO_FIRST_FRAME_SHOW  "/sys/module/amvideo/parameters/first_frame_toggled"
 
 #define PATCH_PERIOD_COUNT 4
 #define DTV_PTS_CORRECTION_THRESHOLD (90000 * 30 / 1000)
@@ -1056,6 +1057,11 @@ static bool dtv_firstapts_lookup_over(struct aml_audio_patch *patch,
             ALOGI("demux pcr not set, wait, tsync_mode=%d, use_tsdemux_pcr=%d\n", dtv_get_tsync_mode(), get_dtv_pcr_sync_mode());
             return false;
         }
+
+        if (patch->dtv_has_video && getprop_bool("vendor.media.audio.syncshow")) {
+            aml_dev->start_mute_flag = 1;
+            ALOGI("start_mute_flag 1.");
+        }
         if (first_checkinapts > demux_pcr) {
             unsigned diff = first_checkinapts - demux_pcr;
             if (diff  < AUDIO_PTS_DISCONTINUE_THRESHOLD) {
@@ -1816,12 +1822,27 @@ void dtv_avsync_process(struct aml_audio_patch* patch, struct aml_stream_out* st
 {
     unsigned long pts ;
     int audio_output_delay = 0;
+    unsigned int pcrpts, firstvpts;
     ring_buffer_t *ringbuffer = &(patch->aml_ringbuffer);
     struct audio_hw_device *dev = patch->dev;
     struct aml_audio_device *aml_dev = (struct aml_audio_device *)dev;
     if (patch->dtv_decoder_state != AUDIO_DTV_PATCH_DECODER_STATE_RUNING) {
         return;
     }
+
+    get_sysfs_uint(TSYNC_PCRSCR, &pcrpts);
+    get_sysfs_uint(TSYNC_FIRST_VPTS, &firstvpts);
+
+    if (patch->show_first_frame == 0) {
+        patch->show_first_frame = get_sysfs_int(VIDEO_FIRST_FRAME_SHOW);
+        ALOGI("dtv_avsync_process: patch->show_first_frame=%d, firstvpts=0x%x, pcrpts=0x%x, cache:%dms",
+               patch->show_first_frame, firstvpts, pcrpts, (int)(firstvpts - pcrpts)/90);
+    }
+    if (aml_dev->start_mute_flag && ((firstvpts != 0 && pcrpts + 10*90 > firstvpts) || patch->show_first_frame)) {
+        ALOGI("start_mute_flag 0.");
+        aml_dev->start_mute_flag = 0;
+    }
+
     patch->dtv_pcr_mode = get_dtv_pcr_sync_mode();
     aml_dev->audio_discontinue = get_audio_discontinue(patch);
 

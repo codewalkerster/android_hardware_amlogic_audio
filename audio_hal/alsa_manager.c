@@ -489,7 +489,7 @@ write:
             adev->discontinue_mute_flag = 0;
             adev->no_underrun_count = 0;
         }
-        if (adev->patch_src == SRC_DTV && adev->discontinue_mute_flag) {
+        if (adev->patch_src == SRC_DTV && (adev->discontinue_mute_flag || adev->start_mute_flag)) {
             memset(buffer, 0x0, bytes);
         }
     }
