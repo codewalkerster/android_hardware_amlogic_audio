@@ -552,13 +552,9 @@ uint32_t out_get_latency_frames(const struct audio_stream_out *stream)
                 }
             }
         }
-        if (out->hal_format == AUDIO_FORMAT_IEC61937) {
-             mul = 1;
-        } else {
-             if (out->hal_internal_format == AUDIO_FORMAT_E_AC3 &&
-                adev->sink_format == AUDIO_FORMAT_E_AC3)
-                mul = 4;
-        }
+
+        if (adev->sink_format == AUDIO_FORMAT_E_AC3)
+            mul = 4;
 
     } else {
         if (is_4x_rate_fmt(codec_type))
