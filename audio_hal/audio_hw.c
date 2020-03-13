@@ -6739,7 +6739,10 @@ int do_output_standby_l(struct audio_stream *stream)
      */
     if (adev->patch_src == SRC_DTV && adev->audio_patch != NULL) {
         int dtv_format = adev->audio_patch->dtv_aformat;
-        if ((IS_DOBLBY_FORMAT(dtv_format) || IS_DTS_FORMAT(dtv_format)) &&
+        ALOGD("dtv_format: %#x", dtv_format);
+        ALOGI("hal format=0x%x internal format=0x%x",aml_out->hal_format, aml_out->hal_internal_format);
+        if (!audio_is_linear_pcm(aml_out->hal_internal_format) &&
+            (IS_DOBLBY_FORMAT(dtv_format) || IS_DTS_FORMAT(dtv_format)) &&
             !aml_out->dual_output_flag && (AUDIO_FORMAT_PCM_16_BIT != get_output_format(out)))
             aml_tinymix_set_spdif_format(AUDIO_FORMAT_PCM_16_BIT, aml_out);
     }
