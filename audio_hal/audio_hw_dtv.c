@@ -1055,8 +1055,7 @@ static bool dtv_firstapts_lookup_over(struct aml_audio_patch *patch,
             return false;
         }
 
-        char value[PROPERTY_VALUE_MAX];
-        if (patch->dtv_has_video && (property_get("vendor.media.audio.syncshow", value, NULL) <= 0 || strcmp(value, "1") == 0)) {
+        if (patch->dtv_has_video && getprop_bool("vendor.media.audio.syncshow")) {
             aml_dev->start_mute_flag = 1;
             ALOGI("start_mute_flag 1.");
         }
