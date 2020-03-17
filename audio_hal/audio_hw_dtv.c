@@ -646,7 +646,7 @@ static void dtv_do_ease_out(struct aml_audio_device *aml_dev)
     if (aml_dev && aml_dev->audio_ease) {
         ALOGI("%s(), do fade out", __func__);
         start_ease_out(aml_dev);
-        usleep(200 * 1000);
+        //usleep(200 * 1000);
     }
 }
 
