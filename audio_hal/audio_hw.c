@@ -618,7 +618,7 @@ static int start_output_stream (struct aml_stream_out *out)
         if (fake_receiver)
             port = PORT_SPDIF;
         else
-            port = PORT_SPDIFB2HDMI;
+            port = PORT_SPDIFB;
 #else
         port = PORT_SPDIF;
 #endif
@@ -830,7 +830,7 @@ static int start_output_stream_direct (struct aml_stream_out *out)
         if (fake_receiver)
             port = PORT_SPDIF;
         else
-            port = PORT_SPDIFB2HDMI;
+            port = PORT_SPDIFB;
 #else
 		port = PORT_SPDIF;
 #endif
@@ -4350,7 +4350,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
     else if (adev->patch_src == SRC_DTV && adev->tuner2mix_patch == 1)
     {
         if (adev->debug_flag) {
-            ALOGD("%s:%d dtv_in_read data size:%d, src_gain:%f",__func__,__LINE__, bytes, adev->src_gain[adev->active_inport]);
+            ALOGD("%s:%d dtv_in_read data size:%zu, src_gain:%f",__func__,__LINE__, bytes, adev->src_gain[adev->active_inport]);
         }
         ret = dtv_in_read(stream, buffer, bytes);
         if (adev->src_gain[adev->active_inport] != 1.0)
@@ -4402,7 +4402,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
             }
         } else {
             if (adev->debug_flag) {
-                ALOGD("%s:%d pcm_read data size:%d, channels:%d, pResampler:%p",__func__,__LINE__, bytes, in->config.channels, in->resampler);
+                ALOGD("%s:%d pcm_read data size:%zu, channels:%d, pResampler:%p",__func__,__LINE__, bytes, in->config.channels, in->resampler);
             }
             if (in->resampler) {
                 ret = read_frames(in, buffer, in_frames);
@@ -7381,7 +7381,7 @@ static void output_mute(struct audio_stream_out *stream, size_t *output_buffer_b
             start_ease_in(adev);
             ALOGI ("%s() tv source unmute, start fade in", __func__);
         } else {
-            ALOGD("%s line %d target memset len 0x%x\n", __func__, __LINE__, target_len);
+            ALOGD("%s line %d target memset len 0x%zx\n", __func__, __LINE__, target_len);
             memset(aml_out->tmp_buffer_8ch, 0, target_len);
         }
     }

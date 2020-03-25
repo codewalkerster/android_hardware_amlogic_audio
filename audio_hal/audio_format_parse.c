@@ -168,13 +168,13 @@ static size_t extract_bits(const char* buffer, size_t extract_bits_offset, size_
         ALOGE("%s, illegal param buffer, it is null", __FUNCTION__);
         return 0;
     }
-    ALOGD("%s, extract_bits_offset = %d, extract_bits_len = %d, offset_divisor = %d, offset_remainder = %d",
+    ALOGD("%s, extract_bits_offset = %zu, extract_bits_len = %zu, offset_divisor = %d, offset_remainder = %d",
         __FUNCTION__, extract_bits_offset, extract_bits_len, offset_divisor, offset_remainder);
     char *temp_pointer = (char *)buffer;
     temp_pointer += offset_divisor;
     if (8 - offset_remainder >= (int)extract_bits_len) {
         ret = (temp_pointer[0] & (mask >> offset_remainder)) >> (8 - offset_remainder - (int)extract_bits_len);
-        ALOGD("%s, ret = %#x", __FUNCTION__, ret);
+        ALOGD("%s, ret = %#zx", __FUNCTION__, ret);
         return ret;
     }
     len_divisor = (extract_bits_len - (8 - offset_remainder)) / 8;
@@ -189,7 +189,7 @@ static size_t extract_bits(const char* buffer, size_t extract_bits_offset, size_
             ret |= (temp_pointer[i] << ((len_divisor - i) * 8 + len_remainder));
         }
     }
-    ALOGD("%s, ret = %#x", __FUNCTION__, ret);
+    ALOGD("%s, ret = %#zx", __FUNCTION__, ret);
     return ret;
 }
 
@@ -216,7 +216,7 @@ int get_dts_stream_channels(const char *buffer, size_t buffer_size) {
 
     //8 Byte IEC Header + 15 Byte Bitstream Header(120 bits)
     if (bytes < 23) {
-        ALOGE("%s, illegal param bytes(%d)", __FUNCTION__, bytes);
+        ALOGE("%s, illegal param bytes(%zu)", __FUNCTION__, bytes);
         return -1;
     }
     temp_buffer = (char *)malloc(sizeof(char) * bytes);
