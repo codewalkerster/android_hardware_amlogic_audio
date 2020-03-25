@@ -223,11 +223,11 @@ void aml_audio_debug_malloc_showinfo(uint32_t level)
         if (malloc_node) {
             total_mem += malloc_node->size;
             if (level == MEMINFO_SHOW_PRINT) {
-                ALOGI("mem info:%s line=%d pointer =%p size=0x%x", malloc_node->file_name, malloc_node->line, malloc_node->pointer, malloc_node->size);
+                ALOGI("mem info:%s line=%d pointer =%p size=0x%zx", malloc_node->file_name, malloc_node->line, malloc_node->pointer, malloc_node->size);
             } else if (level == MEMINFO_SHOW_FILE) {
                 if (fp1) {
                     memset(aml_malloc_temp_buf, 0, sizeof(aml_malloc_temp_buf));
-                    sprintf(aml_malloc_temp_buf, "mem info:%s line=%d pointer =%p size=0x%x\n", malloc_node->file_name, malloc_node->line, malloc_node->pointer, malloc_node->size);
+                    sprintf(aml_malloc_temp_buf, "mem info:%s line=%d pointer =%p size=0x%zx\n", malloc_node->file_name, malloc_node->line, malloc_node->pointer, malloc_node->size);
                     fwrite((char *)aml_malloc_temp_buf, 1, sizeof(aml_malloc_temp_buf), fp1);
                 }
             }

@@ -1259,7 +1259,7 @@ static int dtv_do_drop_ac3_pcm(struct aml_audio_patch *patch,
     }
     aml_out->need_drop_size = (patch->dtv_apts_lookup / 90) * 48 * frame_size;
     aml_out->need_drop_size &= ~(frame_size - 1);
-    ALOGI("dtv_do_drop need_drop_size=%d,frame_size=%d\n",
+    ALOGI("dtv_do_drop need_drop_size=%d,frame_size=%zu\n",
         aml_out->need_drop_size, frame_size);
     return 0;
 }
