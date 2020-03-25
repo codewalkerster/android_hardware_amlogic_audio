@@ -275,7 +275,7 @@ static int skt_write(struct audio_stream_out* stream, int fd, const void* p, siz
             if (total_input_ns == 0)
                 begin_ns = aml_audio_get_systime_ns();
             process_ns = aml_audio_get_systime_ns() - begin_ns;
-            ALOGD("skt_write: process_ns %lld input_ns %lld, diff: %ldms (%ld)",
+            ALOGD("skt_write: process_ns %" PRId64 " input_ns %" PRId64 ", diff: %ldms (%ld)",
                 process_ns, total_input_ns, (long)((total_input_ns- process_ns)/1000000),
                 (long)(total_input_ns- process_ns));
             total_input_ns += input_ns;
@@ -1278,7 +1278,7 @@ ssize_t a2dp_out_write(struct audio_stream_out* stream, const void* buffer, size
             } else {
                 in_frames = bytes/frame_size;
             }
-            ALOGI("a2dp drop finish bytes:%d, need_drop_size=%d\n", bytes, aml_out->need_drop_size);
+            ALOGI("a2dp drop finish bytes:%zu, need_drop_size=%d\n", bytes, aml_out->need_drop_size);
         }
     }
 

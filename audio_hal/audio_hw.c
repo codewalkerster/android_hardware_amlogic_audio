@@ -9093,7 +9093,7 @@ exit:
     }
 
     if (adev->debug_flag) {
-        ALOGI("%s return %zu!\n", __FUNCTION__, return_bytes);
+        ALOGI("%s return %d!\n", __FUNCTION__, return_bytes);
     }
     return return_bytes;
 }
