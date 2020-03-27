@@ -287,7 +287,7 @@ exit:
         //TODO
         if (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP)
             latency_frames = mixer_get_inport_latency_frames(audio_mixer, out->port_index)
-                    + a2dp_out_get_latency(stream);
+                    + a2dp_out_get_latency(stream) * out->hal_rate / 1000;
         else
             latency_frames = mixer_get_inport_latency_frames(audio_mixer, out->port_index)
                     + mixer_get_outport_latency_frames(audio_mixer);
@@ -633,7 +633,27 @@ static int out_get_presentation_position_port(
     }
 
     if (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
-        *frames = frames_written_hw;
+        struct timespec stCurTimestamp;
+        int64_t  curr_nanoseconds = 0;
+        int64_t  pre_nanoseconds = 0;
+        int64_t  time_diff = 0;
+        int drift_frames = 0;
+
+        pre_nanoseconds = (long long)out->timestamp.tv_sec * 1000000000 + (long long)out->timestamp.tv_nsec;
+        clock_gettime(CLOCK_MONOTONIC, &stCurTimestamp);
+        curr_nanoseconds = (long long)stCurTimestamp.tv_sec * 1000000000 + (long long)stCurTimestamp.tv_nsec;
+        time_diff = curr_nanoseconds - pre_nanoseconds;
+        if (time_diff <= 100*1000000) {
+            drift_frames = (time_diff * out->hal_rate) / 1000000000;
+            if (adev->debug_flag > 0)
+                ALOGI("[%s:%d] normal time diff=%lld drift_frames=%d", __func__, __LINE__,time_diff, drift_frames);
+        } else {
+            if (adev->debug_flag > 0)
+                ALOGW("[%s:%d] big time diff:%lld", __func__, __LINE__, time_diff);
+            time_diff = 0;
+            drift_frames = 0;
+        }
+        *frames = frames_written_hw + drift_frames;
         *timestamp = out->timestamp;
     } else if (!adev->audio_patching) {
         ret = mixer_get_presentation_position(audio_mixer,
@@ -1033,7 +1053,7 @@ ssize_t mixer_main_buffer_write_sm (struct audio_stream_out *stream, const void 
     audio_hwsync_t *hw_sync = aml_out->hwsync;
 
     if (adev->debug_flag) {
-        ALOGI("%s:%p write in %zu!, format = 0x%x\n", __FUNCTION__, stream, bytes, aml_out->hal_internal_format);
+        ALOGI("%s:%p write in %zu!, format = 0x%x, hw_sync_mode:%d", __FUNCTION__, stream, bytes, aml_out->hal_internal_format, aml_out->hw_sync_mode);
     }
     int return_bytes = bytes;
 
@@ -1346,7 +1366,18 @@ exit:
     aml_out->lasttimestamp.tv_sec = aml_out->timestamp.tv_sec;
     aml_out->lasttimestamp.tv_nsec = aml_out->timestamp.tv_nsec;
 
-    aml_out->last_frames_postion = aml_out->frame_write_sum;
+
+    if (aml_out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
+        uint64_t latency_frames = mixer_get_inport_latency_frames(sm->mixerData, aml_out->port_index)
+                + a2dp_out_get_latency(stream) * aml_out->hal_rate / 1000;
+        if (aml_out->frame_write_sum > latency_frames)
+            aml_out->last_frames_postion = aml_out->frame_write_sum - latency_frames;
+        else
+            aml_out->last_frames_postion = 0;
+    } else {
+        aml_out->last_frames_postion = aml_out->frame_write_sum;
+    }
+
     ALOGV("%s(), frame write sum %lld", __func__, aml_out->frame_write_sum);
     return bytes;
 }
