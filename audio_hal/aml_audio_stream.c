@@ -94,7 +94,7 @@ void get_sink_format (struct audio_stream_out *stream)
     audio_format_t sink_capability = get_sink_capability(stream);
     audio_format_t source_format = aml_out->hal_internal_format;
 
-    if (aml_out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
+    if (adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
         ALOGD("get_sink_format: a2dp set to pcm");
         adev->sink_format = AUDIO_FORMAT_PCM_16_BIT;
         adev->optical_format = AUDIO_FORMAT_PCM_16_BIT;
