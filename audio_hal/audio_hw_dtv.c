@@ -1328,7 +1328,12 @@ static void dtv_do_drop_pcm(int avail, struct aml_audio_patch *patch,
                 break;
             }
             memset(patch->out_buf, 0, patch->out_buf_size);
-            int ret = ring_buffer_write(&(patch->aml_ringbuffer), (unsigned char *)patch->out_buf, t1, 0);
+            int ret = 0;
+            if ((size_t)t1 > patch->out_buf_size) {
+                ret = ring_buffer_write(&(patch->aml_ringbuffer), (unsigned char *)patch->out_buf, patch->out_buf_size, 0);
+            } else {
+                ret = ring_buffer_write(&(patch->aml_ringbuffer), (unsigned char *)patch->out_buf, t1, 0);
+            }
             t1 -= ret;
             int buff_len = ring_buffer_read(&(patch->aml_ringbuffer), (unsigned char *)patch->out_buf, patch->out_buf_size);
             int write_len = out_write_new(stream_out, patch->out_buf, buff_len);
