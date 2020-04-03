@@ -173,7 +173,11 @@ endif
     #LOCAL_CFLAGS += -Wall -Wunknown-pragmas
 
 ifneq ($(wildcard device/hardkernel), )
-    LOCAL_CFLAGS += -DODROID
+ifeq ($(strip $(TARGET_BOOTLOADER_BOARD_NAME)), odroidn2)
+    LOCAL_CFLAGS += -DODROIDN2
+else
+    LOCAL_CFLAGS += -DODROIDC4
+endif
 endif
 
 #add dolby ms12support
