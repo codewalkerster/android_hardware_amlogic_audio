@@ -66,6 +66,7 @@ int (*FuncDolbyMS12GetAssociateBufferAvail)(void);
 int (*FuncDolbyMS12GetSystemBufferAvail)(int *);
 
 int (*FuncDolbyMS12GetGain)(int);
+int (*FuncDolbyMS12Config)(ms12_config_type_t, ms12_config_t *);
 int (*FuncDolbyMS12GetAudioInfo)(struct aml_audio_info *);
 
 
@@ -233,6 +234,11 @@ int DolbyMS12::GetLibHandle(void)
         goto ERROR;
     }
 
+    FuncDolbyMS12Config = (int (*)(ms12_config_type_t, ms12_config_t *))  dlsym(mDolbyMS12LibHanle, "ms12_audio_config");
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s, dlsym ms12_audio_config\n", __FUNCTION__);
+        goto ERROR;
+    }
     FuncDolbyMS12GetAudioInfo = (int (*)(struct aml_audio_info *))  dlsym(mDolbyMS12LibHanle, "get_audio_info");
     if (!FuncDolbyMS12GetAudioInfo) {
         ALOGE("%s, dlsym get_audio_info fail\n", __FUNCTION__);
@@ -275,6 +281,7 @@ void DolbyMS12::ReleaseLibHandle(void)
     FuncDolbyMS12GetAssociateBufferAvail = NULL;
     FuncDolbyMS12GetSystemBufferAvail = NULL;
     FuncDolbyMS12SetMainDummy = NULL;
+    FuncDolbyMS12Config = NULL;
     FuncDolbyMS12GetAudioInfo = NULL;
 
     if (mDolbyMS12LibHanle != NULL) {
@@ -659,6 +666,19 @@ int DolbyMS12::DolbyMS12GetSystemBufferAvail(int * max_size)
     return ret;
 }
 
+int DolbyMS12::DolbyMS12SetMainVolume(float volume)
+{
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncDolbyMS12Config)(MS12_CONFIG_MAIN_VOLUME, (ms12_config_t *)&volume);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
 int DolbyMS12::DolbyMS12GetInputISDolbyAtmos()
 {
     int ret = 0;

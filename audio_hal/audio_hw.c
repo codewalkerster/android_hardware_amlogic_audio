@@ -1729,8 +1729,9 @@ static int out_set_volume (struct audio_stream_out *stream, float left, float ri
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
     int ret = 0;
+    int is_dolby_audio = (out->hal_internal_format == AUDIO_FORMAT_E_AC3) || (out->hal_internal_format == AUDIO_FORMAT_AC3);
     ALOGI("%s(), stream(%p), left:%f right:%f ", __func__, stream, left, right);
-    if (out->hal_internal_format == AUDIO_FORMAT_E_AC3) {
+    if (is_dolby_audio) {
         if (out->volume_l < FLOAT_ZERO && left > FLOAT_ZERO) {
             ALOGI("set offload mute: false");
             spdifenc_set_mute(false);
@@ -1746,13 +1747,16 @@ static int out_set_volume (struct audio_stream_out *stream, float left, float ri
 
     // When MS12 input is PCM to OTT, ms12 fail to change volume.we will change volume at input side.
     // When MS12 input is DD/DDP, we adjust main DD/DDP input volume here
-    if ((eDolbyMS12Lib == adev->dolby_lib_type) && continous_mode(adev) && !audio_is_linear_pcm(out->hal_internal_format)) {
+    if ((eDolbyMS12Lib == adev->dolby_lib_type) && is_dolby_audio) {
         int iMS12DB = -96;
 
         if (out->volume_l != out->volume_r) {
             ALOGW("%s, left:%f right:%f NOT match", __FUNCTION__, left, right);
         }
 
+#if 1
+        dolby_ms12_set_main_volume(out->volume_l);
+#else
         iMS12DB = volume2Ms12DBGain(out->volume_l);
 
         // MS12 initial DB gain is 0 when setup
@@ -1767,6 +1771,7 @@ static int out_set_volume (struct audio_stream_out *stream, float left, float ri
             aml_ms12_update_runtime_params_lite(&(adev->ms12));
             ALOGI("%s,out->volume_l = %f,  iMS12DB = %d", __FUNCTION__, out->volume_l, iMS12DB);
         }
+#endif
 
     }
     return 0;
@@ -4820,6 +4825,9 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     if (continous_mode(adev) && (eDolbyMS12Lib == adev->dolby_lib_type)) {
         if (out->volume_l != 1.0) {
             if (!audio_is_linear_pcm(out->hal_internal_format)) {
+#if 1
+                dolby_ms12_set_main_volume(1.0);
+#else
                 /*we change the volume in this stream, but it will be closed,
                   we need to restore the ms12 to normal one
                 */
@@ -4828,6 +4836,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
                 set_dolby_ms12_primary_input_db_gain(&(adev->ms12), iMS12DB , 10);
                 adev->ms12.curDBGain = iMS12DB;
                 aml_ms12_update_runtime_params(&(adev->ms12));
+#endif
             }
         }
     }
@@ -7568,7 +7577,15 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
                 gain_speaker = adev->sink_gain[OUTPORT_A2DP];
             else
                 gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
-
+            /*
+            for dolby audio with ms12 enabled,the gain will apply to
+            ms12 main audio, there is no need to apply any more.
+            */
+            int is_dolby_audio = (aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3) \
+                                 || (aml_out->hal_internal_format == AUDIO_FORMAT_AC3);
+            if ((eDolbyMS12Lib == adev->dolby_lib_type) && is_dolby_audio) {
+                gain_speaker = 1.0;
+            }
             if (adev->patch_src == SRC_DTV && adev->audio_patch != NULL) {
                 aml_audio_switch_output_mode((int16_t *)buffer, bytes, adev->audio_patch->mode);
             }
@@ -8051,6 +8068,10 @@ void config_output(struct audio_stream_out *stream)
             ring_buffer_reset(&adev->spk_tuning_rbuf);
             adev->ms12.is_continuous_paused = false;
             ret = get_the_dolby_ms12_prepared(aml_out, aformat, AUDIO_CHANNEL_OUT_STEREO, aml_out->hal_rate);
+            /*set the volume to current one*/
+            if (!audio_is_linear_pcm(aml_out->hal_internal_format)) {
+                dolby_ms12_set_main_volume(aml_out->volume_l);
+            }
             if (continous_mode(adev)) {
                 dolby_ms12_set_main_dummy(0, main1_dummy);
                 dolby_ms12_set_main_dummy(1, !ott_input);
@@ -8903,6 +8924,20 @@ ssize_t mixer_main_buffer_write (struct audio_stream_out *stream, const void *bu
                     hw_write (stream, output_buffer, output_buffer_bytes, output_format);
             }
             else {
+                /*not continuous mode, we use sink gain control the volume*/
+                if (!continous_mode(adev)) {
+                    /*for pcm output, we will control it in hal_data_process*/
+                    if (!adev->is_TV && (adev->audio_patching)) {
+                        float out_gain = 1.0f;
+                        out_gain = adev->sink_gain[adev->active_outport];
+                        if (!audio_is_linear_pcm(aml_out->hal_internal_format)) {
+                            dolby_ms12_set_main_volume(out_gain);
+                        } else {
+                            //for stb,no chance to here
+                            //apply_volume(out_gain, write_buf, sizeof(int16_t), write_bytes);
+                        }
+                    }
+                }
 re_write:
                 if (adev->debug_flag) {
                     ALOGI("%s dolby_ms12_main_process before write_bytes %zu!\n", __func__, write_bytes);
@@ -10912,10 +10947,10 @@ static int adev_release_audio_patch(struct audio_hw_device *dev,
 #ifdef ENABLE_DTV_PATCH
         if (aml_dev->patch_src == SRC_DTV) {
             ALOGI("patch src == DTV now line %d \n", __LINE__);
-            aml_dev->audio_patching = 0;
             aml_dev->reset_dtv_audio = 1;
             ALOGI("device->device,reset the dtv audio port\n");
             release_dtv_patch(aml_dev);
+            aml_dev->audio_patching = 0;
         }
 #endif
         if (aml_dev->patch_src != SRC_DTV
@@ -10936,8 +10971,8 @@ static int adev_release_audio_patch(struct audio_hw_device *dev,
 #ifdef ENABLE_DTV_PATCH
         if (aml_dev->patch_src == SRC_DTV) {
             ALOGI("patch src == DTV now line %d \n", __LINE__);
-            aml_dev->audio_patching = 0;
             release_dtv_patch(aml_dev);
+            aml_dev->audio_patching = 0;
         }
 #endif
         aml_dev->patch_src = SRC_INVAL;

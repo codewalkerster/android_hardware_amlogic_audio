@@ -222,6 +222,11 @@ int dolby_ms12_get_gain(int idx);
 
 
 /*@@
+    @brief set the main audio volume
+*/
+int dolby_ms12_set_main_volume(float volume);
+
+/*@@
     @brief get dolby atmos info
 */
 int dolby_ms12_get_input_atmos_info();

@@ -23,6 +23,13 @@
 
 #ifdef __cplusplus
 
+typedef enum  {
+    MS12_CONFIG_MAIN_VOLUME,
+}ms12_config_type_t;
+
+typedef union ms12_config {
+    float main_volume;
+}ms12_config_t;
 struct aml_audio_info{
     int is_dolby_atmos;
     int reserved_a;
@@ -122,6 +129,7 @@ public:
 
     virtual int     DolbyMS12GetGain(int);
 
+    virtual int     DolbyMS12SetMainVolume(float volume);
     virtual int     DolbyMS12GetInputISDolbyAtmos();
 
     // protected:
