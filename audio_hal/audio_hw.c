@@ -6124,6 +6124,9 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
     } else if (!strcmp(keys, "SOURCE_MUTE")) {
         sprintf(temp_buf, "source_mute = %d", adev->source_mute);
         return strdup(temp_buf);
+    } else if (!strcmp(keys, "parental_control_av_mute")) {
+        sprintf(temp_buf, "parental_control_av_mute = %d", adev->parental_control_av_mute);
+        return strdup(temp_buf);
     }
 
     //1.HDMI in samplerate
@@ -10962,7 +10965,9 @@ static int adev_release_audio_patch(struct audio_hw_device *dev,
         }
         aml_dev->audio_patching = 0;
         aml_dev->patch_src = SRC_INVAL;
-        aml_dev->parental_control_av_mute = false;
+        if (aml_dev->is_TV) {
+            aml_dev->parental_control_av_mute = false;
+        }
     }
 
     if (patch->sources[0].type == AUDIO_PORT_TYPE_DEVICE
