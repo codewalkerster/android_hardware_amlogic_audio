@@ -29,6 +29,8 @@
 #include "dolby_lib_api.h"
 #include "aml_audio_stream.h"
 #include "audio_virtual_buf.h"
+#include "alsa_config_parameters.h"
+
 #define AML_ZERO_ADD_MIN_SIZE 1024
 
 #define AUDIO_EAC3_FRAME_SIZE 16
