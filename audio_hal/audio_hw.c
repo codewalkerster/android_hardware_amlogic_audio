@@ -6759,10 +6759,10 @@ int do_output_standby_l(struct audio_stream *stream)
     }
 
     if ((aml_out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) && aml_out->a2dp_out) {
-        a2dp_out_standby(stream);
         if ((eDolbyMS12Lib == adev->dolby_lib_type) && (ms12->dolby_ms12_enable == true)) {
             get_dolby_ms12_cleanup(&adev->ms12);
         }
+        a2dp_out_standby(stream);
     }
 
     /*
