@@ -102,7 +102,7 @@ int aml_audio_delay_clear(aml_audio_delay_type_e enAudioDelayType)
 int aml_audio_delay_process(aml_audio_delay_type_e enAudioDelayType, void *pData, int s32Size, audio_format_t enFormat)
 {
     if (!g_bAudioDelayInit) {
-        ALOGW("[%s:%d] audio delay not initialized", __func__, __LINE__);
+        //ALOGW("[%s:%d] audio delay not initialized", __func__, __LINE__);
         return -1;
     }
     if (enAudioDelayType < AML_DELAY_OUTPORT_SPEAKER || enAudioDelayType >= AML_DELAY_OUTPORT_BUTT) {

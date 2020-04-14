@@ -1896,7 +1896,7 @@ void dtv_avsync_process(struct aml_audio_patch* patch, struct aml_stream_out* st
     get_sysfs_uint(TSYNC_PCRSCR, &pcrpts);
     get_sysfs_uint(TSYNC_FIRST_VPTS, &firstvpts);
 
-    if (patch->show_first_frame == 0) {
+    if (patch->dtv_has_video && patch->show_first_frame == 0) {
         patch->show_first_frame = get_sysfs_int(VIDEO_FIRST_FRAME_SHOW);
         ALOGI("dtv_avsync_process: patch->show_first_frame=%d, firstvpts=0x%x, pcrpts=0x%x, cache:%dms",
                patch->show_first_frame, firstvpts, pcrpts, (int)(firstvpts - pcrpts)/90);
@@ -1945,7 +1945,7 @@ void dtv_avsync_process(struct aml_audio_patch* patch, struct aml_stream_out* st
     dtv_audio_gap_monitor(patch);
 }
 
-static int dtv_patch_pcm_wirte(unsigned char *pcm_data, int size,
+static int dtv_patch_pcm_write(unsigned char *pcm_data, int size,
                                int symbolrate, int channel, void *args)
 {
     struct aml_audio_patch *patch = (struct aml_audio_patch *)args;
@@ -2807,7 +2807,7 @@ static void *audio_dtv_patch_process_threadloop(void *data)
         switch (patch->dtv_decoder_state) {
         case AUDIO_DTV_PATCH_DECODER_STATE_INIT: {
             ALOGI("++%s live now  open the audio decoder now !\n", __FUNCTION__);
-            dtv_patch_input_open(&adec_handle, dtv_patch_pcm_wirte,
+            dtv_patch_input_open(&adec_handle, dtv_patch_pcm_write,
                                  dtv_patch_buffer_info,
                                  dtv_patch_audio_info, patch);
             patch->dtv_decoder_state = AUDIO_DTV_PATCH_DECODER_STATE_START;
@@ -3264,6 +3264,8 @@ int release_dtv_patch_l(struct aml_audio_device *aml_dev)
     dtv_assoc_deinit();
     ring_buffer_release(&(patch->aml_ringbuffer));
     free(patch);
+    if (aml_dev->start_mute_flag != 0)
+        aml_dev->start_mute_flag = 0;
     aml_dev->audio_patch = NULL;
     dtv_check_audio_reset(aml_dev);
     ALOGI("--%s", __FUNCTION__);
