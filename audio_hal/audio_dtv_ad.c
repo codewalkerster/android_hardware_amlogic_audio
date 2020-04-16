@@ -177,7 +177,7 @@ int dtv_assoc_init(void)
     param->assoc_enable = DTV_ASSOC_STAT_DISABLE;
     param->bufinited = 1;
     param->sub_apid = 0;
-    param->sub_afmt = 0;
+    param->sub_afmt = -1;
     param->cache= 0;
     param->main_frame_size= 0;
     param->ad_frame_size= 0;
@@ -206,7 +206,7 @@ int dtv_assoc_deinit(void)
         param->bufinited = 0;
     }
     param->sub_apid = 0;
-    param->sub_afmt = 0;
+    param->sub_afmt = -1;
     param->cache= 0;
     param->main_frame_size= 0;
     param->ad_frame_size= 0;
@@ -326,7 +326,7 @@ int dtv_assoc_audio_start(unsigned int handle, int pid, int fmt)
     } else if (!VALID_PID(pid) && param->assoc_enable == DTV_ASSOC_STAT_ENABLE) {
         ALOGI("%s, assoc is enable, disable it", __FUNCTION__);
         param->sub_apid = 0;
-        param->sub_afmt = 0;
+        param->sub_afmt = -1;
         param->cache= 0;
         param->main_frame_size= 0;
         param->ad_frame_size= 0;
@@ -354,7 +354,7 @@ void dtv_assoc_audio_stop(unsigned int handle)
         ALOGI("%s, disable it\n", __FUNCTION__);
         param->assoc_enable = DTV_ASSOC_STAT_DISABLE;
         param->sub_apid = 0;
-        param->sub_afmt = 0;
+        param->sub_afmt = -1;
         param->cache= 0;
         param->main_frame_size= 0;
         param->ad_frame_size= 0;

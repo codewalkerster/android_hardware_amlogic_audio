@@ -853,6 +853,7 @@ static int start_output_stream_direct (struct aml_stream_out *out)
             ALOGI("need_convert init %d ",__LINE__);
             struct dolby_ddp_dec *ddp_dec = & (adev->ddp);
             ddp_dec->digital_raw = 1;
+            ddp_dec->dual_input  = false;
             if (ddp_dec->status != 1) {
                 int status = dcv_decoder_init_patch(ddp_dec);
                 ddp_dec->nIsEc3 = 1;
@@ -1254,7 +1255,7 @@ static int out_standby (struct audio_stream *stream)
     return status;
 }
 
-static int out_standby_direct (struct audio_stream *stream)
+int out_standby_direct (struct audio_stream *stream)
 {
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
@@ -2957,6 +2958,7 @@ static ssize_t out_write_direct(struct audio_stream_out *stream, const void* buf
              if (out->need_convert) {
                 struct dolby_ddp_dec *ddp_dec = &(adev->ddp);
                 ddp_dec->digital_raw = 1;
+                ddp_dec->dual_input  = false;
                 if (ddp_dec->status != 1) {
                     int status = dcv_decoder_init_patch(ddp_dec);
                     ddp_dec->nIsEc3 = 1;
@@ -5583,39 +5585,55 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
         adev->frame_trigger_thred = 0;
         goto exit;
     }
-    if (eDolbyMS12Lib == adev->dolby_lib_type) {
+
+    {
         ret = str_parms_get_int(parms, "dual_decoder_support", &val);
         if (ret >= 0) {
-            pthread_mutex_lock(&adev->lock);
-            pthread_mutex_lock(&ms12->lock);
-            adev->dual_decoder_support = val;
-            ALOGI("dual_decoder_support set to %d\n", adev->dual_decoder_support);
-            set_audio_system_format(AUDIO_FORMAT_PCM_16_BIT);
-            //only use to set associate flag, dd/dd+ format is same.
-            if (adev->dual_decoder_support == 1) {
-                set_audio_associate_format(AUDIO_FORMAT_AC3);
+            if (adev->audio_patch != NULL) {
+                pthread_mutex_lock(&adev->lock);
+                adev->dual_decoder_support = val;
+                ALOGI("dual_decoder_support set to %d\n", adev->dual_decoder_support);
+                if (eDolbyMS12Lib == adev->dolby_lib_type_last) {
+                    pthread_mutex_lock(&ms12->lock);
+                    set_audio_system_format(AUDIO_FORMAT_PCM_16_BIT);
+                    //only use to set associate flag, dd/dd+ format is same.
+                    if (adev->dual_decoder_support == 1) {
+                        set_audio_associate_format(AUDIO_FORMAT_AC3);
+                    } else {
+                        set_audio_associate_format(AUDIO_FORMAT_INVALID);
+                    }
+                    dolby_ms12_config_params_set_associate_flag(adev->dual_decoder_support);
+                    pthread_mutex_unlock(&ms12->lock);
+                }
+                adev->need_reset_for_dual_decoder = true;
+                pthread_mutex_unlock(&adev->lock);
             } else {
-                set_audio_associate_format(AUDIO_FORMAT_INVALID);
+                ALOGE("%s()the audio patch is NULL \n", __func__);
             }
-            dolby_ms12_config_params_set_associate_flag(adev->dual_decoder_support);
-            adev->need_reset_for_dual_decoder = true;
-            pthread_mutex_unlock(&adev->lock);
-            pthread_mutex_unlock(&ms12->lock);
             goto exit;
         }
 
         ret = str_parms_get_int(parms, "associate_audio_mixing_enable", &val);
         if (ret >= 0) {
-            pthread_mutex_lock(&adev->lock);
-            pthread_mutex_lock(&ms12->lock);
-            dtv_assoc_audio_cache(-1);
-            adev->associate_audio_mixing_enable = val;
-            ALOGI("associate_audio_mixing_enable set to %d\n", adev->associate_audio_mixing_enable);
-            dolby_ms12_set_asscociated_audio_mixing(adev->associate_audio_mixing_enable);
-            int ms12_runtime_update_ret = aml_ms12_update_runtime_params(& (adev->ms12));
-            ALOGI("aml_ms12_update_runtime_params return %d\n", ms12_runtime_update_ret);
-            pthread_mutex_unlock(&adev->lock);
-            pthread_mutex_unlock(&ms12->lock);
+            if (adev->audio_patch != NULL) {
+                pthread_mutex_lock(&adev->lock);
+                if (val == 0) {
+                    dtv_assoc_audio_cache(-1);
+                }
+                adev->associate_audio_mixing_enable = val;
+                ALOGI("associate_audio_mixing_enable set to %d\n", adev->associate_audio_mixing_enable);
+                if (eDolbyMS12Lib == adev->dolby_lib_type_last) {
+                    pthread_mutex_lock(&ms12->lock);
+                    dolby_ms12_set_asscociated_audio_mixing(adev->associate_audio_mixing_enable);
+                    int ms12_runtime_update_ret = aml_ms12_update_runtime_params(& (adev->ms12));
+                    ALOGI("aml_ms12_update_runtime_params return %d\n", ms12_runtime_update_ret);
+                    pthread_mutex_unlock(&ms12->lock);
+                }
+                pthread_mutex_unlock(&adev->lock);
+            } else {
+                ALOGE("%s()the audio patch is NULL \n", __func__);
+            }
+
             goto exit;
         }
 
@@ -5623,9 +5641,7 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
         if (ret >= 0) {
             int mix_user_prefer = 0;
             int mixing_level = val;
-
             pthread_mutex_lock(&adev->lock);
-            pthread_mutex_lock(&ms12->lock);
             if (mixing_level < 0) {
                 mixing_level = 0;
             } else if (mixing_level > 100) {
@@ -5634,14 +5650,21 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
             mix_user_prefer = (mixing_level * 64 - 32 * 100) / 100; //[0,100] mapping to [-32,32]
             adev->mixing_level = mix_user_prefer;
             ALOGI("mixing_level set to %d\n", adev->mixing_level);
-            dolby_ms12_set_user_control_value_for_mixing_main_and_associated_audio(adev->mixing_level);
-            int ms12_runtime_update_ret = aml_ms12_update_runtime_params(& (adev->ms12));
-            ALOGI("aml_ms12_update_runtime_params return %d\n", ms12_runtime_update_ret);
-            pthread_mutex_unlock(&ms12->lock);
+            if (eDolbyMS12Lib == adev->dolby_lib_type_last) {
+                pthread_mutex_lock(&ms12->lock);
+                dolby_ms12_set_user_control_value_for_mixing_main_and_associated_audio(adev->mixing_level);
+                int ms12_runtime_update_ret = aml_ms12_update_runtime_params(& (adev->ms12));
+                ALOGI("aml_ms12_update_runtime_params return %d\n", ms12_runtime_update_ret);
+                pthread_mutex_unlock(&ms12->lock);
+            }
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
+    }
 
+    /*use dolby_lib_type_last to check ms12 type, because durig playing DTS file,
+      this type will be changed to dcv*/
+    if (eDolbyMS12Lib == adev->dolby_lib_type_last) {
         ret = str_parms_get_int(parms, "continuous_audio_mode", &val);
         if (ret >= 0) {
             ALOGI("%s continuous_audio_mode set to %d\n", __func__ , val);
@@ -5901,7 +5924,7 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
             if (audio_sub_pid > 0) {
                 adev->sub_apid = audio_sub_pid;
             } else {
-                adev->sub_apid = 0;
+                adev->sub_apid = -1;
             }
         } else {
             adev->sub_apid = audio_sub_pid;
@@ -5918,7 +5941,7 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
             if (audio_sub_fmt > 0) {
                 adev->sub_afmt = audio_sub_fmt;
             } else {
-                adev->sub_afmt= 0;
+                adev->sub_afmt= -1;
             }
         } else {
             adev->sub_afmt = audio_sub_fmt;
@@ -8218,6 +8241,9 @@ void config_output(struct audio_stream_out *stream)
             if (adev->dcvlib_bypass_enable != 1) {
                 if (ddp_dec->status != 1 && (aml_out->hal_internal_format == AUDIO_FORMAT_AC3
                                           || aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3)) {
+                    if (adev->dual_decoder_support) {
+                        ddp_dec->dual_input = true;
+                    }
                     int status = dcv_decoder_init_patch(ddp_dec);
                     if (aml_out->hal_internal_format == AUDIO_FORMAT_E_AC3) {
                         ddp_dec->nIsEc3 = 1;
@@ -8746,15 +8772,16 @@ ssize_t mixer_main_buffer_write (struct audio_stream_out *stream, const void *bu
         }
     }
 
+    if (adev->need_reset_for_dual_decoder == true) {
+        need_reconfig_output = true;
+        adev->need_reset_for_dual_decoder = false;
+        ALOGI("%s get the dual decoder support, need reset", __FUNCTION__);
+    }
+
+
     if (eDolbyMS12Lib == adev->dolby_lib_type &&
         aml_out->hal_internal_format != AUDIO_FORMAT_DTS &&
         aml_out->hal_internal_format != AUDIO_FORMAT_DTS_HD) {
-        if (adev->need_reset_for_dual_decoder == true) {
-            need_reconfig_output = true;
-            adev->need_reset_for_dual_decoder = false;
-            ALOGI("%s get the dual decoder support, need reset ms12", __FUNCTION__);
-        }
-
         /**
          * Need config MS12 if its not enabled.
          * Since MS12 is essential for main input.
@@ -9044,6 +9071,12 @@ dcv_rewrite:
                     }
                     write_bytes /= 2;
 #endif
+                    /* config the main and ad mixer level*/
+                    if (ddp_dec->dual_input && (adev->ddp.mixer_level != adev->mixing_level)) {
+                        ddp_dec->mixer_level = adev->mixing_level;
+                        dcv_decoder_config(DDP_CONFIG_MIXER_LEVEL, (ddp_config_t *)(&ddp_dec->mixer_level));
+                    }
+
                     ret = dcv_decoder_process_patch(ddp_dec, (unsigned char *)write_buf, write_bytes);
                 } else {
                     config_output(stream);

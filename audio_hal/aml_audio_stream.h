@@ -285,6 +285,7 @@ struct aml_audio_patch {
     unsigned int first_apts_lookup_over;
     int dtv_symple_rate;
     int dtv_pcm_channel;
+    int dtv_replay_flag;  //set for the first play
     unsigned int dtv_output_clock;
     unsigned int dtv_default_i2s_clock;
     unsigned int dtv_default_spdif_clock;
@@ -301,6 +302,8 @@ struct aml_audio_patch {
     unsigned int last_pcrpts;
     unsigned int show_first_frame;
     dtv_avsync_process_cb avsync_callback;
+    int dtv_faded_out;
+    int dtv_ac3_fmsize;
     pthread_mutex_t dtv_output_mutex;
     pthread_mutex_t dtv_input_mutex;
     pthread_mutex_t assoc_mutex;

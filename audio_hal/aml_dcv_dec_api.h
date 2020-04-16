@@ -23,16 +23,28 @@
 #include "aml_audio_parser.h"
 #include "aml_audio_types_def.h"
 
+typedef enum  {
+    DDP_CONFIG_MIXER_LEVEL,
+} ddp_config_type_t;
+
+typedef union ddp_config {
+    int  mixer_level;
+} ddp_config_t;
+
+
 struct dolby_ddp_dec {
     unsigned char *inbuf;
     unsigned char *outbuf;
     unsigned char *outbuf_raw;
     int status;
+    int inbuf_size;
     int remain_size;
     int outlen_pcm;
     int outlen_raw;
     int nIsEc3;
     int digital_raw;
+    bool dual_input;
+    int  mixer_level;
     bool is_iec61937;
     int curFrmSize;
     int (*get_parameters)(void *, int *, int *, int *,int *);
@@ -57,5 +69,7 @@ int dcv_decoder_init_patch(struct dolby_ddp_dec *ddp_dec);
 int dcv_decoder_release_patch(struct dolby_ddp_dec *ddp_dec);
 int dcv_decoder_process_patch(struct dolby_ddp_dec *ddp_dec, unsigned char*buffer, int bytes);
 int dcv_decoder_get_framesize(unsigned char*buffer, int bytes, int* p_head_offset);
+int dcv_decoder_config(ddp_config_type_t config_type, ddp_config_t *config);
+
 
 #endif
