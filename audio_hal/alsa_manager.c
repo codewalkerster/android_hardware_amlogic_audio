@@ -30,6 +30,7 @@
 #include "aml_audio_stream.h"
 #include "audio_virtual_buf.h"
 #include "alsa_config_parameters.h"
+#include "audio_hw_dtv.h"
 
 #define AML_ZERO_ADD_MIN_SIZE 1024
 
@@ -503,12 +504,16 @@ write:
                 adev->no_underrun_count = 0;
                 ALOGD("output_write, audio discontinue, underrun, begin mute\n");
             }
-        } else if (adev->discontinue_mute_flag == 1 &&
-            adev->no_underrun_count++ >= adev->no_underrun_max) {
-            ALOGD("output_write, no underrun, not mute, audio_discontinue=%d,count=%d\n",
-                adev->audio_discontinue, adev->no_underrun_count);
-            adev->discontinue_mute_flag = 0;
-            adev->no_underrun_count = 0;
+        } else if (adev->discontinue_mute_flag == 1) {
+            if ((adev->audio_discontinue == 0 &&
+                patch->dtv_audio_tune == AUDIO_RUNNING) ||
+                adev->no_underrun_count++ >= adev->no_underrun_max) {
+                ALOGD("no underrun, not mute, audio_discontinue=%d,count=%d\n",
+                        adev->audio_discontinue, adev->no_underrun_count);
+                ALOGD("dtv_audio_tune=%d\n", patch->dtv_audio_tune);
+                adev->discontinue_mute_flag = 0;
+                adev->no_underrun_count = 0;
+            }
         }
         if (adev->patch_src == SRC_DTV && (adev->discontinue_mute_flag || adev->start_mute_flag)) {
             memset(buffer, 0x0, bytes);

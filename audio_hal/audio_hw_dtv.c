@@ -144,15 +144,6 @@ enum {
     DIRECT_SLOW,
     DIRECT_NORMAL,
 };
-enum {
-    AUDIO_FREE = 0,
-    AUDIO_BREAK,
-    AUDIO_LOOKUP,
-    AUDIO_DROP,
-    AUDIO_RAISE,
-    AUDIO_LATENCY,
-    AUDIO_RUNNING,
-};
 enum tsync_mode_e {
     TSYNC_MODE_VMASTER,
     TSYNC_MODE_AMASTER,

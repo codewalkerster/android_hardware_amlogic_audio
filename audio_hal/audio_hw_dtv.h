@@ -72,6 +72,15 @@ enum {
     AUDIO_DTV_PATCH_CMD_NUM,
 };
 
+enum {
+    AUDIO_FREE = 0,
+    AUDIO_BREAK,
+    AUDIO_LOOKUP,
+    AUDIO_DROP,
+    AUDIO_RAISE,
+    AUDIO_LATENCY,
+    AUDIO_RUNNING,
+};
 int create_dtv_patch(struct audio_hw_device *dev, audio_devices_t input, audio_devices_t output __unused);
 int release_dtv_patch(struct aml_audio_device *dev);
 int release_dtv_patch_l(struct aml_audio_device *dev);
