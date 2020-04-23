@@ -56,6 +56,17 @@ enum mixer_state {
     MIXER_DRAIN_TRACK,      // drain currently playing track
     MIXER_DRAIN_ALL,        // fully drain the hardware
 };
+typedef enum AML_AUDIO_MIXER_RUN_STATE_TYPE {
+    AML_AUDIO_MIXER_RUN_STATE_EXITED            = 0,
+    AML_AUDIO_MIXER_RUN_STATE_REQ_EXIT          = 1,
+    AML_AUDIO_MIXER_RUN_STATE_RUNNING           = 2,
+    AML_AUDIO_MIXER_RUN_STATE_REQ_RUN           = 3,
+    AML_AUDIO_MIXER_RUN_STATE_SLEEP             = 4,
+    AML_AUDIO_MIXER_RUN_STATE_REQ_SLEEP         = 5,
+
+    AML_AUDIO_MIXER_RUN_STATE_BUTT              = 6,
+} aml_audio_mixer_run_state_type_e;
+
 
 //simple mixer support: 2 in , 1 out
 struct amlAudioMixer {
@@ -82,6 +93,7 @@ struct amlAudioMixer {
     bool continuous_output;
     //int init_ok : 1;
     bool standby;
+    aml_audio_mixer_run_state_type_e run_state;
 };
 
 int mixer_set_state(struct amlAudioMixer *audio_mixer, enum mixer_state state)
@@ -387,15 +399,27 @@ static int mixer_output_startup(struct amlAudioMixer *audio_mixer)
 
 int mixer_output_standby(struct amlAudioMixer *audio_mixer)
 {
-    enum MIXER_OUTPUT_PORT port_index = 0;
-    struct output_port *out_port = audio_mixer->out_ports[port_index];
+    ALOGI("[%s:%d] request sleep thread", __func__, __LINE__);
+    int timeoutMs = 200;
+    audio_mixer->run_state = AML_AUDIO_MIXER_RUN_STATE_REQ_SLEEP;
+    return 0;
+}
 
-    if (!audio_mixer->standby) {
-        ALOGI("++%s()", __func__);
+static int mixer_thread_sleep(struct amlAudioMixer *audio_mixer)
+{
+    struct output_port *out_port = audio_mixer->out_ports[MIXER_OUTPUT_PORT_PCM];
+
+    if (false == audio_mixer->standby) {
+        ALOGI("[%s:%d] start going to standby", __func__, __LINE__);
         out_port->standby(out_port);
+        audio_mixer->standby = true;
     }
-    audio_mixer->standby = 1;
-
+    pthread_mutex_lock(&audio_mixer->lock);
+    ALOGI("[%s:%d] the thread is sleeping", __func__, __LINE__);
+    audio_mixer->run_state = AML_AUDIO_MIXER_RUN_STATE_SLEEP;
+    pthread_cond_wait(&audio_mixer->cond, &audio_mixer->lock);
+    ALOGI("[%s:%d] the thread is awakened", __func__, __LINE__);
+    pthread_mutex_unlock(&audio_mixer->lock);
     return 0;
 }
 
@@ -1427,6 +1451,7 @@ static void *mixer_16b_threadloop(void *data)
     audio_mixer->exit_thread = 0;
     prctl(PR_SET_NAME, "amlAudioMixer16");
     set_thread_affinity();
+    audio_mixer->run_state = AML_AUDIO_MIXER_RUN_STATE_RUNNING;
     while (!audio_mixer->exit_thread) {
         // processing throttle
         struct timespec tval_new;
@@ -1459,13 +1484,9 @@ static void *mixer_16b_threadloop(void *data)
             } else {
                 clock_gettime(CLOCK_MONOTONIC, &tval_new);
                 delta_us = tspec_diff_to_us(audio_mixer->tval_last_write, tval_new);
-                if (delta_us >= STANDBY_TIME_US) {
-                    mixer_output_standby(audio_mixer);
-                    pthread_mutex_lock(&audio_mixer->lock);
-                    ALOGI("%s() sleep", __func__);
-                    pthread_cond_wait(&audio_mixer->cond, &audio_mixer->lock);
-                    ALOGI("%s() wakeup", __func__);
-                    pthread_mutex_unlock(&audio_mixer->lock);
+                if (delta_us >= STANDBY_TIME_US ||
+                    audio_mixer->run_state == AML_AUDIO_MIXER_RUN_STATE_REQ_SLEEP) {
+                    mixer_thread_sleep(audio_mixer);
                 }
             }
             clock_gettime(CLOCK_MONOTONIC, &audio_mixer->tval_last_run);
@@ -1481,6 +1502,7 @@ static void *mixer_16b_threadloop(void *data)
         }
         clock_gettime(CLOCK_MONOTONIC, &audio_mixer->tval_last_run);
     }
+    audio_mixer->run_state = AML_AUDIO_MIXER_RUN_STATE_EXITED;
 
     ALOGI("--%s", __func__);
     return NULL;
@@ -1556,6 +1578,7 @@ int pcm_mixer_thread_exit(struct amlAudioMixer *audio_mixer)
     ALOGD("+%s()", __func__);
     // block exit
     audio_mixer->exit_thread = 1;
+    audio_mixer->run_state = AML_AUDIO_MIXER_RUN_STATE_REQ_EXIT;
     pthread_cond_broadcast(&audio_mixer->cond);
     pthread_join(audio_mixer->out_mixer_tid, NULL);
     audio_mixer->out_mixer_tid = 0;

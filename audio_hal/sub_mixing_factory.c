@@ -1248,9 +1248,9 @@ ssize_t mixer_aux_buffer_write_sm(struct audio_stream_out *stream, const void *b
     int64_t throttle_timeus = 0;
     clock_gettime(CLOCK_MONOTONIC, &tval_begin);
 #endif
-
-    ALOGV("++%s", __func__);
-
+    if (adev->debug_flag) {
+        ALOGI("[%s:%d] bytes:%d, out_device:%#x", __func__, __LINE__, bytes, adev->out_device);
+    }
     if (is_sco_port(adev->active_outport)) {
         int ret = 0;
         if (!bt->active) {
