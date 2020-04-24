@@ -9109,7 +9109,10 @@ dcv_rewrite:
                     return return_bytes;
                 }
 
-                bytes  = ddp_dec->outlen_pcm;
+                if (ddp_dec->outlen_pcm > 0)
+                    bytes = ddp_dec->outlen_pcm;
+                else
+                    bytes = PLAYBACK_PERIOD_COUNT * DEFAULT_PLAYBACK_PERIOD_SIZE * 4;
                 if (bytes != 6144)
                     ALOGD("%s: ddp decoder size %d", __func__, bytes);
 
