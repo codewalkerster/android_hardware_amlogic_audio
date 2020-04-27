@@ -32,7 +32,8 @@ int aml_hw_mixer_init(struct aml_hw_mixer *mixer)
     pthread_mutex_lock(&mixer->lock);
     mixer->wp = 0;
     mixer->rp = 0;
-    mixer->buf_size = AML_HW_MIXER_BUF_SIZE;
+    if (mixer->buf_size == 0)
+        mixer->buf_size = AML_HW_MIXER_BUF_SIZE;
     mixer->start_buf = calloc(1, mixer->buf_size);
     if (!mixer->start_buf) {
         ALOGE("%s(), no mem", __func__);
@@ -133,7 +134,7 @@ int aml_hw_mixer_write(struct aml_hw_mixer *mixer, const void *buffer, size_t by
     } else {
         memcpy(mixer->start_buf + mixer->wp, buffer, write_bytes);
         mixer->wp += write_bytes;
-        mixer->wp %= AML_HW_MIXER_BUF_SIZE;
+        mixer->wp %= mixer->buf_size;
     }
     pthread_mutex_unlock(&mixer->lock);
 
@@ -194,7 +195,7 @@ int aml_hw_mixer_mixing(struct aml_hw_mixer *mixer, void *buffer, int bytes, aud
                 *tmp_buffer++ = CLIPINT(tmp);
             }
             mixer->rp += read_bytes;
-            mixer->rp %= AML_HW_MIXER_BUF_SIZE;
+            mixer->rp %= mixer->buf_size;
         }
     } else if (format == AUDIO_FORMAT_PCM_16_BIT) {
         int32_t tmp;
@@ -219,7 +220,7 @@ int aml_hw_mixer_mixing(struct aml_hw_mixer *mixer, void *buffer, int bytes, aud
                 *tmp_buffer++ = CLIPSHORT(tmp);
             }
             mixer->rp += read_bytes;
-            mixer->rp %= AML_HW_MIXER_BUF_SIZE;
+            mixer->rp %= mixer->buf_size;
         }
     } else {
         ALOGE("%s(), format %#x not supporte!", __func__, format);
@@ -254,7 +255,7 @@ int aml_hw_mixer_read(struct aml_hw_mixer *mixer, void *r_buf, uint size)
     } else {
         memcpy(r_buf, mixer->start_buf + mixer->rp, read_size);
         mixer->rp += read_size;
-        mixer->rp %= AML_HW_MIXER_BUF_SIZE;
+        mixer->rp %= mixer->buf_size;
     }
     pthread_mutex_unlock(&mixer->lock);
 

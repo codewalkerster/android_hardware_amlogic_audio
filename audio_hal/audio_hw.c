@@ -5920,15 +5920,10 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
     if (ret > 0) {
         int audio_sub_pid = (unsigned int)atoi(value);
         ALOGI("%s() get the sub audio pid %d\n", __func__, audio_sub_pid);
-        if (adev->audio_patch != NULL) {
-            if (audio_sub_pid > 0) {
-                adev->sub_apid = audio_sub_pid;
-            } else {
-                adev->sub_apid = -1;
-            }
-        } else {
+        if (audio_sub_pid > 0) {
             adev->sub_apid = audio_sub_pid;
-            ALOGI("%s()the audio patch is NULL \n", __func__);
+        } else {
+            adev->sub_apid = -1;
         }
         goto exit;
     }
@@ -5937,15 +5932,10 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
     if (ret > 0) {
         int audio_sub_fmt = (unsigned int)atoi(value);
         ALOGI("%s() get the sub audio fmt %d\n", __func__, audio_sub_fmt);
-        if (adev->audio_patch != NULL) {
-            if (audio_sub_fmt > 0) {
-                adev->sub_afmt = audio_sub_fmt;
-            } else {
-                adev->sub_afmt= -1;
-            }
-        } else {
+        if (audio_sub_fmt >= 0) {
             adev->sub_afmt = audio_sub_fmt;
-            ALOGI("%s()the audio patch is NULL \n", __func__);
+        } else {
+            adev->sub_afmt = -1;
         }
         goto exit;
     }

@@ -63,7 +63,6 @@ include $(BUILD_PREBUILT)
         audio_hw_utils.c \
         audio_hwsync.c \
         audio_hw_profile.c \
-        aml_hw_mixer.c \
         alsa_manager.c \
         audio_hw_ms12.c \
         audio_hw_dtv.c \
@@ -91,7 +90,6 @@ include $(BUILD_PREBUILT)
         aml_resample_wrap.cpp \
         audio_simple_resample_api.c \
         aml_audio_resample_manager.c \
-        audio_dtv_ad.c \
         audio_android_resample_api.c \
         aml_audio_timer.c \
         audio_virtual_buf.c \
@@ -133,7 +131,8 @@ include $(BUILD_PREBUILT)
         liblog libcutils libtinyalsa \
         libaudioutils libdl libaudioroute libutils \
         libdroidaudiospdif libamaudioutils libamlaudiorc libamadec \
-        libnano
+        libnano \
+        libdtvad
 
 ifeq ($(BOARD_COMPILE_IN_SYSTEM), true)
     LOCAL_SHARED_LIBRARIES += libam_adp_vendor
@@ -205,6 +204,38 @@ endif
     include $(BUILD_SHARED_LIBRARY)
 
 endif # BOARD_ALSA_AUDIO
+
+
+include $(CLEAR_VARS)
+
+LOCAL_SRC_FILES := \
+    audio_dtv_ad.c
+
+LOCAL_SHARED_LIBRARIES := \
+    libcutils \
+    liblog \
+    libutils \
+    libamaudioutils \
+    libam_adp
+
+LOCAL_C_INCLUDES := \
+   external/tinyalsa/include \
+   system/media/audio_utils/include \
+   system/media/audio/include \
+   $(LOCAL_PATH)/../utils/include \
+   system/core/libion/include \
+   system/core/include \
+   hardware/libhardware/include \
+   vendor/amlogic/common/external/dvb/include/am_adp 
+
+LOCAL_CFLAGS += -Werror
+LOCAL_MODULE := libdtvad
+LOCAL_MODULE_TAGS := optional
+ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 26 && echo OK),OK)
+    LOCAL_PROPRIETARY_MODULE := true
+endif
+include $(BUILD_SHARED_LIBRARY)
+
 
 #########################################################
 # Audio Policy Manager

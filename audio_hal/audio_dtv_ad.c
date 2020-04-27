@@ -57,7 +57,7 @@ typedef struct _dtv_assoc_audio {
 static dtv_assoc_audio assoc_bst = {
     .assoc_enable = 0,
     .sub_apid = 0,
-    .sub_afmt = 0,
+    .sub_afmt = -1,
     .cache = 0,
     .main_frame_size = 0,
     .ad_frame_size = 0,
@@ -123,7 +123,8 @@ static void audio_adcallback(const unsigned char * data, int len, void * handle)
             //  adec_print("write buffer size:%d,bs->buf_length=%d,bs->buf_level=%d",len,param->g_assoc_bst->buf_length,param->g_assoc_bst->buf_level);
             ring_buffer_write(ringbuffer, (unsigned char *)data, len, UNCOVER_WRITE);
         } else {
-            ALOGI("audio_adcallback,not ac3/eac3 data len=%d\n", len);
+            //ALOGI("audio_adcallback,not ac3/eac3 data len=%d\n", len);
+            ring_buffer_write(ringbuffer, (unsigned char *)data, len, UNCOVER_WRITE);
         }
     } else {
         ALOGI("[%s]-[associate_dec_supported:%d]-[g_assoc_bst:%p]\n", __FUNCTION__, param->assoc_enable, param->g_assoc_bst);
