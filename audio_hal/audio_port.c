@@ -28,7 +28,7 @@
 #include "aml_ringbuffer.h"
 #include "audio_hw_utils.h"
 #include "audio_hwsync.h"
-#if defined(ODROID)
+#if defined(ODROIDN2) || defined(ODROIDC4)
 #include <aml_android_utils.h>
 #include "alsa_device_parser.h"
 #endif
@@ -491,7 +491,7 @@ static ssize_t output_port_start(struct output_port *port)
         pcm_cfg.format = PCM_FORMAT_S16_LE;
     }
 
-#if defined(ODROID)
+#if defined(ODROIDN2) || defined(ODROIDC4)
     if (card == 0) {
         device = aml_getprop_int("media.audio_hal.device");
         device = alsa_device_update_pcm_index(device, PLAYBACK);
