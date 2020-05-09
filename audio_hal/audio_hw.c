@@ -3357,7 +3357,9 @@ static int out_get_render_position (const struct audio_stream_out *stream,
         } else if (adev->active_outport == OUTPORT_HDMI) {
             int hdmi_latency_ms = 0;
             if (adev->audio_type == EAC3 || adev->audio_type == AC3)
-                hdmi_latency_ms = aml_audio_get_hdmi_latency_offset(out->hal_internal_format);
+                hdmi_latency_ms = aml_audio_get_hdmi_latency_offset(out->hal_internal_format,
+                                           adev->ms12.dolby_ms12_enable,
+                                           adev->hdmi_format);
             frame_latency = hdmi_latency_ms * (out->hal_rate / 1000);
             *dsp_frames += frame_latency ;
         } else if (adev->active_outport == OUTPORT_SPEAKER) {
@@ -3514,7 +3516,9 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
         } else if (adev->active_outport == OUTPORT_HDMI) {
             int hdmi_latency_ms = 0;
             if (adev->audio_type == EAC3 || adev->audio_type == AC3)
-                hdmi_latency_ms = aml_audio_get_hdmi_latency_offset(out->hal_internal_format);
+                hdmi_latency_ms = aml_audio_get_hdmi_latency_offset(out->hal_internal_format,
+                                           adev->ms12.dolby_ms12_enable,
+                                           adev->hdmi_format);
             frame_latency = hdmi_latency_ms * (out->hal_rate / 1000);
             *frames += frame_latency ;
         } else if (adev->active_outport == OUTPORT_SPEAKER) {

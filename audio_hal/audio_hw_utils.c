@@ -711,7 +711,7 @@ uint64_t get_systime_ns(void)
     return timespec_ns(tval);
 }
 
-int aml_audio_get_hdmi_latency_offset(int aformat)
+int aml_audio_get_hdmi_latency_offset(int aformat,int is_ms12,int hdmi_format)
 {
     char buf[PROPERTY_VALUE_MAX];
     char *prop_name = NULL;
@@ -723,10 +723,19 @@ int aml_audio_get_hdmi_latency_offset(int aformat)
 
     if (aformat == AUDIO_FORMAT_PCM_16_BIT || aformat == AUDIO_FORMAT_PCM_32_BIT) {
         prop_name = "media.audio.hal.hdmi_latency.pcm";
-        latency_ms = -20;
+        if (is_ms12)
+          latency_ms = 0;
+        else
+          latency_ms = -60;
     } else {
         prop_name = "media.audio.hal.hdmi_latency.raw";
-        latency_ms = -80;
+        if (is_ms12) {
+          if (hdmi_format == PCM)
+              latency_ms = -130;
+          else if (hdmi_format == AUTO)
+              latency_ms = -100;
+        } else
+              latency_ms = -120;
     }
     ret = property_get(prop_name, buf, NULL);
     if (ret > 0)

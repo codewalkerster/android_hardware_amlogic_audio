@@ -54,7 +54,7 @@ void audio_fade_func(void *buf,int fade_size,int is_fadein);
 void ts_wait_time_us(struct timespec *ts, uint32_t time_us);
 int cpy_16bit_data_with_gain(int16_t *dst, int16_t *src, int size_in_bytes, float vol);
 uint64_t get_systime_ns(void);
-int aml_audio_get_hdmi_latency_offset(int aformat);
+int aml_audio_get_hdmi_latency_offset(int aformat,int is_ms12,int hdmi_format);
 int aml_audio_get_speaker_latency_offset(int aformat);
 uint32_t tspec_diff_to_us(struct timespec tval_old,
         struct timespec tval_new);

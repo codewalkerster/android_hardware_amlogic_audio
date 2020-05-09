@@ -651,7 +651,9 @@ static int out_get_presentation_position_port(
     if (adev->active_outport == OUTPORT_HDMI) {
         int hdmi_latency_ms = 0;
         if (adev->audio_type == EAC3 || adev->audio_type == AC3)
-            hdmi_latency_ms = aml_audio_get_hdmi_latency_offset(out->hal_internal_format);
+            hdmi_latency_ms = aml_audio_get_hdmi_latency_offset(out->hal_internal_format,
+                                                                adev->ms12.dolby_ms12_enable,
+                                                                adev->hdmi_format);
         frame_latency = hdmi_latency_ms * (out->hal_rate / 1000);
         ALOGV("hdmi_latency_ms %d",hdmi_latency_ms);
         *frames += frame_latency ;
