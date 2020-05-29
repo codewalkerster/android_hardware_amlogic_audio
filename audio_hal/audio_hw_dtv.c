@@ -1306,7 +1306,7 @@ static void dtv_do_drop_pcm(int avail, struct aml_audio_patch *patch,
         }
         t2 = t1 / patch->out_buf_size;
         t1 = t1 & ~3;
-        ALOGI("dtv_do_drop:++drop %d,lookup %d,diff %d ms,t2=%d,patch->out_buf_size=%u\n",
+        ALOGI("dtv_do_drop:++drop %d,lookup %d,diff %d ms,t2=%d,patch->out_buf_size=%zu\n",
             t1, patch->dtv_apts_lookup, t1 / 192, t2, patch->out_buf_size);
 
         /*[SE][BUG][SWPL-21122][chengshun] when insert 0, need check write len,
