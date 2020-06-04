@@ -275,9 +275,9 @@ static int skt_write(struct audio_stream_out* stream, int fd, const void* p, siz
             if (total_input_ns == 0)
                 begin_ns = aml_audio_get_systime_ns();
             process_ns = aml_audio_get_systime_ns() - begin_ns;
-            ALOGD("skt_write: process_ns %lld input_ns %lld, diff: %ldms (%ld)",
-                process_ns, total_input_ns, (long)((total_input_ns- process_ns)/1000000),
-                (long)(total_input_ns- process_ns));
+            ALOGD("skt_write: process_ns %lld input_ns %lld, diff: %lldms (%lld), cur write=%llu",
+                process_ns, total_input_ns, (((int64_t)total_input_ns- process_ns)/1000000),
+                ((int64_t)total_input_ns- process_ns), input_ns);
             total_input_ns += input_ns;
         }
 
@@ -1323,7 +1323,7 @@ ssize_t a2dp_out_write(struct audio_stream_out* stream, const void* buffer, size
         out_size = out->pstResampler->resample_size;
         in_frames = out->pstResampler->resample_size / frame_size;
     } else {
-        out_size = bytes;
+        out_size = in_frames*frame_size;
     }
     out_buffer = data_buffer;
 
