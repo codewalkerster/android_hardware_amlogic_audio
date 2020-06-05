@@ -1242,6 +1242,16 @@ ssize_t a2dp_out_write(struct audio_stream_out* stream, const void* buffer, size
         return bytes;
     if (aml_out->pause_status)
         return bytes;
+
+    if (adev->audio_patch && out->state == AUDIO_A2DP_STATE_STARTED) {
+        uint64_t cur_time = aml_audio_get_systime();
+        if (cur_time - out->last_write_time > 64000) {
+            ALOGD("%s:%d, for DTV/HDMIIN, input may be has gap: %lld", __func__, __LINE__, cur_time - out->last_write_time);
+            a2dp_out_standby(&stream->common);
+            return bytes;
+         }
+    }
+
     pthread_mutex_lock(&out->mutex);
     if (aml_out->is_tv_platform == 1) {
         in_frames = bytes/32; // 8ch pcm32
@@ -1401,6 +1411,7 @@ ssize_t a2dp_out_write(struct audio_stream_out* stream, const void* buffer, size
     }
 
 finish:
+    out->last_write_time = aml_audio_get_systime();
     out->frames_rendered += in_frames;
     out->frames_presented += in_frames;
     pthread_mutex_unlock(&out->mutex);
