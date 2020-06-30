@@ -7632,10 +7632,11 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
             }
         } else {
             float gain_speaker = 1.0;
-            if (!adev->is_TV)
+            if ((aml_out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP)) {
+                if (adev->audio_patching)
+                    gain_speaker = adev->sink_gain[OUTPORT_A2DP];
+            } else if (!adev->is_TV)
                 gain_speaker = adev->sink_gain[adev->active_outport];
-            else if (aml_out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP)
-                gain_speaker = adev->sink_gain[OUTPORT_A2DP];
             else
                 gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
             /*
