@@ -1715,14 +1715,10 @@ static uint32_t out_get_latency_frames (const struct audio_stream_out *stream)
 static uint32_t out_get_latency (const struct audio_stream_out *stream)
 {
     const struct aml_stream_out *out = (const struct aml_stream_out *) stream;
-    uint32_t a2dp_delay = 0;
 
-    if (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
-        a2dp_delay = a2dp_out_get_latency(stream);
-    }
     snd_pcm_sframes_t frames = out_get_latency_frames (stream);
     //snd_pcm_sframes_t frames = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
-    return (frames * 1000) / out->config.rate + a2dp_delay;
+    return (frames * 1000) / out->config.rate;
 }
 
 #define FLOAT_ZERO 0.000001
@@ -4886,6 +4882,9 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
             }
         }
     }
+    if (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
+        a2dp_output_disable(stream);
+    }
 
     /*when open dts decoder, the dolby lib is changed, so we need restore it*/
     if (out->hal_internal_format == AUDIO_FORMAT_DTS) {
@@ -5234,6 +5233,7 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
             ALOGI("bHDMIConnected: %d\n", val);
         } else if (val & AUDIO_DEVICE_OUT_ALL_A2DP) {
             adev->a2dp_updated = 1;
+            adev->a2dp_connected = false;
             adev->out_device &= (~val);
             ALOGI("adev_set_parameters a2dp disconnect: %x, device=%x\n", val, adev->out_device);
         }
@@ -5257,6 +5257,7 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
         } else if (val & AUDIO_DEVICE_OUT_ALL_A2DP) {
             adev->a2dp_updated = 1;
             adev->out_device |= val;
+            adev->a2dp_connected = true;
             ALOGI("adev_set_parameters a2dp connect: %x, device=%x\n", val, adev->out_device);
         }
         goto exit;
@@ -9680,9 +9681,6 @@ void adev_close_output_stream_new(struct audio_hw_device *dev,
     ALOGD("%s: enter usecase = %s", __func__, str_usecases[aml_out->usecase]);
     /* call legacy close to reuse codes */
     adev->active_outputs[aml_out->usecase] = NULL;
-    if (aml_out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
-        a2dp_output_disable(stream);
-    }
 
     if (adev->useSubMix) {
         if (aml_out->is_normal_pcm || aml_out->usecase == STREAM_PCM_HWSYNC) {

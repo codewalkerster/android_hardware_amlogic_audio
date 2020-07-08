@@ -555,12 +555,13 @@ uint32_t out_get_latency_frames(const struct audio_stream_out *stream)
 
         if (adev->sink_format == AUDIO_FORMAT_E_AC3)
             mul = 4;
-
     } else {
         if (is_4x_rate_fmt(codec_type))
             mul = 4;
     }
-
+    if (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
+        return a2dp_out_get_latency(stream)*out->hal_rate/1000 + decoder_latency_frames + ringbuf_latency_frames;
+    }
     whole_latency_frames = out->config.period_size * out->config.period_count;
     if (!out->pcm || !pcm_is_ready(out->pcm)) {
         return whole_latency_frames / mul;
