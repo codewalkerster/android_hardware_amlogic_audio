@@ -35,6 +35,7 @@
 
 #include "audio_hw.h"
 #include "audio_a2dp_hw.h"
+#include "audio_bt_sco.h"
 
 #define MIXER_IN_BUFFER_SIZE (512*4)
 #define MIXER_OUT_BUFFER_SIZE MIXER_IN_BUFFER_SIZE
@@ -457,6 +458,8 @@ static int mixer_output_write(struct amlAudioMixer *audio_mixer)
         ALOGV("++%s start", __func__);
         if (out && (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP))
             a2dp_out_write(&out->stream, out_port->data_buf, out_port->bytes_avail);
+        else if (out && is_sco_port(out->dev->active_outport))
+            write_to_sco(&out->stream, out_port->data_buf, out_port->bytes_avail);
         else
             out_port->write(out_port, out_port->data_buf, out_port->bytes_avail);
         set_outport_data_avail(out_port, 0);

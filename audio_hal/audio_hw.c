@@ -122,6 +122,7 @@
 #include "sub_mixing_factory.h"
 #include "aml_malloc_debug.h"
 #include "audio_a2dp_hw.h"
+#include "audio_bt_sco.h"
 
 #define CARD_AMLOGIC_BOARD 0
 
@@ -5089,6 +5090,7 @@ static int aml_audio_output_routing(struct audio_hw_device *dev,
             break;
         case OUTPORT_BT_SCO:
         case OUTPORT_BT_SCO_HEADSET:
+            close_btSCO_device(aml_dev);
             break;
         case OUTPORT_A2DP:
             ALOGE("%s: active_outport = %s A2DP off", __func__, outport2String(aml_dev->active_outport));
@@ -5259,6 +5261,14 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
             adev->out_device |= val;
             adev->a2dp_connected = true;
             ALOGI("adev_set_parameters a2dp connect: %x, device=%x\n", val, adev->out_device);
+        }
+        goto exit;
+    }
+
+    ret = str_parms_get_str (parms, "BT_SCO", value, sizeof (value) );
+    if (ret >= 0) {
+        if (strcmp (value, AUDIO_PARAMETER_VALUE_OFF) == 0) {
+            close_btSCO_device(adev);
         }
         goto exit;
     }
@@ -7788,7 +7798,7 @@ ssize_t hw_write (struct audio_stream_out *stream
             }
         }
     }
-    if (aml_out->pcm || aml_out->a2dp_out) {
+    if (aml_out->pcm || aml_out->a2dp_out || is_sco_port(adev->active_outport)) {
 #ifdef ADD_AUDIO_DELAY_INTERFACE
         ret = aml_audio_delay_process(AML_DELAY_OUTPORT_ALL, (void *) tmp_buffer, bytes, output_format);
         if (ret < 0) {
@@ -7823,6 +7833,8 @@ ssize_t hw_write (struct audio_stream_out *stream
                     write_size = adjust_bytes > 1024 ? 1024 : adjust_bytes;
                     if (adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
                         ret = a2dp_out_write(stream, (void*)buf, write_size);
+                    } else if (is_sco_port(adev->active_outport)) {
+                        ret = write_to_sco(stream, buffer, bytes);
                     } else {
                         ret = aml_alsa_output_write(stream, (void*)buf, write_size);
                     }
@@ -7845,6 +7857,8 @@ ssize_t hw_write (struct audio_stream_out *stream
         }
         if (adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
             ret = a2dp_out_write(stream, buffer, bytes);
+        } else if (is_sco_port(adev->active_outport)) {
+            ret = write_to_sco(stream, buffer, bytes);
         } else {
             ret = aml_alsa_output_write(stream, (void *) buffer, bytes);
         }
