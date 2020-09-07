@@ -6064,6 +6064,7 @@ static int adev_set_parameters (struct audio_hw_device *dev, const char *kvpairs
         ALOGI ("Amlogic_HAL - %s: TV-Mute:%d.", __FUNCTION__,tv_mute);
         adev->need_reset_ringbuffer = tv_mute;
         adev->tv_mute = tv_mute;
+        adev->hw_mixer.mute_main_flag = tv_mute;
         goto exit;
     }
     ret = str_parms_get_str(parms, "direct-mode", value, sizeof(value));
@@ -8995,6 +8996,8 @@ ssize_t mixer_main_buffer_write (struct audio_stream_out *stream, const void *bu
                     if (!adev->is_TV && (adev->audio_patching)) {
                         float out_gain = 1.0f;
                         out_gain = adev->sink_gain[adev->active_outport];
+                        if (adev->tv_mute)
+                            out_gain = 0.0f;
                         if (!audio_is_linear_pcm(aml_out->hal_internal_format)) {
                             dolby_ms12_set_main_volume(out_gain);
                         } else {
@@ -9098,6 +9101,9 @@ dcv_rewrite:
                            patch->sample_rate = ddp_dec->pcm_out_info.sample_rate;
                     if (ddp_dec->outlen_raw > 0) {
                         output_format = get_output_format(stream);
+                        if (adev->tv_mute) {
+                            memset(ddp_dec->outbuf_raw, 0, ddp_dec->outlen_raw);
+                        }
                         if (audio_hal_data_processing(stream, (void *)ddp_dec->outbuf_raw, ddp_dec->outlen_raw, &output_buffer, &output_buffer_bytes, output_format) == 0) {
                             hw_write(stream, output_buffer, output_buffer_bytes, output_format);
                         }
@@ -11568,6 +11574,15 @@ static int adev_set_audio_port_config (struct audio_hw_device *dev, const struct
                         }
                     }
                 }
+
+                if (aml_dev->patch_src == SRC_DTV) {
+                   if (aml_dev->sink_gain[outport] <= 0.0f) {
+                        aml_dev->passthrough_mute = 1;
+                    } else if (aml_dev->sink_gain[outport] != 0.0f) {
+                        aml_dev->passthrough_mute = 0;
+                    }
+                }
+
                 ALOGI(" - set src device[%#x](inport:%s): gain[%f]",
                             config->ext.device.type, inport2String(inport), aml_dev->src_gain[inport]);
                 ALOGI(" - set sink device[%#x](outport:%s): volume_Mb[%d], gain[%f]",
@@ -11781,6 +11796,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->ms12_ott_enable = false;
     adev->continuous_audio_mode = 0;
     adev->need_remove_conti_mode = false;
+    adev->passthrough_mute = 0;
     ret = property_get(DISABLE_CONTINUOUS_OUTPUT, buf, NULL);
     if (ret > 0) {
         sscanf(buf, "%d", &disable_continuous);
