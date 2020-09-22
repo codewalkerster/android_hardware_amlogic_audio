@@ -30,7 +30,7 @@ LOCAL_MULTILIB := both
 include $(BUILD_PREBUILT)
 
 #voice record of SEI BT remote control
-BOARD_ENABLE_HBG := true
+#BOARD_ENABLE_HBG := true
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libhbgdecode
