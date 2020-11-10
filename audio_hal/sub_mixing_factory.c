@@ -668,8 +668,8 @@ static int out_get_presentation_position_port(
          if (*frames < 0)
             ret = -EINVAL;
     }
-    ALOGI("%s() out:%p frames:%"PRIu64", sec:%ld, nanosec:%ld, ret:%d\n",
-            __func__, out, *frames, timestamp->tv_sec, timestamp->tv_nsec, ret);
+//    ALOGI("%s() out:%p frames:%"PRIu64", sec:%ld, nanosec:%ld, ret:%d\n",
+//            __func__, out, *frames, timestamp->tv_sec, timestamp->tv_nsec, ret);
     return ret;
 }
 
