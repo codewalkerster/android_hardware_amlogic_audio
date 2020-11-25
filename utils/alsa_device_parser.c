@@ -229,9 +229,7 @@ void alsa_device_parser_pcm_string(struct alsa_info *p_info, char *InputBuffer)
 					p_info->spdifb_descrpt = mAudioDeviceDescriptor;
 				else if (!strncmp(PortName, ALSAPORT_SPDIF, strlen(ALSAPORT_SPDIF)))
 					p_info->spdif_descrpt = mAudioDeviceDescriptor;
-				else if (!strncmp(PortName, ALSAPORT_I2S2HDMI, strlen(ALSAPORT_I2S2HDMI)))
-					p_info->i2s2hdmi_descrpt = mAudioDeviceDescriptor;
-				else if (!strcmp(PortName, ALSAPORT_TV))
+				else if (!strncmp(PortName, ALSAPORT_TV, strlen(ALSAPORT_TV)))
 					p_info->tvin_descrpt = mAudioDeviceDescriptor;
 				else if (!strncmp(PortName, ALSAPORT_LPBK, strlen(ALSAPORT_LPBK)))
 					p_info->lpbk_descrpt = mAudioDeviceDescriptor;
@@ -303,11 +301,11 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 		} else
 			pADD = p_info->i2s_descrpt;
 		break;
-	case PORT_PCM:
-		pADD = p_info->pcm_descrpt;
-		break;
 	case PORT_SPDIF:
 		pADD = p_info->spdif_descrpt;
+		break;
+	case PORT_PCM:
+		pADD = p_info->pcm_descrpt;
 		break;
 	case PROT_TDM:
 		pADD = p_info->tdm_descrpt;
@@ -320,6 +318,9 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 		break;
 	case PORT_I2S2HDMI:
 		pADD = p_info->i2s2hdmi_descrpt;
+		break;
+	case PORT_TV:
+		pADD = p_info->tvin_descrpt;
 		break;
 	case PORT_I2S1:
 		pADD = p_info->i2s1_descrpt;
@@ -335,9 +336,6 @@ int alsa_device_update_pcm_index(int alsaPORT, int stream)
 		break;
 	case PORT_EARC:
 		pADD = p_info->earc_descrpt;
-#endif
-	case PORT_TV:
-		pADD = p_info->tvin_descrpt;
 		break;
 	default:
 		pADD = p_info->i2s_descrpt;
