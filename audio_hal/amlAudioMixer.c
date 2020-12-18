@@ -276,6 +276,8 @@ int mixer_write_inport(struct amlAudioMixer *audio_mixer,
         enum MIXER_INPUT_PORT port_index, const void *buffer, int bytes)
 {
     struct input_port *port = audio_mixer->in_ports[port_index];
+    struct aml_audio_device     *adev = audio_mixer->adev; 
+    int j = 0;
     int written = 0;
 
     if (!port) {
@@ -288,6 +290,11 @@ int mixer_write_inport(struct amlAudioMixer *audio_mixer,
         //audio_fade_func(buffer, bytes, 1);
         //aml_hwsync_set_tsync_resume();
     //}
+    // do audio process here
+    /*audio effect process for speaker*/
+    for (j = 0; j < adev->native_postprocess.num_postprocessors; j++) {
+        audio_post_process(adev->native_postprocess.postprocessors[j], (int16_t *)buffer, bytes/4);
+    }
     written = port->write(port, buffer, bytes);
     if (/*port_index == MIXER_INPUT_PORT_PCM_SYSTEM && */get_inport_state(port) != ACTIVE) {
         ALOGI("port index %d is active now", port_index);

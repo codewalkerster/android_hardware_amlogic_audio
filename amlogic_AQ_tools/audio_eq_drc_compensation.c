@@ -68,7 +68,7 @@ static int get_model_name(char *model_name, int size)
     int ret = -1;
     char node[PROPERTY_VALUE_MAX];
 
-    ret = property_get("tv.model_name", node, NULL);
+    ret = property_get("tv.model_name", node, "FHD");
     if (ret < 0) {
         ALOGD("%s: Can't get model name!", __FUNCTION__);
     } else {
