@@ -490,7 +490,7 @@ int aml_audio_get_ddp_frame_size()
 
 bool is_stream_using_mixer(struct aml_stream_out *out)
 {
-    return is_inport_valid(out->port_index);
+    return is_inport_valid(out->enInputPortType);
 }
 
 uint32_t out_get_outport_latency(const struct audio_stream_out *stream)
@@ -831,3 +831,22 @@ void aml_audio_switch_output_mode(int16_t *buf, size_t bytes, AM_AOUT_OutputMode
     }
 }
 
+
+int aml_set_thread_priority(char *pName, pthread_t threadId, int sched_type)
+{
+    struct sched_param  params = {0};
+    int                 ret = 0;
+    int                 policy = sched_type; /* value:1 [pthread.h] */
+    if (sched_type == SCHED_NORMAL)
+        params.sched_priority = 0;
+    else
+        params.sched_priority = 5;
+    ret = pthread_setschedparam(threadId, policy, &params);
+    if (ret != 0) {
+        ALOGW("[%s:%d] set scheduled param error, ret:%#x", __func__, __LINE__, ret);
+    }
+    ret = pthread_getschedparam(threadId, &policy, &params);
+    ALOGD("[%s:%d] thread:%s set priority, ret:%d policy:%d priority:%d",
+        __func__, __LINE__, pName, ret, policy, params.sched_priority);
+    return ret;
+}
