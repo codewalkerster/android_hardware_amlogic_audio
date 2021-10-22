@@ -52,6 +52,10 @@ include $(BUILD_PREBUILT)
 # required type is 'primary'. Other possibilites are 'a2dp', 'usb', etc.
 	include $(CLEAR_VARS)
 
+    LOCAL_CFLAGS += -Wno-format
+    ifeq ($(ANDROID_BUILD_TYPE), 64)
+        LOCAL_CFLAGS += -DARM64_BIT
+    endif
     LOCAL_MODULE := audio.primary.amlogic
     ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 26 && echo OK),OK)
         LOCAL_PROPRIETARY_MODULE := true
@@ -154,7 +158,7 @@ endif
 
     LOCAL_MODULE_TAGS := optional
 
-    LOCAL_CFLAGS += -Werror
+   # LOCAL_CFLAGS += -Werror
 ifneq ($(TARGET_BUILD_VARIANT),user)
     LOCAL_CFLAGS += -DDEBUG_VOLUME_CONTROL
 endif
@@ -232,7 +236,7 @@ LOCAL_C_INCLUDES := \
    hardware/libhardware/include \
    vendor/amlogic/common/external/dvb/include/am_adp 
 
-LOCAL_CFLAGS += -Werror
+#LOCAL_CFLAGS += -Werror
 LOCAL_MODULE := libdtvad
 LOCAL_MODULE_TAGS := optional
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 26 && echo OK),OK)

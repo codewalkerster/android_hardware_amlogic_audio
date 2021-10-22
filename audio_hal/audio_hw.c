@@ -4463,9 +4463,13 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
 
     /*noise gate is only used in Linein for 16bit audio data*/
     if (adev->active_inport == INPORT_LINEIN && adev->aml_ng_enable == 1) {
-        int ng_status = noise_evaluation(adev->aml_ng_handle, buffer, bytes >> 1);
-        /*if (ng_status == NG_MUTE)
-            ALOGI("noise gate is working!");*/
+        #ifdef ARM64_BIT
+           // int ng_status = noise_evaluation(adev->aml_ng_handle, buffer, bytes >> 1);
+        #else
+           int ng_status = noise_evaluation(adev->aml_ng_handle, buffer, bytes >> 1);
+        #endif
+           /*if (ng_status == NG_MUTE)
+           ALOGI("noise gate is working!");*/
     }
 
     if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
@@ -6999,6 +7003,38 @@ static void aml_tinymix_set_spdif_format(audio_format_t output_format,struct aml
     ALOGI("%s tinymix AML_MIXER_ID_SPDIF_FORMAT %d,spdif mute %d",
           __FUNCTION__, aml_spdif_format, spdif_mute);
 }
+
+/* called when adev locked */
+int dolby_stream_active(struct aml_audio_device *adev)
+{
+    int i = 0;
+    int is_dolby = 0;
+    struct aml_stream_out *out = NULL;
+    for (i = 0 ; i < STREAM_USECASE_MAX; i++) {
+        out = adev->active_outputs[i];
+        if (out && (out->hal_internal_format == AUDIO_FORMAT_AC3 || out->hal_internal_format == AUDIO_FORMAT_E_AC3)) {
+            is_dolby = 1;
+            break;
+        }
+    }
+    return is_dolby;
+}
+/* called when adev locked */
+int hwsync_lpcm_active(struct aml_audio_device *adev)
+{
+    int i = 0;
+    int is_hwsync_lpcm = 0;
+    struct aml_stream_out *out = NULL;
+    for (i = 0 ; i < STREAM_USECASE_MAX; i++) {
+        out = adev->active_outputs[i];
+        if (out && audio_is_linear_pcm(out->hal_internal_format) && (out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC)) {
+            is_hwsync_lpcm = 1;
+            break;
+        }
+    }
+    return is_hwsync_lpcm;
+}
+
 audio_format_t get_output_format (struct audio_stream_out *stream)
 {
     struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
@@ -11393,8 +11429,13 @@ static int adev_close(hw_device_t *device)
         free(adev->spdif_output_buf);
     }
     if (adev->aml_ng_handle) {
-        release_noise_gate(adev->aml_ng_handle);
-        adev->aml_ng_handle = NULL;
+		#ifdef ARM64_BIT
+            //release_noise_gate(adev->aml_ng_handle);
+            //adev->aml_ng_handle = NULL;
+        #else
+            release_noise_gate(adev->aml_ng_handle);
+            adev->aml_ng_handle = NULL;
+	    #endif
     }
     ring_buffer_release(&(adev->spk_tuning_rbuf));
     if (adev->ar) {
@@ -11983,11 +12024,19 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     }
 
     if (adev && adev->aml_ng_enable) {
-        adev->aml_ng_handle = init_noise_gate(adev->aml_ng_level,
+		#ifdef ARM64_BIT
+        //adev->aml_ng_handle = init_noise_gate(adev->aml_ng_level,
+        //                         adev->aml_ng_attack_time, adev->aml_ng_release_time);
+        //ALOGI("%s: init amlogic noise gate: level: %fdB, attrack_time = %dms, release_time = %dms",
+        //      __func__, adev->aml_ng_level,
+        //      adev->aml_ng_attack_time, adev->aml_ng_release_time);
+        #else
+		adev->aml_ng_handle = init_noise_gate(adev->aml_ng_level,
                                  adev->aml_ng_attack_time, adev->aml_ng_release_time);
         ALOGI("%s: init amlogic noise gate: level: %fdB, attrack_time = %dms, release_time = %dms",
               __func__, adev->aml_ng_level,
               adev->aml_ng_attack_time, adev->aml_ng_release_time);
+		#endif
     }
 
     if (aml_audio_ease_init(&adev->audio_ease) < 0) {
