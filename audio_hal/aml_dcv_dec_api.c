@@ -108,7 +108,7 @@ const DDPshort frmsizetab[MAXFSCOD][MAXDDDATARATE] = {
         1536, 1536, 1728, 1728, 1920, 1920
     }
 };
-const float ddp_udc_int_altmixtab[8] =
+const float int_alt_mix_tab[8] =
 {
     1.414,         /*!< +3.0 dB    */
     1.189,       /*!< +1.5 dB    */
@@ -360,11 +360,11 @@ int aml_downmix6to2(unsigned char *outbuf,int outlen_pcm,struct pcm_info pcm_out
         //Ro = R + (C *  -3 dB)  + (Rs * -3 dB)
        for (int i = 0; i < samplenum; i++ ) {
             lfe = (double)p1[6 * i + 3]*(1.678804f / 4);
-            centre = (double)p1[6 * i + 2] * ddp_udc_int_altmixtab[pcm_out_info.lorocmixlev];
+            centre = (double)p1[6 * i + 2] * int_alt_mix_tab[pcm_out_info.lorocmixlev];
             //p1[6 * i] = p1[6 * i] + (int32_t)centre - p1[6 * i + 4] * 0.870963 - p1[6 * i + 5] * 0.489778;
             //p1[6 * i + 1] = p1[6 * i + 1] + (int32_t)centre + p1[6 * i + 4] * 0.489778 + p1[6 * i + 5] * 0.870963;
-            p1[6 * i] = p1[6 * i] + centre + p1[6 * i + 4] * ddp_udc_int_altmixtab[pcm_out_info.lorosurmixlev];
-            p1[6 * i + 1] = p1[6 * i + 1] + centre  + p1[6 * i + 5] * ddp_udc_int_altmixtab[pcm_out_info.lorosurmixlev];
+            p1[6 * i] = p1[6 * i] + centre + p1[6 * i + 4] * int_alt_mix_tab[pcm_out_info.lorosurmixlev];
+            p1[6 * i + 1] = p1[6 * i + 1] + centre  + p1[6 * i + 5] * int_alt_mix_tab[pcm_out_info.lorosurmixlev];
             p1[2 * i ] = (p1[6 * i] >> 2) + lfe;
             p1[2 * i  + 1] = (p1[6 * i + 1] >> 2) + lfe;
        }
