@@ -43,12 +43,9 @@ enum {
     NO_ENOUGH_DATA = -1002,
 };
 
-#define     DDPshort            short
-#define     DDPerr              short
-#define     DDPushort           unsigned short
 #define     BYTESPERWRD         2
 #define     BITSPERWRD          (BYTESPERWRD*8)
-#define     SYNCWRD             ((DDPshort)0x0b77)
+#define     SYNCWRD             ((short)0x0b77)
 #define     MAXFSCOD            3
 #define     MAXDDDATARATE       38
 #define     BS_STD              8
@@ -61,12 +58,12 @@ enum {
 
 
 typedef struct {
-    DDPshort       *buf;
-    DDPshort        bitptr;
-    DDPshort        data;
-} DDP_BSTRM;
+    short       *buf;
+    short        bitptr;
+    short        data;
+} BITSTREAM;
 
-const DDPshort chanary[MAXCHANCFGS] = { 2, 1, 2, 3, 3, 4, 4, 5 };
+const short chanary[MAXCHANCFGS] = { 2, 1, 2, 3, 3, 4, 4, 5 };
 enum {
     MODE11 = 0,
     MODE_RSVD = 0,
@@ -78,11 +75,11 @@ enum {
     MODE22,
     MODE32
 };
-const DDPushort msktab[] = { 0x0000, 0x8000, 0xc000, 0xe000, 0xf000, 0xf800,
+const unsigned short msktab[] = { 0x0000, 0x8000, 0xc000, 0xe000, 0xf000, 0xf800,
                              0xfc00, 0xfe00, 0xff00, 0xff80, 0xffc0, 0xffe0, 0xfff0, 0xfff8, 0xfffc,
                              0xfffe, 0xffff
                            };
-const DDPshort frmsizetab[MAXFSCOD][MAXDDDATARATE] = {
+const short frmsizetab[MAXFSCOD][MAXDDDATARATE] = {
     /* 48kHz */
     {
         64, 64, 80, 80, 96, 96, 112, 112,
@@ -130,7 +127,7 @@ static int (*ddp_decoder_config)(void *, ddp_config_type_t, ddp_config_t *);
 static void *gDDPDecoderLibHandler = NULL;
 static void *handle = NULL;
 
-static DDPerr ddbs_init(DDPshort * buf, DDPshort bitptr, DDP_BSTRM *p_bstrm)
+static short bitstream_init(short * buf, short bitptr, BITSTREAM *p_bstrm)
 {
     p_bstrm->buf = buf;
     p_bstrm->bitptr = bitptr;
@@ -138,37 +135,37 @@ static DDPerr ddbs_init(DDPshort * buf, DDPshort bitptr, DDP_BSTRM *p_bstrm)
     return 0;
 }
 
-static DDPerr ddbs_unprj(DDP_BSTRM *p_bstrm, DDPshort *p_data,  DDPshort numbits)
+static short bitstream_unprj(BITSTREAM *p_bstrm, short *p_data,  short numbits)
 {
-    DDPushort data;
-    *p_data = (DDPshort)((p_bstrm->data << p_bstrm->bitptr) & msktab[numbits]);
+    unsigned short data;
+    *p_data = (short)((p_bstrm->data << p_bstrm->bitptr) & msktab[numbits]);
     p_bstrm->bitptr += numbits;
     if (p_bstrm->bitptr >= BITSPERWRD) {
         p_bstrm->buf++;
         p_bstrm->data = *p_bstrm->buf;
         p_bstrm->bitptr -= BITSPERWRD;
-        data = (DDPushort) p_bstrm->data;
+        data = (unsigned short) p_bstrm->data;
         *p_data |= ((data >> (numbits - p_bstrm->bitptr)) & msktab[numbits]);
     }
-    *p_data = (DDPshort)((DDPushort)(*p_data) >> (BITSPERWRD - numbits));
+    *p_data = (short)((unsigned short)(*p_data) >> (BITSPERWRD - numbits));
     return 0;
 }
 
 static int Get_DD_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChNum)
 {
     int numch = 0;
-    DDP_BSTRM bstrm = {NULL, 0, 0};
-    DDP_BSTRM *p_bstrm = &bstrm;
+    BITSTREAM bstrm = {NULL, 0, 0};
+    BITSTREAM *p_bstrm = &bstrm;
     short tmp = 0, acmod, lfeon, fscod, frmsizecod;
-    ddbs_init((short*) buf, 0, p_bstrm);
+    bitstream_init((short*) buf, 0, p_bstrm);
 
-    ddbs_unprj(p_bstrm, &tmp, 16);
+    bitstream_unprj(p_bstrm, &tmp, 16);
     if (tmp != SYNCWRD) {
         ALOGI("Invalid synchronization word");
         return 0;
     }
-    ddbs_unprj(p_bstrm, &tmp, 16);
-    ddbs_unprj(p_bstrm, &fscod, 2);
+    bitstream_unprj(p_bstrm, &tmp, 16);
+    bitstream_unprj(p_bstrm, &fscod, 2);
     if (fscod == MAXFSCOD) {
         ALOGI("Invalid sampling rate code");
         return 0;
@@ -182,7 +179,7 @@ static int Get_DD_Parameters(void *buf, int *sample_rate, int *frame_size, int *
         *sample_rate = 32000;
     }
 
-    ddbs_unprj(p_bstrm, &frmsizecod, 6);
+    bitstream_unprj(p_bstrm, &frmsizecod, 6);
     if (frmsizecod >= MAXDDDATARATE) {
         ALOGI("Invalid frame size code");
         return 0;
@@ -190,26 +187,26 @@ static int Get_DD_Parameters(void *buf, int *sample_rate, int *frame_size, int *
 
     *frame_size = 2 * frmsizetab[fscod][frmsizecod];
 
-    ddbs_unprj(p_bstrm, &tmp, 5);
+    bitstream_unprj(p_bstrm, &tmp, 5);
     if (!ISDD(tmp)) {
         ALOGI("Unsupported bitstream id");
         return 0;
     }
 
-    ddbs_unprj(p_bstrm, &tmp, 3);
-    ddbs_unprj(p_bstrm, &acmod, 3);
+    bitstream_unprj(p_bstrm, &tmp, 3);
+    bitstream_unprj(p_bstrm, &acmod, 3);
 
     if ((acmod != MODE10) && (acmod & 0x1)) {
-        ddbs_unprj(p_bstrm, &tmp, 2);
+        bitstream_unprj(p_bstrm, &tmp, 2);
     }
     if (acmod & 0x4) {
-        ddbs_unprj(p_bstrm, &tmp, 2);
+        bitstream_unprj(p_bstrm, &tmp, 2);
     }
 
     if (acmod == MODE20) {
-        ddbs_unprj(p_bstrm, &tmp, 2);
+        bitstream_unprj(p_bstrm, &tmp, 2);
     }
-    ddbs_unprj(p_bstrm, &lfeon, 1);
+    bitstream_unprj(p_bstrm, &lfeon, 1);
 
 
     numch = chanary[acmod];
@@ -230,25 +227,25 @@ static int Get_DD_Parameters(void *buf, int *sample_rate, int *frame_size, int *
 static int Get_DDP_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChNum)
 {
     int numch = 0;
-    DDP_BSTRM bstrm = {NULL, 0, 0};
-    DDP_BSTRM *p_bstrm = &bstrm;
+    BITSTREAM bstrm = {NULL, 0, 0};
+    BITSTREAM *p_bstrm = &bstrm;
     short tmp = 0, acmod, lfeon, strmtyp;
-    ddbs_init((short*) buf, 0, p_bstrm);
-    ddbs_unprj(p_bstrm, &tmp, 16);
+    bitstream_init((short*) buf, 0, p_bstrm);
+    bitstream_unprj(p_bstrm, &tmp, 16);
     if (tmp != SYNCWRD) {
         ALOGI("Invalid synchronization word");
         return -1;
     }
 
-    ddbs_unprj(p_bstrm, &strmtyp, 2);
-    ddbs_unprj(p_bstrm, &tmp, 3);
-    ddbs_unprj(p_bstrm, &tmp, 11);
+    bitstream_unprj(p_bstrm, &strmtyp, 2);
+    bitstream_unprj(p_bstrm, &tmp, 3);
+    bitstream_unprj(p_bstrm, &tmp, 11);
 
     *frame_size = 2 * (tmp + 1);
     if (strmtyp != 0 && strmtyp != 1 && strmtyp != 2) {
         return -1;
     }
-    ddbs_unprj(p_bstrm, &tmp, 2);
+    bitstream_unprj(p_bstrm, &tmp, 2);
 
     if (tmp == 0x3) {
         ALOGI("Half sample rate unsupported");
@@ -262,10 +259,10 @@ static int Get_DDP_Parameters(void *buf, int *sample_rate, int *frame_size, int 
             *sample_rate = 32000;
         }
 
-        ddbs_unprj(p_bstrm, &tmp, 2);
+        bitstream_unprj(p_bstrm, &tmp, 2);
     }
-    ddbs_unprj(p_bstrm, &acmod, 3);
-    ddbs_unprj(p_bstrm, &lfeon, 1);
+    bitstream_unprj(p_bstrm, &acmod, 3);
+    bitstream_unprj(p_bstrm, &lfeon, 1);
     numch = chanary[acmod];
     numch = 2;
     *ChNum = numch;
@@ -273,7 +270,7 @@ static int Get_DDP_Parameters(void *buf, int *sample_rate, int *frame_size, int 
     return 0;
 }
 
-static DDPerr ddbs_skip(DDP_BSTRM   *p_bstrm, DDPshort    numbits)
+static short bitstream_skip(BITSTREAM   *p_bstrm, short    numbits)
 {
     p_bstrm->bitptr += numbits;
     while (p_bstrm->bitptr >= BITSPERWRD) {
@@ -284,13 +281,13 @@ static DDPerr ddbs_skip(DDP_BSTRM   *p_bstrm, DDPshort    numbits)
     return 0;
 }
 
-static DDPerr ddbs_getbsid(DDP_BSTRM *p_inbstrm,    DDPshort *p_bsid)
+static short bitstream_getbsid(BITSTREAM *p_inbstrm,    short *p_bsid)
 {
-    DDP_BSTRM    bstrm;
+    BITSTREAM    bstrm;
 
-    ddbs_init(p_inbstrm->buf, p_inbstrm->bitptr, &bstrm);
-    ddbs_skip(&bstrm, BS_BITOFFSET);
-    ddbs_unprj(&bstrm, p_bsid, 5);
+    bitstream_init(p_inbstrm->buf, p_inbstrm->bitptr, &bstrm);
+    bitstream_skip(&bstrm, BS_BITOFFSET);
+    bitstream_unprj(&bstrm, p_bsid, 5);
     if (!ISDDP(*p_bsid) && !ISDD(*p_bsid)) {
         ALOGI("Unsupported bitstream id");
     }
@@ -298,11 +295,11 @@ static DDPerr ddbs_getbsid(DDP_BSTRM *p_inbstrm,    DDPshort *p_bsid)
     return 0;
 }
 
-static int Get_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChNum, int *is_eac3)
+static int Get_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChNum, int *is_eac3,int *ad_substream_supported)
 {
-    DDP_BSTRM bstrm = {NULL, 0, 0};
-    DDP_BSTRM *p_bstrm = &bstrm;
-    DDPshort    bsid;
+    BITSTREAM bstrm = {NULL, 0, 0};
+    BITSTREAM *p_bstrm = &bstrm;
+    short    bsid;
     int chnum = 0;
     uint8_t ptr8[PTR_HEAD_SIZE];
 
@@ -320,8 +317,8 @@ static int Get_Parameters(void *buf, int *sample_rate, int *frame_size, int *ChN
         }
     }
 
-    ddbs_init((short*) ptr8, 0, p_bstrm);
-    int ret = ddbs_getbsid(p_bstrm, &bsid);
+    bitstream_init((short*) ptr8, 0, p_bstrm);
+    int ret = bitstream_getbsid(p_bstrm, &bsid);
     if (ret < 0) {
         return -1;
     }
