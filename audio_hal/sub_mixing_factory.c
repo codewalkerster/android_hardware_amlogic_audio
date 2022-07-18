@@ -1092,6 +1092,7 @@ ssize_t mixer_aux_buffer_write_sm(struct audio_stream_out *stream, const void *b
         ALOGD("[%s:%d] stream:%p, switch from device:%#x to device:%#x", __func__, __LINE__,
              stream, adev->out_device, aml_out->out_device);
         aml_out->out_device = adev->out_device;
+	a2dp_switch(stream);
         aml_out->stream.common.standby(&aml_out->stream.common);
         goto exit;
     } else if (aml_out->out_device == 0) {
