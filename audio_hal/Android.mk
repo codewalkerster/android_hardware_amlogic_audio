@@ -175,6 +175,8 @@ endif
 ifneq ($(wildcard device/hardkernel), )
 ifeq ($(strip $(TARGET_BOOTLOADER_BOARD_NAME)), odroidn2)
     LOCAL_CFLAGS += -DODROIDN2
+else ifeq ($(strip $(TARGET_BOOTLOADER_BOARD_NAME)), odroidn2l)
+    LOCAL_CFLAGS += -DODROIDN2
 else
     LOCAL_CFLAGS += -DODROIDC4
 endif
