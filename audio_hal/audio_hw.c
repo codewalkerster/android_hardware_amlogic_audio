@@ -619,7 +619,14 @@ static int start_output_stream (struct aml_stream_out *out)
         port = PORT_PCM;
         out->config = pcm_config_bt;
     } else if (out->flags & AUDIO_OUTPUT_FLAG_DIRECT && !hwsync_lpcm) {
+#if defined(ODROIDN2)
+        if (fake_receiver)
+            port = PORT_SPDIF;
+        else
+            port = PORT_SPDIFB;
+#else
         port = PORT_SPDIF;
+#endif
     }
     /* check to update port */
     port = alsa_device_update_pcm_index(port, PLAYBACK);
@@ -824,7 +831,14 @@ static int start_output_stream_direct (struct aml_stream_out *out)
             for a113 later chip,raw passthr goes to spsdifa or spdifb
             */
             if (format_is_passthrough(out->hal_format) || codec_type == TYPE_PCM_HIGH_SR) {
+#if defined(ODROIDN2)
+                if (fake_receiver)
+                    port = PORT_SPDIF;
+                else
+                    port = PORT_SPDIFB;
+#else
                 port = PORT_SPDIF;
+#endif
             }
             else
                 port = PORT_I2S;
